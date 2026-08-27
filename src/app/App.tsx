@@ -33,10 +33,11 @@ import {
   Circle,
   AlertCircle,
   Info,
+  ClipboardCheck,
 } from "lucide-react";
 
 // ─── Mobile hook ──────────────────────────────────────────────────────────────
-function useIsMobile() {
+export function useIsMobile() {
   const [isMobile, setIsMobile] = useState(() => typeof window !== "undefined" && window.innerWidth < 768);
   useEffect(() => {
     const fn = () => setIsMobile(window.innerWidth < 768);
@@ -48,8 +49,8 @@ function useIsMobile() {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Country = "Todos" | "Argentina" | "Bolivia" | "Chile" | "Ecuador" | "Perú";
-type Section = "dashboard" | "barreras" | "tramites" | "comparativa" | "repositorio" | "administracion" | "reportes" | "documentacion";
-type UserRole = "administrador" | "usuario-bid";
+type Section = "dashboard" | "barreras" | "tramites" | "comparativa" | "repositorio" | "administracion" | "reportes" | "documentacion" | "revision";
+type UserRole = "administrador" | "usuario-bid" | "asesor" | "analista" | "validador";
 type View =
   | { screen: "regional-dashboard" }
   | { screen: "country-dashboard"; country: string }
@@ -62,7 +63,16 @@ type View =
   | { screen: "administracion"; tab?: string }
   | { screen: "reportes"; prefill?: ReportesPrefill }
   | { screen: "reporte-pdf"; context?: string }
-  | { screen: "documentacion" };
+  | { screen: "documentacion" }
+  | { screen: "revision-repositorio" }
+  | { screen: "revision-asesor-detalle"; id: string }
+  | { screen: "revision-analista-checklist"; id: string }
+  | { screen: "revision-decision-final"; id: string }
+  | { screen: "revision-ajuste"; id: string }
+  | { screen: "revision-devolver-analista"; id: string }
+  | { screen: "revision-candados"; id: string }
+  | { screen: "revision-log-errores" }
+  | { screen: "revision-log-errores-detalle"; id: string };
 type AuthView = "login" | "recover" | "recover-sent" | "recover-new" | "recover-confirmed" | "recover-expired";
 
 type ReportesPrefill = {
@@ -79,7 +89,7 @@ type ReportesPrefill = {
 };
 
 // ─── Colours ──────────────────────────────────────────────────────────────────
-const C = {
+export const C = {
   canvas: "#EDF1F5",
   card: "#FAFBFC",
   sidebar: "#14161A",
@@ -94,6 +104,12 @@ const C = {
   border: "#DCE3EB",
   text: "#14161A",
   textMuted: "#6B7A8D",
+  ambar1: "#D9A441",
+  ambar2: "#F6EBD6",
+  ambarTexto: "#8A5A12",
+  verde1: "#3B6D11",
+  verde2: "#E7F1DC",
+  rojoClaro: "#F7E4E3",
 };
 
 const SEVERITY_COLOR: Record<string, string> = {
@@ -1029,6 +1045,10 @@ function Sidebar({
         {navItem("Trámites", "tramites", <FileText size={18} />, () => nav(() => onNavigate({ screen: "tramites" })))}
         {navItem("Reportes", "reportes", <ClipboardList size={18} />, () => nav(() => onNavigate({ screen: "reportes" })))}
         {navItem("Documentación", "documentacion", <BookOpen size={18} />, () => nav(() => onNavigate({ screen: "documentacion" })))}
+        {/* Revisión — visible para asesor, analista, validador y administrador */}
+        {(userRole === "asesor" || userRole === "analista" || userRole === "validador" || userRole === "administrador") &&
+          navItem("Revisión", "revision", <ClipboardCheck size={18} />, () => nav(() => onNavigate({ screen: "revision-repositorio" })))
+        }
         {/* Administración submenu — visible solo para Administrador */}
         {userRole === "administrador" && (
           <>
@@ -1108,7 +1128,7 @@ export const HDR_BTN_SECONDARY: React.CSSProperties = {
   border: `1px solid ${C.border}`, borderRadius: 8, padding: "7px 14px", cursor: "pointer", whiteSpace: "nowrap",
 };
 
-function Header({ breadcrumb, title, subtitle, actions }: { breadcrumb: string; title: string; subtitle?: string; actions?: React.ReactNode }) {
+export function Header({ breadcrumb, title, subtitle, actions }: { breadcrumb: string; title: string; subtitle?: string; actions?: React.ReactNode }) {
   const isMobile = useIsMobile();
   return (
     <div className="mb-5 md:mb-6">

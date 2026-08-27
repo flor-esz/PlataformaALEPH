@@ -1,61 +1,70 @@
-**Add your own guidelines here**
-<!--
+# Guidelines de ALEPH — reglas persistentes para Figma Make
 
-System Guidelines
+Estas son reglas de diseño y producto que debes respetar en **toda** generación de este proyecto, sin excepción, aunque un prompt puntual no las repita. Si un prompt contradice una regla marcada como no negociable, prioriza esta guía.
 
-Use this file to provide the AI with rules and guidelines you want it to follow.
-This template outlines a few examples of things you can add. You can add your own sections and format it to suit your needs
+## Producto
+ALEPH es una plataforma de inteligencia regulatoria con identidad propia (no es un sub-brand). Audita el stock regulatorio de un país e identifica barreras regulatorias y trámites con fricciones, cada uno anclado a su fuente legal. Esencia: **"Evidencia desde el origen"**. Principio: **"Nada escapa, nada se inventa"**. La vista actual es la del usuario del BID (analista regional multi-país). El usuario ve resultados de análisis ya procesados, nunca estado de agentes en tiempo real.
 
-TIP: More context isn't always better. It can confuse the LLM. Try and add the most important rules you need
+## Color (no negociable)
+- Canvas / fondo de contenido: `#EDF1F5` (off-white frío).
+- Superficie de tarjetas y paneles: `#FAFBFC`.
+- Sidebar de navegación: `#14161A` (grafito casi negro), con texto e íconos claros.
+- Rango azul acero (estructura, interacción, enlaces, charts, jerarquía): `#7FA8D4` → `#5E8FC2` → `#3E6E9E` → `#26456B`.
+- Bordes y divisores: gris sutil `#DCE3EB` aprox.
+- Texto principal: `#14161A`; texto secundario en gris medio.
 
-# General guidelines
+## Severidad (no negociable)
+El rojo `#C75450` se usa **exclusivamente** para severidad CRÍTICA (badges, segmentos de chart, números críticos). Nunca decorativo ni categórico.
+Escala completa, consistente en toda la app:
+- Crítico → nivel 4 → `#C75450` (rojo)
+- Alto → nivel 3 → `#26456B` (azul acero oscuro)
+- Mediano → nivel 2 → `#3E6E9E` (azul acero medio)
+- Bajo → nivel 1 → `#7FA8D4` (azul acero claro)
 
-Any general rules you want the AI to follow.
-For example:
+Dirección fija: mayor número = mayor severidad. El nivel numérico se
+muestra como prefijo de la etiqueta (ej. "4 · Crítico"), nunca solo.
 
-* Only use absolute positioning when necessary. Opt for responsive and well structured layouts that use flexbox and grid by default
-* Refactor code as you go to keep code clean
-* Keep file sizes small and put helper functions and components in their own files.
+## Rampa categórica (rankings y series)
+Para ordenar categorías sin significado de severidad: rankings por país,
+series comparativas, segmentos de composición. Comparte valores con la
+escala de severidad por consistencia visual, pero se declara por separado:
+son funciones semánticas distintas y el rojo nunca entra aquí.
 
---------------
+- Paso 1 → `#26456B`
+- Paso 2 → `#3E6E9E`
+- Paso 3 → `#5E8FC2`
+- Paso 4 → `#7FA8D4`
+- Paso 5 → `#A0C1E0`
 
-# Design system guidelines
-Rules for how the AI should make generations look like your company's design system
+El paso 5 (`#A0C1E0`) existe solo en esta rampa. No tiene equivalente en
+la escala de severidad.
 
-Additionally, if you select a design system to use in the prompt box, you can reference
-your design system's components, tokens, variables and components.
-For example:
+## Tipografía (no negociable)
+- **Space Grotesk** (weight 500): marca/logo, todos los títulos, etiquetas, navegación, números y referencias de datos (KPIs, conteos, badges, headers de tabla).
+- **IBM Plex Sans**: todo el texto de lectura corrida (diagnósticos, descripciones, propuestas de reforma, párrafos).
+- No usar fuentes monoespaciadas.
 
-* Use a base font-size of 14px
-* Date formats should always be in the format “Jun 10”
-* The bottom toolbar should only ever have a maximum of 4 items
-* Never use the floating action button with the bottom toolbar
-* Chips should always come in sets of 3 or more
-* Don't use a dropdown if there are 2 or fewer options
+## Marca
+Logo denominativo "ALEPH" en Space Grotesk 500, letras finas, con la "A" tratada como chevron (trazo delgado, elegante). Isotipo abstracto opcional: anillos de onda concéntricos / híbrido tipo gráfico radial, geométrico y simple, en azul acero. Nunca figurativo.
 
-You can also create sub sections and add more specific details
-For example:
+## Estilo general
+Minimalista, sobrio, institucional pero moderno. Mucho espacio en blanco. NO es dark mode completo: contenido claro, sidebar grafito. Densidad de datos alta pero ordenada, tipo herramienta analítica profesional. Tarjetas con esquinas suavemente redondeadas (~8px), sombras muy sutiles, charts planos sin 3D.
 
+## Navegación (estructura fija)
+- Sidebar grafito persistente en todas las pantallas. De arriba a abajo: logo ALEPH; **switcher de país** (Todos · Honduras · Paraguay · Ecuador · El Salvador · Guatemala); menú con **Regulaciones** como ítem padre y submenú **Dashboard · Barreras · Trámites**; luego **Comparativa** y **Repositorio**; un **selector de idioma ES/EN**; y **Salir**. El ítem activo se resalta con un indicador sutil.
+- **El switcher gobierna el contexto de datos, no la estructura**: las mismas pantallas sirven para "Todos" (Panel Regional agregado) y para un país (solo ese país). Cambian título, números y alcance; no la estructura, gráficas ni tablas.
+- En este alcance se desarrollan a fondo el Dashboard, Barreras y Trámites. Comparativa y Repositorio quedan enunciados (placeholder "En construcción").
+- El selector de sector NO es ítem del sidebar: es un dropdown junto al título en Barreras y Trámites.
+- Chrome del header: breadcrumb pequeño, título grande (Panel Regional o país) + subtítulo; a la derecha campana + avatar de usuaria; botón "Exportar informe" cuando aplique.
 
-## Button
-The Button component is a fundamental interactive element in our design system, designed to trigger actions or navigate
-users through the application. It provides visual feedback and clear affordances to enhance user experience.
+## Costo (dimensión transversal)
+Los trámites tienen costo vía el modelo SCM (`costeo_scm`): costo monetario, tiempo promedio, frecuencia anual e indicador de carga total (lo que cuesta mantener el trámite). Aparece en KPIs, ranking regional por costo (dona), costo por sector y costo por tipo (ciudadano/empresarial). Todos los costos son **datos simulados** hasta integrar la fórmula real; márcalos como tales.
 
-### Usage
-Buttons should be used for important actions that users need to take, such as form submissions, confirming choices,
-or initiating processes. They communicate interactivity and should have clear, action-oriented labels.
+## Patrón "Evidencia desde el origen" (no negociable)
+Toda barrera, en su detalle, debe mostrar el texto normativo de origen en un panel tipo documento, con el pasaje exacto de la barrera **resaltado** (highlight suave + marca lateral en azul acero) y su metadata (instrumento, número, año, jerarquía). La propuesta de reforma se presenta como bloque **"Dice / Debe Decir"**. El texto legal literal es contenido de muestra hasta incorporar la cita oficial: señálalo discretamente como "texto de muestra".
 
-### Variants
-* Primary Button
-  * Purpose : Used for the main action in a section or page
-  * Visual Style : Bold, filled with the primary brand color
-  * Usage : One primary button per section to guide users toward the most important action
-* Secondary Button
-  * Purpose : Used for alternative or supporting actions
-  * Visual Style : Outlined with the primary color, transparent background
-  * Usage : Can appear alongside a primary button for less important actions
-* Tertiary Button
-  * Purpose : Used for the least important actions
-  * Visual Style : Text-only with no border, using primary color
-  * Usage : For actions that should be available but not emphasized
--->
+## Puentes entre módulos
+Barreras y Trámites son módulos separados conectados por puentes contextuales: en una barrera, "Afecta a N trámites"; en un trámite, "N barreras afectan este trámite". Una barrera puede afectar varios trámites.
+
+## Idioma
+Toda la interfaz en español.
