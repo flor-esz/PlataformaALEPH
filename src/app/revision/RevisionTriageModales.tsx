@@ -126,7 +126,7 @@ function ModalBody({ children }: { children: React.ReactNode }) {
 // ─── 1. ModalPublicarDirecto ──────────────────────────────────────────────────
 
 export interface ModalPublicarDirectoProps {
-  onConfirm: () => void;
+  onConfirm: (nota: string) => void;
   onCancel: () => void;
 }
 
@@ -157,7 +157,7 @@ export function ModalPublicarDirecto({ onConfirm, onCancel }: ModalPublicarDirec
         <div style={{ display: "flex", gap: 10 }}>
           <button
             style={{ ...BTN_BASE, backgroundColor: C.verde1, color: "#ffffff" }}
-            onClick={onConfirm}
+            onClick={() => onConfirm(nota)}
           >
             Confirmar publicación
           </button>
@@ -176,7 +176,7 @@ export function ModalPublicarDirecto({ onConfirm, onCancel }: ModalPublicarDirec
 // ─── 2. ModalRechazarTriage ───────────────────────────────────────────────────
 
 export interface ModalRechazarTriageProps {
-  onConfirm: () => void;
+  onConfirm: (motivo: string) => void;
   onCancel: () => void;
 }
 
@@ -220,7 +220,7 @@ export function ModalRechazarTriage({ onConfirm, onCancel }: ModalRechazarTriage
               color: "#ffffff",
               cursor: canConfirm ? "pointer" : "not-allowed",
             }}
-            onClick={canConfirm ? onConfirm : undefined}
+            onClick={canConfirm ? () => onConfirm(motivo) : undefined}
           >
             Confirmar descarte
           </button>
@@ -289,7 +289,7 @@ const PRIORIDAD_STYLE: Record<Prioridad, { active: React.CSSProperties; idle: Re
 };
 
 export interface ModalAsignarAnalistaProps {
-  onConfirm: () => void;
+  onConfirm: (analistaId: string, analistaNombre: string, prioridad: Prioridad, nota: string) => void;
   onCancel: () => void;
 }
 
@@ -298,6 +298,7 @@ export function ModalAsignarAnalista({ onConfirm, onCancel }: ModalAsignarAnalis
   const [prioridad, setPrioridad] = useState<Prioridad>("Normal");
   const [nota, setNota] = useState("");
   const canConfirm = selected !== null;
+  const selectedAnalista = ANALISTAS.find(a => a.id === selected);
 
   return (
     <div style={OVERLAY} onClick={onCancel}>
@@ -403,7 +404,8 @@ export function ModalAsignarAnalista({ onConfirm, onCancel }: ModalAsignarAnalis
                     fontFamily: "Space Grotesk, sans-serif",
                     fontSize: 11,
                     fontWeight: 600,
-                    border: `1px solid`,
+                    borderStyle: "solid",
+                    borderWidth: 1,
                     borderRadius: 9999,
                     padding: "4px 12px",
                     cursor: "pointer",
@@ -436,7 +438,7 @@ export function ModalAsignarAnalista({ onConfirm, onCancel }: ModalAsignarAnalis
               color: "#ffffff",
               cursor: canConfirm ? "pointer" : "not-allowed",
             }}
-            onClick={canConfirm ? onConfirm : undefined}
+            onClick={canConfirm && selectedAnalista ? () => onConfirm(selectedAnalista.id, selectedAnalista.nombre, prioridad, nota) : undefined}
           >
             Asignar
           </button>
@@ -498,19 +500,19 @@ export default function RevisionTriageModalesDemo() {
 
       {open === "publicar" && (
         <ModalPublicarDirecto
-          onConfirm={() => { console.log("confirm publicar"); setOpen(null); }}
+          onConfirm={(nota) => { console.log("confirm publicar", nota); setOpen(null); }}
           onCancel={() => setOpen(null)}
         />
       )}
       {open === "rechazar" && (
         <ModalRechazarTriage
-          onConfirm={() => { console.log("confirm rechazar"); setOpen(null); }}
+          onConfirm={(motivo) => { console.log("confirm rechazar", motivo); setOpen(null); }}
           onCancel={() => setOpen(null)}
         />
       )}
       {open === "asignar" && (
         <ModalAsignarAnalista
-          onConfirm={() => { console.log("confirm asignar"); setOpen(null); }}
+          onConfirm={(analistaId, analistaNombre, prioridad, nota) => { console.log("confirm asignar", analistaId, analistaNombre, prioridad, nota); setOpen(null); }}
           onCancel={() => setOpen(null)}
         />
       )}

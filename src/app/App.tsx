@@ -1,4 +1,17 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
+// Cargados con React.lazy (no import estático): estos módulos importan { C, Header }
+// de vuelta desde este archivo (ciclo App.tsx <-> revision/*.tsx) y usan C en el
+// top-level de su módulo (ej. fieldStyle, ANALISTAS, SEV_COLOR). Un import estático
+// aquí arriba dispara ese ciclo antes de que `export const C` quede inicializado más
+// abajo -> ReferenceError "Cannot access 'C' before initialization" en tiempo de
+// ejecución (no lo atrapa `vite build`, solo se ve corriendo la app en el navegador).
+// lazy() difiere la evaluación del módulo hasta el primer render, cuando C ya existe.
+const RevisionRepositorio = lazy(() => import("./revision/RevisionRepositorio"));
+const RevisionAsesorDetalle = lazy(() => import("./revision/RevisionAsesorDetalle"));
+const RevisionAnalistaChecklist = lazy(() => import("./revision/RevisionAnalistaChecklist"));
+const RevisionTriageModalesDemo = lazy(() => import("./revision/RevisionTriageModales"));
+// store.tsx no importa nada de este archivo (ver comentario ahí) -> import estático seguro.
+import { RevisionProvider } from "./revision/store";
 import { PanelTipoSubdimension } from "./components/ui/PanelTipoSubdimension";
 import type { TipoDato } from "./components/ui/PanelTipoSubdimension";
 import { BarrasComposicion } from "./components/ui/BarrasComposicion";
@@ -50,7 +63,14 @@ export function useIsMobile() {
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Country = "Todos" | "Argentina" | "Bolivia" | "Chile" | "Ecuador" | "Perú";
 type Section = "dashboard" | "barreras" | "tramites" | "comparativa" | "repositorio" | "administracion" | "reportes" | "documentacion" | "revision";
-type UserRole = "administrador" | "usuario-bid" | "asesor" | "analista" | "validador";
+export type UserRole = "administrador" | "usuario-bid" | "asesor" | "analista" | "validador";
+const ROLE_LABEL: Record<UserRole, string> = {
+  administrador: "Administrador",
+  "usuario-bid": "Usuario BID",
+  asesor: "Asesor (ESZ)",
+  analista: "Analista jurídico-económico",
+  validador: "Validador BID",
+};
 type View =
   | { screen: "regional-dashboard" }
   | { screen: "country-dashboard"; country: string }
@@ -65,6 +85,7 @@ type View =
   | { screen: "reporte-pdf"; context?: string }
   | { screen: "documentacion" }
   | { screen: "revision-repositorio" }
+  | { screen: "revision-triage-modales" }
   | { screen: "revision-asesor-detalle"; id: string }
   | { screen: "revision-analista-checklist"; id: string }
   | { screen: "revision-decision-final"; id: string }
@@ -1078,7 +1099,7 @@ function Sidebar({
           <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-semibold flex-shrink-0" style={{ backgroundColor: C.steel3, fontFamily: "Space Grotesk, sans-serif" }}>AM</div>
           <div>
             <p className="text-[13px] text-white font-medium" style={{ fontFamily: "Space Grotesk, sans-serif" }}>Ana Mejía</p>
-            <p className="text-[11px]" style={{ color: "#5A6A7A", fontFamily: "IBM Plex Sans, sans-serif" }}>{userRole === "administrador" ? "Administrador" : "Usuario BID"}</p>
+            <p className="text-[11px]" style={{ color: "#5A6A7A", fontFamily: "IBM Plex Sans, sans-serif" }}>{ROLE_LABEL[userRole]}</p>
           </div>
         </div>
         <button className="flex items-center gap-3 text-[#8FA3BA] hover:text-white transition-colors" style={{ fontFamily: "Space Grotesk, sans-serif", fontSize: 15, background: "none", border: "none" }}>
@@ -3042,17 +3063,20 @@ function LoginScreen({ onLogin, onNavigate }: { onLogin: (role: UserRole) => voi
               letterSpacing: "0.10em", marginBottom: 8,
               fontFamily: "Space Grotesk, sans-serif", color: "#6B7A8D", fontWeight: 500,
             }}>Perfil de acceso</label>
-            <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               {([
                 { value: "administrador" as UserRole, label: "Administrador", sub: "Regulaciones + Administración" },
                 { value: "usuario-bid" as UserRole, label: "Usuario BID", sub: "Solo Regulaciones" },
+                { value: "asesor" as UserRole, label: "Asesor (ESZ)", sub: "Etapa 1 · Revisión" },
+                { value: "analista" as UserRole, label: "Analista jurídico-económico", sub: "Etapa 3 · Revisión" },
+                { value: "validador" as UserRole, label: "Validador BID", sub: "Etapas 2 y 4 · Revisión" },
               ]).map(opt => (
                 <button
                   key={opt.value}
                   type="button"
                   onClick={() => setRole(opt.value)}
                   style={{
-                    flex: 1,
+                    flex: "1 1 150px",
                     padding: "10px 12px",
                     borderRadius: 10,
                     textAlign: "left",
@@ -5088,6 +5112,86 @@ function PlaceholderScreen({ label }: { label: string }) {
   );
 }
 
+// ─── Revisión: barra temporal de acceso directo entre pantallas ───────────────
+// TODO(handoff): reemplazar por navegación real (acciones de fila, botones de
+// confirmación de los modales, etc.) cuando se conecte cada bloque [CLAUDE CODE]
+// del docs/ALEPH_prompts_pipeline_hitl.md. Por ahora solo hace visibles/alcanzables
+// las pantallas ya construidas en src/app/revision/.
+type RevisionQuickNavKey =
+  | "revision-repositorio"
+  | "revision-asesor-detalle"
+  | "revision-analista-checklist"
+  | "revision-triage-modales";
+
+const REVISION_QUICK_LINKS: { key: RevisionQuickNavKey; label: string }[] = [
+  { key: "revision-repositorio", label: "Repositorio" },
+  { key: "revision-asesor-detalle", label: "Detalle Asesor (demo)" },
+  { key: "revision-analista-checklist", label: "Checklist Analista (demo)" },
+  { key: "revision-triage-modales", label: "Modales de Triage (demo)" },
+];
+
+function RevisionLoadingFallback() {
+  return (
+    <div className="p-8" style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 13, color: C.textMuted }}>
+      Cargando…
+    </div>
+  );
+}
+
+function RevisionQuickNav({ onNavigate, current }: { onNavigate: (v: View) => void; current: string }) {
+  const go = (key: RevisionQuickNavKey) => {
+    if (key === "revision-asesor-detalle" || key === "revision-analista-checklist") {
+      onNavigate({ screen: key, id: "demo" });
+    } else {
+      onNavigate({ screen: key });
+    }
+  };
+  return (
+    <div
+      className="flex flex-wrap items-center gap-2 px-4 md:px-8 py-2 flex-shrink-0"
+      style={{ borderBottom: `1px solid ${C.border}`, backgroundColor: "#F8FAFC" }}
+    >
+      <span
+        className="text-[10px] uppercase tracking-widest mr-1"
+        style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}
+      >
+        Acceso directo (temporal):
+      </span>
+      {REVISION_QUICK_LINKS.map(link => (
+        <button
+          key={link.key}
+          onClick={() => go(link.key)}
+          style={{
+            fontFamily: "Space Grotesk, sans-serif",
+            fontSize: 11,
+            fontWeight: 500,
+            padding: "4px 10px",
+            borderRadius: 9999,
+            border: `1px solid ${current === link.key ? C.steel3 : C.border}`,
+            backgroundColor: current === link.key ? `${C.steel3}18` : "transparent",
+            color: current === link.key ? C.steel4 : C.textMuted,
+            cursor: "pointer",
+          }}
+        >
+          {link.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ─── Revisión: identidad "demo" por rol ────────────────────────────────────────
+// No hay sistema de usuarios real todavía: cada UserRole de sesión se mapea a un
+// id fijo para poder probar la matriz de visibilidad de src/app/revision/store.tsx
+// (Asesor ve solo lo suyo, Analista ve su Etapa 3 + lectura de lo suyo, etc.)
+const REVISION_DEMO_USER_ID: Record<UserRole, string> = {
+  administrador: "demo-admin",
+  "usuario-bid": "demo-bid",
+  asesor: "demo-asesor",
+  analista: "demo-analista",
+  validador: "demo-validador",
+};
+
 // ─── Root ─────────────────────────────────────────────────────────────────────
 export default function App() {
   const isMobile = useIsMobile();
@@ -5128,9 +5232,31 @@ export default function App() {
     if (v.screen === "administracion") setActiveSection("administracion");
     if (v.screen === "reportes" || v.screen === "reporte-pdf") setActiveSection("reportes");
     if (v.screen === "documentacion") setActiveSection("documentacion");
+    if (v.screen.startsWith("revision")) setActiveSection("revision");
     if (v.screen === "placeholder") {
       const s = (v as { screen: "placeholder"; label: string }).label.toLowerCase() as Section;
       setActiveSection(s === "comparativa" ? "comparativa" : "repositorio");
+    }
+  };
+
+  // Puente entre los screens de src/app/revision/* (que no conocen el tipo `View`
+  // completo de este archivo) y `navigate`. Los screens todavía no construidos
+  // (ej. revision-decision-final, Lote 5) caen al default y solo hacen console.log
+  // -- así ningún botón ya wireado puede llevar a un case inexistente del switch
+  // de renderView() y mostrar pantalla en blanco.
+  const revisionNavigate = (screen: string, id?: string) => {
+    switch (screen) {
+      case "revision-repositorio":
+        navigate({ screen: "revision-repositorio" });
+        return;
+      case "revision-asesor-detalle":
+        navigate({ screen: "revision-asesor-detalle", id: id ?? "demo" });
+        return;
+      case "revision-analista-checklist":
+        navigate({ screen: "revision-analista-checklist", id: id ?? "demo" });
+        return;
+      default:
+        console.log("[revision] navegación aún no implementada:", screen, id);
     }
   };
 
@@ -5151,6 +5277,60 @@ export default function App() {
       case "reportes": return <ReportesScreen prefill={(view as { screen: "reportes"; prefill?: ReportesPrefill }).prefill} onNavigate={navigate} />;
       case "reporte-pdf": return <ReportePDFScreen context={(view as { screen: "reporte-pdf"; context?: string }).context} onNavigate={navigate} />;
       case "documentacion": return <DocumentacionScreen />;
+      case "revision-repositorio":
+        return (
+          <div className="h-full flex flex-col overflow-hidden">
+            <RevisionQuickNav onNavigate={navigate} current={view.screen} />
+            <div className="flex-1 overflow-hidden">
+              <Suspense fallback={<RevisionLoadingFallback />}>
+                <RevisionRepositorio
+                  userRole={userRole}
+                  userId={REVISION_DEMO_USER_ID[userRole]}
+                  onNavigate={revisionNavigate}
+                />
+              </Suspense>
+            </div>
+          </div>
+        );
+      case "revision-triage-modales":
+        return (
+          <div className="h-full flex flex-col overflow-hidden">
+            <RevisionQuickNav onNavigate={navigate} current={view.screen} />
+            <div className="flex-1 overflow-hidden">
+              <Suspense fallback={<RevisionLoadingFallback />}><RevisionTriageModalesDemo /></Suspense>
+            </div>
+          </div>
+        );
+      case "revision-asesor-detalle":
+        return (
+          <div className="h-full flex flex-col overflow-hidden">
+            <RevisionQuickNav onNavigate={navigate} current={view.screen} />
+            <div className="flex-1 overflow-hidden">
+              <Suspense fallback={<RevisionLoadingFallback />}>
+                <RevisionAsesorDetalle
+                  onBack={() => navigate({ screen: "revision-repositorio" })}
+                  onReject={() => console.log("rechazar hallazgo")}
+                  onAccept={() => console.log("aceptar y enviar a etapa 2")}
+                />
+              </Suspense>
+            </div>
+          </div>
+        );
+      case "revision-analista-checklist":
+        return (
+          <div className="h-full flex flex-col overflow-hidden">
+            <RevisionQuickNav onNavigate={navigate} current={view.screen} />
+            <div className="flex-1 overflow-hidden">
+              <Suspense fallback={<RevisionLoadingFallback />}>
+                <RevisionAnalistaChecklist
+                  onBack={() => navigate({ screen: "revision-repositorio" })}
+                  onSave={() => console.log("guardar avance")}
+                  onSend={() => console.log("enviar al validador")}
+                />
+              </Suspense>
+            </div>
+          </div>
+        );
       case "placeholder": return <PlaceholderScreen label={view.label} />;
     }
   };
@@ -5162,6 +5342,7 @@ export default function App() {
   };
 
   return (
+    <RevisionProvider>
     <div className="flex flex-col h-screen overflow-hidden" style={{ backgroundColor: C.canvas, fontFamily: "IBM Plex Sans, sans-serif" }}>
       {/* Mobile sticky header */}
       {isMobile && (
@@ -5194,5 +5375,6 @@ export default function App() {
         </div>
       </div>
     </div>
+    </RevisionProvider>
   );
 }
