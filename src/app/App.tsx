@@ -60,10 +60,23 @@ type View =
   | { screen: "distorsion-detail"; id: string }
   | { screen: "placeholder"; label: string }
   | { screen: "administracion"; tab?: string }
-  | { screen: "reportes" }
+  | { screen: "reportes"; prefill?: ReportesPrefill }
   | { screen: "reporte-pdf"; context?: string }
   | { screen: "documentacion" };
 type AuthView = "login" | "recover" | "recover-sent" | "recover-new" | "recover-confirmed" | "recover-expired";
+
+type ReportesPrefill = {
+  tipoHallazgo?: "distorsion" | "carga";
+  pais?: Country;
+  sectores?: string[];
+  eje?: string;
+  subdimDistorsion?: string;
+  severidades?: string[];
+  entidad?: string;
+  tipoCarga?: string;
+  subdimCarga?: string;
+  tipoTramite?: string;
+};
 
 // ─── Colours ──────────────────────────────────────────────────────────────────
 const C = {
@@ -1081,30 +1094,32 @@ function Sidebar({
 }
 
 // ─── Header ───────────────────────────────────────────────────────────────────
-function Header({ breadcrumb, title, subtitle, showExport, onExport }: { breadcrumb: string; title: string; subtitle?: string; showExport?: boolean; onExport?: () => void }) {
+// Shared button style helpers for header actions — used by each screen's actions prop
+export const HDR_BTN_PRIMARY: React.CSSProperties = {
+  display: "flex", alignItems: "center", gap: 6,
+  backgroundColor: C.text, color: "#FAFBFC",
+  fontFamily: "Space Grotesk, sans-serif", fontSize: 12, fontWeight: 600,
+  border: "none", borderRadius: 8, padding: "7px 14px", cursor: "pointer", whiteSpace: "nowrap",
+};
+export const HDR_BTN_SECONDARY: React.CSSProperties = {
+  display: "flex", alignItems: "center", gap: 6,
+  backgroundColor: "transparent", color: C.text,
+  fontFamily: "Space Grotesk, sans-serif", fontSize: 12, fontWeight: 500,
+  border: `1px solid ${C.border}`, borderRadius: 8, padding: "7px 14px", cursor: "pointer", whiteSpace: "nowrap",
+};
+
+function Header({ breadcrumb, title, subtitle, actions }: { breadcrumb: string; title: string; subtitle?: string; actions?: React.ReactNode }) {
   const isMobile = useIsMobile();
   return (
     <div className="mb-5 md:mb-6">
-      <div className="flex items-start justify-between">
-        <div className="flex-1 min-w-0 mr-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
           <p className="text-[10px] md:text-[11px] uppercase tracking-widest mb-0.5" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{breadcrumb}</p>
           <h1 className="text-[22px] md:text-[28px] font-semibold leading-tight" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>{title}</h1>
           {subtitle && <p className="text-[12px] md:text-[13px] mt-0.5" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{subtitle}</p>}
         </div>
         <div className="flex items-center gap-2 flex-shrink-0 mt-1">
-          <button className="flex items-center gap-1.5 px-3 md:px-4 py-2 rounded-lg text-[12px] md:text-sm font-medium" style={{ backgroundColor: C.text, color: "#FAFBFC", fontFamily: "Space Grotesk, sans-serif", border: "none" }}
-              onClick="">
-              <span className="hidden sm:inline">Generar Reporte</span>
-              <span className="sm:hidden">PDF</span>
-            </button>
-          {showExport && (
-            <button className="flex items-center gap-1.5 px-3 md:px-4 py-2 rounded-lg text-[12px] md:text-sm font-medium" style={{ backgroundColor: C.text, color: "#FAFBFC", fontFamily: "Space Grotesk, sans-serif", border: "none" }}
-              onClick={onExport}>
-              <Download size={14} />
-              <span className="hidden sm:inline">Exportar PDF</span>
-              <span className="sm:hidden">PDF</span>
-            </button>
-          )}
+          {actions}
           {!isMobile && (
             <>
               <button className="w-9 h-9 rounded-full flex items-center justify-center" style={{ backgroundColor: C.steel2 }}>
@@ -1190,7 +1205,13 @@ function RegionalDashboard({ country = "Todos", onCountryChange, onNavigate }: {
 
   return (
     <div className="p-4 md:p-8 overflow-y-auto h-full">
-      <Header breadcrumb="Regulaciones › Panorama" title="Panel Regional" showExport onExport={() => onNavigate({ screen: "reporte-pdf", context: "regional" })} />
+      <Header breadcrumb="Regulaciones › Panorama" title="Panel Regional"
+        actions={
+          <button style={HDR_BTN_SECONDARY} onClick={() => onNavigate({ screen: "reporte-pdf", context: JSON.stringify({ tipo: "estrategico", pais: country, fecha: new Date().toLocaleString("es-BO") }) })}>
+            <Download size={13} /><span className="hidden sm:inline">Exportar PDF</span><span className="sm:hidden">PDF</span>
+          </button>
+        }
+      />
 
       {/* Country selector — first control in filter bar */}
       {onCountryChange && (
@@ -1440,7 +1461,13 @@ function CountryDashboard({ country, onCountryChange, onNavigate }: { country: s
 
   return (
     <div className="p-4 md:p-8 overflow-y-auto h-full">
-      <Header breadcrumb={`Regulaciones › Panorama › ${country}`} title={country} subtitle="Análisis activo · Actualizado marzo 2026" showExport onExport={() => onNavigate({ screen: "reporte-pdf", context: country })} />
+      <Header breadcrumb={`Regulaciones › Panorama › ${country}`} title={country} subtitle="Análisis activo · Actualizado marzo 2026"
+        actions={
+          <button style={HDR_BTN_SECONDARY} onClick={() => onNavigate({ screen: "reporte-pdf", context: JSON.stringify({ tipo: "estrategico", pais: country, fecha: new Date().toLocaleString("es-BO") }) })}>
+            <Download size={13} /><span className="hidden sm:inline">Exportar PDF</span><span className="sm:hidden">PDF</span>
+          </button>
+        }
+      />
 
       {/* Country selector — first control in filter bar */}
       {onCountryChange && (
@@ -1709,16 +1736,33 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
         if (subdimension) activeFilters.push(`Subdimensión: ${subdimension}`);
         if (jerarquia) activeFilters.push(`Jerarquía: ${jerarquia}`);
         if (severidadFil) activeFilters.push(`Severidad: ${severidadFil}`);
-        const exportCtx = JSON.stringify({ pais: countryLabel, filtros: activeFilters.length ? activeFilters : ["Sin filtros aplicados"], registros: `${filtered.length} de ${BARRERAS_NIVEL4_LIST.length} barreras`, fecha: new Date().toLocaleString("es-BO"), periodo: "enero 2015 – marzo 2026" });
+        const exportCtx = JSON.stringify({ tipo: "distorsion", pais: countryLabel, sector: sector || "Todos los sectores", filtros: activeFilters, registros: `${filtered.length} de ${BARRERAS_NIVEL4_LIST.length} barreras`, fecha: new Date().toLocaleString("es-BO"), periodo: "enero 2015 – marzo 2026" });
         const cd = COUNTRY_BARRERAS_DATA[country] ?? COUNTRY_BARRERAS_DATA["Bolivia"];
+        const reportesPrefill: ReportesPrefill = {
+          tipoHallazgo: "distorsion",
+          pais: country,
+          sectores: sector ? [sector] : [],
+          eje: clasificacion || "",
+          subdimDistorsion: subdimension || "",
+          severidades: severidadFil ? [severidadFil] : [],
+          entidad: entidad || "",
+        };
         return (
           <>
             <Header
               breadcrumb="Regulaciones › Barreras"
               title="Barreras"
               subtitle={countryLabel}
-              showExport
-              onExport={() => onNavigate({ screen: "reporte-pdf", context: exportCtx })}
+              actions={
+                <>
+                  <button style={HDR_BTN_SECONDARY} onClick={() => onNavigate({ screen: "reporte-pdf", context: exportCtx })}>
+                    <Download size={13} /><span className="hidden sm:inline">Exportar PDF</span><span className="sm:hidden">PDF</span>
+                  </button>
+                  <button style={HDR_BTN_PRIMARY} onClick={() => onNavigate({ screen: "reportes", prefill: reportesPrefill })}>
+                    <ExternalLink size={13} /><span className="hidden sm:inline">Generar reporte</span><span className="sm:hidden">Reporte</span>
+                  </button>
+                </>
+              }
             />
 
             <BarraFiltrosBarreras
@@ -2149,14 +2193,31 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
         if (etapaCiclo) activeFilters.push(`Etapa: ${etapaCiclo}`);
         if (tamano) activeFilters.push(`Tamaño: ${tamano}`);
         if (ano) activeFilters.push(`Año: ${ano}`);
-        const exportCtx = JSON.stringify({ pais: countryLabel, filtros: activeFilters.length ? activeFilters : ["Sin filtros aplicados"], registros: `${filtered.length} de ${TRAMITES_EXT.length} trámites`, fecha: new Date().toLocaleString("es-BO"), periodo: "enero 2015 – marzo 2026" });
+        const exportCtx = JSON.stringify({ tipo: "carga", pais: countryLabel, sector: sector || "Todos los sectores", filtros: activeFilters, registros: `${filtered.length} de ${TRAMITES_EXT.length} trámites`, fecha: new Date().toLocaleString("es-BO"), periodo: "enero 2015 – marzo 2026" });
+        const reportesPrefill: ReportesPrefill = {
+          tipoHallazgo: "carga",
+          pais: country,
+          sectores: sector ? [sector] : [],
+          tipoCarga: tipoCarga || "",
+          subdimCarga: subdimension || "",
+          tipoTramite: tipoUsuario || "",
+          entidad: entidad || "",
+        };
         return (
           <Header
             breadcrumb="Regulaciones › Trámites"
             title="Trámites"
             subtitle={`${countryLabel} · Todos los sectores`}
-            showExport
-            onExport={() => onNavigate({ screen: "reporte-pdf", context: exportCtx })}
+            actions={
+              <>
+                <button style={HDR_BTN_SECONDARY} onClick={() => onNavigate({ screen: "reporte-pdf", context: exportCtx })}>
+                  <Download size={13} /><span className="hidden sm:inline">Exportar PDF</span><span className="sm:hidden">PDF</span>
+                </button>
+                <button style={HDR_BTN_PRIMARY} onClick={() => onNavigate({ screen: "reportes", prefill: reportesPrefill })}>
+                  <ExternalLink size={13} /><span className="hidden sm:inline">Generar reporte</span><span className="sm:hidden">Reporte</span>
+                </button>
+              </>
+            }
           />
         );
       })()}
@@ -3269,7 +3330,7 @@ function AdminUsuariosScreen() {
 
   return (
     <div className="p-4 md:p-8 overflow-y-auto h-full">
-      <Header breadcrumb="Administración — Usuarios" title="Usuarios" subtitle="Gestión del sistema · Rol: Administrador" showExport={false} />
+      <Header breadcrumb="Administración — Usuarios" title="Usuarios" subtitle="Gestión del sistema · Rol: Administrador" />
       <div className="flex items-center justify-between mb-4">
         <p className="text-[13px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{users.length} usuarios registrados</p>
         <button className="flex items-center gap-2 px-3 md:px-4 py-2 rounded-lg text-[13px] font-medium min-h-[44px]"
@@ -3393,7 +3454,7 @@ function AdminCatalogosScreen() {
   // ── List view ──────────────────────────────────────────────────────────────
   if (view === "list") return (
     <div className="p-4 md:p-8 overflow-y-auto h-full">
-      <Header breadcrumb="Administración — Catálogos" title="Catálogos" subtitle="Gestión del sistema · Rol: Administrador" showExport={false} />
+      <Header breadcrumb="Administración — Catálogos" title="Catálogos" subtitle="Gestión del sistema · Rol: Administrador" />
       <div className="rounded-lg overflow-hidden" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
         {CATALOG_LIST.map((cat, i) => (
           <div key={cat.key} className="px-6 py-4 flex items-center justify-between"
@@ -3416,7 +3477,7 @@ function AdminCatalogosScreen() {
   // ── Generic items view ─────────────────────────────────────────────────────
   if (view === "items") return (
     <div className="p-4 md:p-8 overflow-y-auto h-full">
-      <Header breadcrumb={`Administración — Catálogos — ${catLabel}`} title={catLabel} subtitle="Gestión del sistema · Rol: Administrador" showExport={false} />
+      <Header breadcrumb={`Administración — Catálogos — ${catLabel}`} title={catLabel} subtitle="Gestión del sistema · Rol: Administrador" />
       <div className="flex items-center gap-3 mb-4">
         <button className="text-[13px]" style={{ color: C.steel3, fontFamily: "IBM Plex Sans, sans-serif", background: "none", border: "none" }}
           onClick={() => setView("list")}>← Volver a Catálogos</button>
@@ -3507,7 +3568,7 @@ function AdminCatalogosScreen() {
   // ── Roles list view ────────────────────────────────────────────────────────
   if (view === "roles") return (
     <div className="p-4 md:p-8 overflow-y-auto h-full">
-      <Header breadcrumb="Administración — Catálogos — Roles" title="Roles" subtitle="Gestión del sistema · Rol: Administrador" showExport={false} />
+      <Header breadcrumb="Administración — Catálogos — Roles" title="Roles" subtitle="Gestión del sistema · Rol: Administrador" />
       <div className="flex items-center justify-between mb-4">
         <button className="text-[13px]" style={{ color: C.steel3, fontFamily: "IBM Plex Sans, sans-serif", background: "none", border: "none" }}
           onClick={() => setView("list")}>← Volver a Catálogos</button>
@@ -3624,7 +3685,7 @@ function AdminCatalogosScreen() {
   // ── Role permissions view ──────────────────────────────────────────────────
   return (
     <div className="p-4 md:p-8 overflow-y-auto h-full">
-      <Header breadcrumb={`Administración — Catálogos — Roles — ${selectedRole}`} title={selectedRole} subtitle="Gestión del sistema · Rol: Administrador" showExport={false} />
+      <Header breadcrumb={`Administración — Catálogos — Roles — ${selectedRole}`} title={selectedRole} subtitle="Gestión del sistema · Rol: Administrador" />
       <div className="flex items-center mb-5">
         <button className="text-[13px]" style={{ color: C.steel3, fontFamily: "IBM Plex Sans, sans-serif", background: "none", border: "none" }}
           onClick={() => setView("roles")}>← Volver a Roles</button>
@@ -3673,7 +3734,7 @@ function AdminPermisosScreen() {
 
   return (
     <div className="p-4 md:p-8 overflow-y-auto h-full">
-      <Header breadcrumb="Administración — Permisos" title="Permisos" subtitle="Gestión del sistema · Rol: Administrador" showExport={false} />
+      <Header breadcrumb="Administración — Permisos" title="Permisos" subtitle="Gestión del sistema · Rol: Administrador" />
       <div className="rounded-lg overflow-hidden overflow-x-auto" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
         <table className="w-full min-w-[560px]">
           <thead>
@@ -3707,7 +3768,7 @@ function AdminPermisosScreen() {
 }
 
 // ─── Reportes ─────────────────────────────────────────────────────────────────
-function ReportesScreen({ onNavigate }: { onNavigate: (v: View) => void }) {
+function ReportesScreen({ prefill, onNavigate }: { prefill?: ReportesPrefill; onNavigate: (v: View) => void }) {
   const COUNTRIES: Country[] = ["Todos", "Argentina", "Bolivia", "Chile", "Ecuador", "Perú"];
   const CORPUS_MIN = "2015-01";
   const CORPUS_MAX = "2026-03";
@@ -3739,30 +3800,30 @@ function ReportesScreen({ onNavigate }: { onNavigate: (v: View) => void }) {
   const ACCIONES_AMR = ["Eliminar", "Simplificar", "Digitalizar", "Interoperar", "Clarificar", "Proporcionalizar", "Sustituir", "Armonizar", "Neutralidad competitiva", "Mantener con justificación"];
   const SEVERIDADES = ["Crítico", "Alto", "Mediano", "Bajo"];
 
-  // ── State ──────────────────────────────────────────────────────────────────────
-  const [tipoHallazgo, setTipoHallazgo] = useState<"distorsion" | "carga">("distorsion");
+  // ── State (initialised from prefill when navigating from Barreras / Trámites) ──
+  const [tipoHallazgo, setTipoHallazgo] = useState<"distorsion" | "carga">(prefill?.tipoHallazgo ?? "distorsion");
 
   // Siempre visibles
-  const [pais, setPais] = useState<Country>("Todos");
-  const [selectedSectors, setSelectedSectors] = useState<string[]>([]);
+  const [pais, setPais] = useState<Country>(prefill?.pais ?? "Todos");
+  const [selectedSectors, setSelectedSectors] = useState<string[]>(prefill?.sectores ?? []);
   const [periodoTipo, setPeriodoTipo] = useState<"todo" | "1ano" | "3anos" | "5anos" | "personalizado">("todo");
   const [periodoDesde, setPeriodoDesde] = useState("2015-01");
   const [periodoHasta, setPeriodoHasta] = useState("2026-03");
   const [tipoEntidad, setTipoEntidad] = useState("");
-  const [entidad, setEntidad] = useState("");
+  const [entidad, setEntidad] = useState(prefill?.entidad ?? "");
   const [formato, setFormato] = useState<"pdf" | "excel">("pdf");
 
   // Distorsión-specific
-  const [eje, setEje] = useState("");
-  const [subdimDistorsion, setSubdimDistorsion] = useState("");
+  const [eje, setEje] = useState(prefill?.eje ?? "");
+  const [subdimDistorsion, setSubdimDistorsion] = useState(prefill?.subdimDistorsion ?? "");
   const [selectedTiposRestriccion, setSelectedTiposRestriccion] = useState<string[]>([]);
-  const [selectedSeveridades, setSelectedSeveridades] = useState<string[]>([]);
+  const [selectedSeveridades, setSelectedSeveridades] = useState<string[]>(prefill?.severidades ?? []);
   const [selectedAccionesDistorsion, setSelectedAccionesDistorsion] = useState<string[]>([]);
 
   // Carga-specific
-  const [tipoCarga, setTipoCarga] = useState("");
-  const [subdimCarga, setSubdimCarga] = useState("");
-  const [tipoTramite, setTipoTramite] = useState("");
+  const [tipoCarga, setTipoCarga] = useState(prefill?.tipoCarga ?? "");
+  const [subdimCarga, setSubdimCarga] = useState(prefill?.subdimCarga ?? "");
+  const [tipoTramite, setTipoTramite] = useState(prefill?.tipoTramite ?? "");
   const [selectedAccionesCarga, setSelectedAccionesCarga] = useState<string[]>([]);
 
   // ── Derived ────────────────────────────────────────────────────────────────────
@@ -3838,7 +3899,7 @@ function ReportesScreen({ onNavigate }: { onNavigate: (v: View) => void }) {
 
   return (
     <div className="p-4 md:p-8 overflow-y-auto h-full">
-      <Header breadcrumb="Reportes" title="Generador de reportes" subtitle="Configura los filtros y descarga el informe estructurado" showExport={false} />
+      <Header breadcrumb="Reportes" title="Generador de reportes" subtitle="Configura los filtros y descarga el informe estructurado" />
 
       <div className="grid grid-cols-1 md:grid-cols-[1fr_380px] gap-5">
         {/* Left — Controls */}
@@ -4125,229 +4186,736 @@ function ReportesScreen({ onNavigate }: { onNavigate: (v: View) => void }) {
   );
 }
 
-// ─── Reporte PDF ───────────────────────────────────────────────────────────────
-function ReportePDFScreen({ context, onNavigate }: { context?: string; onNavigate: (v: View) => void }) {
-  const pais = context && context !== "regional" ? context : "Bolivia";
-  const fecha = "Marzo 2026";
-  const sector = "Agroindustria Cafetalera";
-  const codigo = `ALEPH-${pais.slice(0, 3).toUpperCase()}-AGRO-2026-001`;
+// ─── Reporte Estratégico ──────────────────────────────────────────────────────
+function ReporteEstrategicoScreen({ pais: rawPais, onNavigate }: {
+  pais?: string; onNavigate: (v: View) => void;
+}) {
+  const VALID: Country[] = ["Argentina", "Bolivia", "Chile", "Ecuador", "Perú"];
+  const pais: Country = VALID.includes(rawPais as Country) ? rawPais as Country : "Bolivia";
+  const isRegional = !VALID.includes(rawPais as Country);
+  const paisLabel = isRegional ? "Regional (5 países)" : pais;
+  const paisCode  = isRegional ? "REG" : pais.slice(0, 3).toUpperCase();
+  const codigo    = `ALEPH-${paisCode}-EST-2026-001`;
 
-  const Tag = ({ label, color }: { label: string; color?: string }) => (
-    <span className="inline-flex items-center px-2.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide"
-      style={{ backgroundColor: (color ?? C.steel3) + "18", color: color ?? C.steel3, fontFamily: "Space Grotesk, sans-serif", border: `1px solid ${(color ?? C.steel3)}30` }}>
+  const cd      = COUNTRY_BARRERAS_DATA[pais] ?? COUNTRY_BARRERAS_DATA["Bolivia"];
+  const cargaCd = COUNTRY_CARGA[pais] ?? { total: 397, criticas: 52 };
+  const f       = cd.total / 397;   // scaling factor vs. Bolivia canonical
+
+  // Instruments per country (from JERARQUIA_NORMATIVA_DATA sums)
+  const instrPorPais: Record<string, number> = {
+    Todos: 1842, Argentina: 421, Perú: 415, Chile: 358, Ecuador: 336, Bolivia: 312,
+  };
+  const instrTotal = instrPorPais[isRegional ? "Todos" : pais] ?? 312;
+
+  // Entidades estimated per country
+  const entidadesPorPais: Record<string, number> = {
+    Todos: 148, Argentina: 42, Bolivia: 24, Chile: 29, Ecuador: 35, Perú: 31,
+  };
+  const entidadesTotal = entidadesPorPais[isRegional ? "Todos" : pais] ?? 24;
+
+  // Severity breakdown (Bolivia base: criticas=91, altas=168, mediano=96, bajo=42)
+  const sevCritico = cd.criticas;
+  const sevAlto    = Math.round(168 * f);
+  const sevMediano = Math.round(96  * f);
+  const sevBajo    = Math.round(42  * f);
+
+  // Scale BarrasComposicion data
+  const scaleBC = (data: BarrasComposicionCategoria[]): BarrasComposicionCategoria[] =>
+    data.map(cat => ({
+      nombre: cat.nombre,
+      total: Math.round(cat.total * f),
+      componentes: cat.componentes.map(c => ({ nombre: c.nombre, valor: Math.round(c.valor * f) })),
+    }));
+  const distorsionesData = scaleBC(CLASIFICACION_BARRERAS_DATA);
+  const cargaBarrasData  = scaleBC(CARGA_TIPO_BOL_DATA);
+  const cargaTotal       = cargaBarrasData.reduce((s, c) => s + c.total, 0);
+
+  // ── Hallazgos pool (distorsión) ─────────────────────────────────────────────
+  const DIST_POOL: { pais: Country; entidad: string; titulo: string; cita: string; severidad: string; accion: string; costo: number }[] = [
+    { pais: "Bolivia",   entidad: "ARSA",                    titulo: "Bloqueo por Renovación de Registros",          cita: "…sin tolerancia de variación por merma natural ni pérdida durante el almacenamiento previo al despacho.", severidad: "Crítico", accion: "Simplificar",     costo: 4.2 },
+    { pais: "Bolivia",   entidad: "SENAVEX",                 titulo: "Restricción de Operadores de Maquila",          cita: "Solo podrán operar las empresas registradas con un mínimo de cinco años de operación continua ininterrumpida.", severidad: "Crítico", accion: "Eliminar",        costo: 4.1 },
+    { pais: "Argentina", entidad: "BCRA",                    titulo: "Registros Superpuestos entre Entidades",        cita: "El empleador deberá presentar ante cada entidad supervisora su propio expediente sin reconocimiento mutuo.", severidad: "Crítico", accion: "Armonizar",       costo: 3.9 },
+    { pais: "Ecuador",   entidad: "SENASA",                  titulo: "Obligación de Reporte Físico",                  cita: "Los reportes de cumplimiento deben presentarse en papel con certificación notarial de forma bimensual.", severidad: "Crítico", accion: "Digitalizar",     costo: 3.7 },
+    { pais: "Bolivia",   entidad: "ASFI",                    titulo: "Capital Mínimo Desproporcionado",               cita: "El capital mínimo exigido supera en cuatro veces el promedio regional para actividades equivalentes.", severidad: "Crítico", accion: "Proporcionalizar", costo: 3.5 },
+    { pais: "Bolivia",   entidad: "SENAVEX",                 titulo: "Restricción de Venta Local en ZOLI",            cita: "Las empresas en zona libre no podrán destinar al mercado local más del 5% de su producción total.", severidad: "Crítico", accion: "Eliminar",        costo: 3.4 },
+    { pais: "Ecuador",   entidad: "IICA",                    titulo: "Registro Duplicado Inter-agencias",             cita: "La empresa deberá obtener certificación independiente de cada entidad sin reconocimiento entre organismos.", severidad: "Crítico", accion: "Armonizar",       costo: 3.2 },
+    { pais: "Argentina", entidad: "Min. Economía",           titulo: "Monopolio de Distribución Estatal",             cita: "La distribución de fibras sintéticas solo podrá realizarse a través de la empresa estatal designada.", severidad: "Crítico", accion: "Eliminar",        costo: 3.1 },
+    { pais: "Bolivia",   entidad: "Min. Economía y Finanzas",titulo: "Tasa de Habilitación Excesiva",                 cita: "La tasa de habilitación equivale al 12% del capital declarado sin límite máximo ni escala proporcional.", severidad: "Alto",    accion: "Proporcionalizar", costo: 2.9 },
+    { pais: "Ecuador",   entidad: "Código de Comercio",      titulo: "Reserva Obligatoria de Actividad",              cita: "Ciertas actividades quedan reservadas exclusivamente para operadores públicos autorizados por decreto.", severidad: "Alto",    accion: "Eliminar",        costo: 2.8 },
+    { pais: "Perú",      entidad: "Aduana Nacional",         titulo: "Canal Rojo Aduanero Obligatorio",               cita: "Todos los envíos del sector deberán ingresar por canal rojo de inspección física sin excepción posible.", severidad: "Alto",    accion: "Simplificar",     costo: 2.7 },
+    { pais: "Chile",     entidad: "Subtel",                  titulo: "Monopolio de Espectro Radioeléctrico",          cita: "La asignación de espectro adicional requiere autorización ministerial discrecional sin plazo definido.", severidad: "Crítico", accion: "Clarificar",      costo: 2.6 },
+  ];
+
+  // ── Hallazgos pool (carga) ──────────────────────────────────────────────────
+  const CARGA_POOL: { pais: Country; entidad: string; tramite: string; cita: string; tipo: string; accion: string; costo: string }[] = [
+    { pais: "Argentina", entidad: "Direc. Nac. Habilitaciones", tramite: "Permiso de Construcción",    cita: "El proceso requiere 14 pasos secuenciales ante 5 entidades distintas sin ventanilla única disponible.", tipo: "Empresarial", accion: "Simplificar",  costo: "$4.2M" },
+    { pais: "Ecuador",   entidad: "ARCSA",                      tramite: "Registro Sanitario",          cita: "La renovación obliga a repetir el proceso completo cada dos años sin reconocimiento de antecedentes.", tipo: "Empresarial", accion: "Digitalizar",  costo: "$4.2M" },
+    { pais: "Bolivia",   entidad: "SENAVEX",                    tramite: "Licencia de Operación",       cita: "La licencia requiere presencia física en hasta tres dependencias con documentos originales cada vez.", tipo: "Empresarial", accion: "Digitalizar",  costo: "$4.2M" },
+    { pais: "Argentina", entidad: "AFIP",                       tramite: "Apertura de Empresa",         cita: "La formalización empresarial promedio toma 21 días hábiles ante organismos no integrados entre sí.", tipo: "Empresarial", accion: "Simplificar",  costo: "$3.9M" },
+    { pais: "Bolivia",   entidad: "SENAVEX",                    tramite: "Certificado de Exportación",  cita: "El visado físico de exportación requiere presencia y documentos originales en cada operación individual.", tipo: "Empresarial", accion: "Digitalizar",  costo: "$3.7M" },
+    { pais: "Ecuador",   entidad: "SENAE",                      tramite: "Habilitación Sanitaria",      cita: "Exige inspección física sin opción de autogestión aun cuando la empresa tiene historial de cumplimiento.", tipo: "Empresarial", accion: "Proporcionalizar", costo: "$3.5M" },
+    { pais: "Perú",      entidad: "SUNAT",                      tramite: "Inscripción Tributaria",      cita: "Requiere documentación física redundante con información ya disponible en bases de datos estatales.", tipo: "Ciudadano",   accion: "Interoperar",  costo: "$3.2M" },
+    { pais: "Chile",     entidad: "Aduana",                     tramite: "Declaración Aduanera",        cita: "Múltiples sistemas no integrados obligan a reingresar la misma información en plataformas distintas.", tipo: "Empresarial", accion: "Interoperar",  costo: "$3.1M" },
+  ];
+
+  const distHallazgos = (() => {
+    const filtered = DIST_POOL.filter(h => isRegional || h.pais === pais).sort((a, b) => b.costo - a.costo).slice(0, 2);
+    return filtered.length >= 2 ? filtered : [...DIST_POOL].sort((a, b) => b.costo - a.costo).slice(0, 2);
+  })();
+  const cargaHallazgos = (() => {
+    const filtered = CARGA_POOL.filter(h => isRegional || h.pais === pais).slice(0, 2);
+    return filtered.length >= 2 ? filtered : CARGA_POOL.slice(0, 2);
+  })();
+
+  // ── Mensajes principales ────────────────────────────────────────────────────
+  const mensajes = [
+    `Se identificaron ${cd.total.toLocaleString()} barreras regulatorias con potencial de ajuste en ${paisLabel}. De estas, ${cd.criticas} presentan impacto crítico (IRR 4) con efecto directo sobre la competitividad del sector privado.`,
+    `Las barreras de entrada concentran ${distorsionesData[0]?.total ?? 0} hallazgos, con la subdimensión de Comercio como la más restrictiva. El 40% de los instrumentos identificados requieren acción normativa en el corto plazo.`,
+    `La carga regulatoria acumulada genera costos de cumplimiento estimados en USD ${(cargaCd.total * 4.2 / 397).toFixed(1)}M anuales para el sector empresarial. Los trámites de mayor fricción concentran el 68% del costo total identificado.`,
+    `Digitalización e interoperabilidad son las principales palancas de reforma. ${cargaBarrasData[1]?.total ?? 0} hallazgos de accesibilidad señalan oportunidades concretas de simplificación sin modificación legislativa.`,
+    `El análisis AMR identifica ${Math.round(cd.total * 0.22)} normas susceptibles de eliminación o simplificación directa en el corto plazo, con impacto económico positivo estimado en los primeros 12 meses de implementación.`,
+  ];
+
+  // ── Acciones AMR ────────────────────────────────────────────────────────────
+  const accionesAMR = [
+    { verbo: "Eliminar",         desc: `${Math.round(cd.total * 0.08)} instrumentos normativos duplicados o sin justificación de política, concentrados en sectores de entrada al mercado.` },
+    { verbo: "Simplificar",      desc: `Reducción de pasos en ${Math.round(cargaCd.total * 0.3)} trámites de alta carga mediante aprobación automática y silencio administrativo positivo.` },
+    { verbo: "Digitalizar",      desc: `Migración de ${Math.round(cargaCd.total * 0.25)} requisitos físicos obligatorios a plataformas de ventanilla única con interoperabilidad estatal.` },
+    { verbo: "Proporcionalizar", desc: `Revisión de ${Math.round(cd.total * 0.12)} normas con sanciones o capitales mínimos sin sustento técnico ni alineación con el riesgo regulatorio.` },
+    { verbo: "Armonizar",        desc: `Alineación de marcos normativos con estándares regionales comparables en ${cd.sectores} sectores para reducir cargas de cumplimiento diferencial.` },
+  ];
+
+  // ── Sub-components ──────────────────────────────────────────────────────────
+  const SecLabel = ({ num, title }: { num: string; title: string }) => (
+    <div className="mb-5">
+      <p className="text-[10px] uppercase tracking-widest mb-1" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Sección {num}</p>
+      <h2 className="text-[20px] font-semibold leading-tight" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>{title}</h2>
+    </div>
+  );
+  const Div = () => <div className="my-8" style={{ borderTop: `1px solid ${C.border}` }} />;
+
+  const AMRBadge = ({ label }: { label: string }) => (
+    <span className="inline-flex items-center px-2.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide flex-shrink-0"
+      style={{ backgroundColor: C.steel4 + "12", color: C.steel4, border: `1px solid ${C.steel4}25`, fontFamily: "Space Grotesk, sans-serif" }}>
       {label}
     </span>
   );
 
-  const Divider = () => <div className="my-8" style={{ borderTop: `1px solid ${C.border}` }} />;
-
-  const FichaBarrera = ({ num, titulo, autoridad, norma, textoNormativo, pasaje, barrera, problema, afectado, impacto, tipoImpacto, sugerencia, tipoSugerencia }: {
-    num: number; titulo: string; autoridad: string; norma: string; textoNormativo: string; pasaje: string;
-    barrera: string; problema: string; afectado: string; impacto: string; tipoImpacto: string; sugerencia: string; tipoSugerencia: string;
-  }) => {
-    const parts = textoNormativo.split(pasaje);
+  const SevBadge = ({ nivel }: { nivel: string }) => {
+    const col = nivel === "Crítico" ? C.critico : nivel === "Alto" ? C.alto : nivel === "Mediano" ? C.mediano : C.bajo;
     return (
-      <div className="rounded-xl overflow-hidden mb-6" style={{ border: `1px solid ${C.border}` }}>
-        {/* Header ficha */}
-        <div className="px-6 py-4 flex items-center justify-between" style={{ backgroundColor: C.steel4, color: "white" }}>
-          <div className="flex items-center gap-3">
-            <span className="text-[13px] font-semibold" style={{ fontFamily: "Space Grotesk, sans-serif" }}>Barrera #{num}</span>
-            <Tag label="Crítico" color="#C75450" />
-          </div>
-          <span className="text-[11px] opacity-70" style={{ fontFamily: "IBM Plex Sans, sans-serif" }}>{autoridad}</span>
-        </div>
-
-        <div className="p-6 flex flex-col gap-5" style={{ backgroundColor: C.card }}>
-          {/* Título */}
-          <div>
-            <p className="text-[11px] uppercase tracking-widest mb-1" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Identificación</p>
-            <h3 className="text-[16px] font-semibold mb-2" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>{titulo}</h3>
-            <div className="flex gap-4">
-              <span className="text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>Autoridad: <strong style={{ color: C.text }}>{autoridad}</strong></span>
-              <span className="text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>Norma: <strong style={{ color: C.text }}>{norma}</strong></span>
-              <span className="text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>Sector: <strong style={{ color: C.text }}>{sector}</strong></span>
-            </div>
-          </div>
-
-          {/* Texto normativo */}
-          <div>
-            <p className="text-[11px] uppercase tracking-widest mb-2" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Texto normativo literal</p>
-            <div className="p-4 rounded-lg text-[12px] leading-relaxed italic"
-              style={{ backgroundColor: "#F4F7FA", border: `1px solid ${C.border}`, fontFamily: "IBM Plex Sans, sans-serif", color: C.text }}>
-              <div className="flex gap-3">
-                <div className="w-1 flex-shrink-0 rounded-full self-stretch" style={{ backgroundColor: C.steel3 }} />
-                <p>
-                  {parts[0]}
-                  <mark style={{ backgroundColor: C.steel3 + "28", color: C.steel4, padding: "0 2px", borderRadius: 2, fontStyle: "normal", fontWeight: 600 }}>{pasaje}</mark>
-                  {parts[1]}
-                </p>
-              </div>
-              <p className="text-[10px] mt-2 not-italic" style={{ color: C.textMuted }}>texto de muestra · {norma}</p>
-            </div>
-          </div>
-
-          {/* Barrera / Problema / Afectado */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {[
-              { label: "Barrera identificada", val: barrera },
-              { label: "Problema regulatorio", val: problema },
-              { label: "Parte afectada", val: afectado },
-            ].map(({ label, val }) => (
-              <div key={label}>
-                <p className="text-[10px] uppercase tracking-widest mb-1" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>{label}</p>
-                <p className="text-[12px] leading-snug" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text }}>{val}</p>
-              </div>
-            ))}
-          </div>
-
-          {/* Impacto */}
-          <div className="rounded-lg p-4" style={{ backgroundColor: C.critico + "08", border: `1px solid ${C.critico}25` }}>
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-[10px] uppercase tracking-widest" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.critico }}>Impacto económico estimado</p>
-              <Tag label={tipoImpacto} color={C.critico} />
-            </div>
-            <p className="text-[20px] font-semibold" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.steel4 }}>{impacto}</p>
-            <p className="text-[10px] mt-0.5" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>simulado · modelo SCM</p>
-          </div>
-
-          {/* Sugerencias */}
-          <div className="rounded-lg p-4" style={{ backgroundColor: C.steel3 + "08", border: `1px solid ${C.steel3}25` }}>
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-[10px] uppercase tracking-widest" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.steel3 }}>Sugerencia de reforma</p>
-              <Tag label={tipoSugerencia} />
-            </div>
-            <p className="text-[12px] leading-relaxed" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text }}>{sugerencia}</p>
-          </div>
-        </div>
-      </div>
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide flex-shrink-0"
+        style={{ backgroundColor: col + "18", color: col, border: `1px solid ${col}30`, fontFamily: "Space Grotesk, sans-serif" }}>
+        {nivel}
+      </span>
     );
   };
 
   return (
     <div className="overflow-y-auto h-full" style={{ backgroundColor: C.canvas }}>
       {/* Toolbar */}
-      <div className="sticky top-0 z-10 flex items-center justify-between px-4 md:px-8 py-3" style={{ backgroundColor: C.card, borderBottom: `1px solid ${C.border}` }}>
-        <button className="flex items-center gap-1.5 text-[13px]" style={{ color: C.steel3, fontFamily: "IBM Plex Sans, sans-serif", background: "none", border: "none" }}
-          onClick={() => onNavigate({ screen: "reportes" })}>← Volver a Reportes</button>
+      <div className="sticky top-0 z-10 flex items-center justify-between px-4 md:px-8 py-3"
+        style={{ backgroundColor: C.card, borderBottom: `1px solid ${C.border}` }}>
+        <button className="flex items-center gap-1.5 text-[13px]"
+          style={{ color: C.steel3, fontFamily: "IBM Plex Sans, sans-serif", background: "none", border: "none", cursor: "pointer" }}
+          onClick={() => isRegional ? onNavigate({ screen: "regional-dashboard" }) : onNavigate({ screen: "country-dashboard", country: pais })}>
+          ← Volver a Panorama
+        </button>
         <div className="flex items-center gap-3">
-          <span className="text-[11px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>Machote · Datos de muestra</span>
-          <button className="flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-medium"
-            style={{ backgroundColor: C.steel4, color: "white", fontFamily: "Space Grotesk, sans-serif", border: "none" }}>
-            <Download size={14} /> Descargar PDF
+          <span className="text-[11px] hidden sm:inline" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>
+            Reporte Estratégico · Datos simulados
+          </span>
+          <button className="flex items-center gap-2 px-4 py-2 rounded-lg text-[12px] font-semibold"
+            style={{ backgroundColor: C.steel4, color: "white", fontFamily: "Space Grotesk, sans-serif", border: "none", cursor: "pointer" }}>
+            <Download size={13} /> Descargar PDF
           </button>
         </div>
       </div>
 
       {/* Paper */}
-      <div className="max-w-[820px] mx-auto my-4 md:my-8 mx-2 md:mx-auto shadow-xl rounded-xl overflow-hidden">
+      <div className="max-w-[820px] mx-auto my-4 md:my-8 shadow-xl rounded-xl overflow-hidden" style={{ marginLeft: "auto", marginRight: "auto" }}>
 
-        {/* ── Portada ── */}
-        <div className="px-6 md:px-16 py-10 md:py-16 flex flex-col" style={{ backgroundColor: C.steel4, minHeight: 480 }}>
-          {/* Logo */}
+        {/* ── PORTADA ── */}
+        <div className="px-10 md:px-16 py-14 md:py-16 flex flex-col" style={{ backgroundColor: C.steel4, minHeight: 520 }}>
           <div className="flex items-center gap-4 mb-auto">
-            <svg width="36" height="36" viewBox="0 0 48 48" fill="none">
-              <circle cx="24" cy="24" r="22" stroke={C.steel1} strokeWidth="2" />
-              <circle cx="24" cy="24" r="14" stroke={C.steel2} strokeWidth="1.5" />
-              <circle cx="24" cy="24" r="6" stroke="#FAFBFC" strokeWidth="1" />
-              <circle cx="24" cy="24" r="3" fill={C.steel1} />
+            <svg width="34" height="34" viewBox="0 0 48 48" fill="none">
+              <circle cx="24" cy="24" r="22" stroke={C.steel1} strokeWidth="2"/>
+              <circle cx="24" cy="24" r="14" stroke={C.steel2} strokeWidth="1.5"/>
+              <circle cx="24" cy="24" r="6"  stroke="#FAFBFC"  strokeWidth="1"/>
+              <circle cx="24" cy="24" r="3"  fill={C.steel1}/>
             </svg>
             <span className="text-[22px] tracking-[4px]" style={{ fontFamily: "Space Grotesk, sans-serif", fontWeight: 500, color: "white" }}>ALEPH</span>
           </div>
 
           <div className="mt-16">
-            <p className="text-[11px] uppercase tracking-widest mb-3" style={{ fontFamily: "Space Grotesk, sans-serif", color: "rgba(255,255,255,0.5)" }}>Informe de Inteligencia Regulatoria</p>
-            <h1 className="text-[36px] font-semibold leading-tight mb-6" style={{ fontFamily: "Space Grotesk, sans-serif", color: "white" }}>
-              Barreras Regulatorias<br />y Análisis de Trámites
+            <p className="text-[10px] uppercase tracking-[3px] mb-4" style={{ fontFamily: "Space Grotesk, sans-serif", color: "rgba(255,255,255,0.42)" }}>
+              Informe de Inteligencia Regulatoria
+            </p>
+            <h1 className="text-[36px] font-semibold leading-tight mb-8" style={{ fontFamily: "Space Grotesk, sans-serif", color: "white" }}>
+              Panorama Regulatorio<br />y Agenda de Reforma
             </h1>
-            <div className="flex flex-col gap-2 mb-10">
+            <div className="grid grid-cols-2 gap-x-12 gap-y-4 mb-10">
               {[
-                { label: "País", val: pais },
-                { label: "Sector", val: sector },
-                { label: "Fecha de corte", val: fecha },
+                { label: "País / Alcance",    val: paisLabel },
+                { label: "Fecha de corte",    val: "Marzo 2026" },
+                { label: "Sector",            val: `Todos los sectores (${cd.sectores})` },
                 { label: "Código de informe", val: codigo },
               ].map(({ label, val }) => (
-                <div key={label} className="flex items-center gap-3">
-                  <span className="text-[11px] w-[120px]" style={{ fontFamily: "Space Grotesk, sans-serif", color: "rgba(255,255,255,0.5)" }}>{label}</span>
-                  <span className="text-[13px] font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: "white" }}>{val}</span>
+                <div key={label}>
+                  <p className="text-[10px] uppercase tracking-wider mb-1" style={{ fontFamily: "Space Grotesk, sans-serif", color: "rgba(255,255,255,0.36)" }}>{label}</p>
+                  <p className="text-[13px] font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: "white" }}>{val}</p>
                 </div>
               ))}
             </div>
-            <div className="pt-6" style={{ borderTop: "1px solid rgba(255,255,255,0.15)" }}>
-              <p className="text-[11px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: "rgba(255,255,255,0.4)" }}>Banco Interamericano de Desarrollo · Plataforma ALEPH · © 2026</p>
+            <div className="pt-6" style={{ borderTop: "1px solid rgba(255,255,255,0.1)" }}>
+              <p className="text-[11px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: "rgba(255,255,255,0.3)" }}>
+                Banco Interamericano de Desarrollo · Plataforma ALEPH · © 2026
+              </p>
             </div>
           </div>
         </div>
 
-        {/* ── Resumen ejecutivo ── */}
-        <div className="px-5 md:px-12 py-8 md:py-10" style={{ backgroundColor: "white" }}>
-          <p className="text-[10px] uppercase tracking-widest mb-2" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Sección 1</p>
-          <h2 className="text-[22px] font-semibold mb-6" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>Resumen ejecutivo</h2>
+        {/* ── BODY ── */}
+        <div className="px-8 md:px-14 py-10" style={{ backgroundColor: "white" }}>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+          {/* S1 — Mensajes principales */}
+          <SecLabel num="1" title="Mensajes principales" />
+          <div className="flex flex-col gap-3">
+            {mensajes.map((txt, i) => (
+              <div key={i} className="flex items-start gap-4 p-4 rounded-xl" style={{ backgroundColor: C.canvas, border: `1px solid ${C.border}` }}>
+                <div className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-[12px] font-bold"
+                  style={{ backgroundColor: C.steel4, color: "white", fontFamily: "Space Grotesk, sans-serif" }}>
+                  {i + 1}
+                </div>
+                <p className="text-[12px] leading-relaxed pt-0.5" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text }}>{txt}</p>
+              </div>
+            ))}
+          </div>
+
+          <Div />
+
+          {/* S2 — Cobertura */}
+          <SecLabel num="2" title="Cobertura del análisis" />
+          <div className="grid grid-cols-3 gap-4">
             {[
-              { label: "Total barreras", val: "65", sub: "registradas en el sector", color: C.text },
-              { label: "Barreras críticas", val: "15", sub: "atención prioritaria", color: C.critico },
-              { label: "Barreras altas", val: "45", sub: "seguimiento requerido", color: C.steel4 },
+              { label: "Instrumentos normativos analizados", val: instrTotal.toLocaleString(), sub: "analizados" },
+              { label: "Sectores económicos cubiertos",      val: cd.sectores.toString(),       sub: "cubiertos" },
+              { label: "Período de análisis",               val: "2015–2026",                  sub: "horizonte temporal" },
             ].map(kpi => (
-              <div key={kpi.label} className="rounded-lg p-4" style={{ backgroundColor: C.canvas, border: `1px solid ${C.border}` }}>
-                <p className="text-[10px] uppercase tracking-widest mb-1" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>{kpi.label}</p>
-                <p className="text-[28px] font-semibold leading-none mb-1" style={{ fontFamily: "Space Grotesk, sans-serif", color: kpi.color }}>{kpi.val}</p>
+              <div key={kpi.label} className="rounded-xl p-5 flex flex-col gap-1" style={{ backgroundColor: C.canvas, border: `1px solid ${C.border}` }}>
+                <p className="text-[10px] uppercase tracking-widest leading-tight" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>{kpi.label}</p>
+                <p className="text-[30px] font-semibold leading-none mt-1" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.steel4 }}>{kpi.val}</p>
                 <p className="text-[11px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{kpi.sub}</p>
               </div>
             ))}
           </div>
 
-          <p className="text-[11px] uppercase tracking-widest mb-3" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Principales hallazgos</p>
-          <div className="flex flex-col gap-2">
+          <Div />
+
+          {/* S3 — Panorama general */}
+          <SecLabel num="3" title="Panorama general" />
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
             {[
-              "La exigencia de acopio físico exacto bloquea exportaciones en períodos de alta demanda, generando pérdidas estimadas de USD 15,120 por exportador/año.",
-              "El proceso de validación de lote tarda en promedio 3 horas adicionales respecto a estándares regionales comparables, concentrando el 68% de las fricciones.",
-              "Se identifican 3 instrumentos normativos con lenguaje ambiguo que amplía la discrecionalidad de los inspectores sin criterios objetivos de evaluación.",
-            ].map((txt, i) => (
-              <div key={i} className="flex items-start gap-3 p-3 rounded-lg" style={{ backgroundColor: C.canvas }}>
-                <span className="text-[11px] font-semibold px-2 py-0.5 rounded flex-shrink-0 mt-0.5" style={{ backgroundColor: C.steel4, color: "white", fontFamily: "Space Grotesk, sans-serif" }}>{i + 1}</span>
-                <p className="text-[12px] leading-relaxed" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text }}>{txt}</p>
+              { label: "Normas encontradas",              val: cd.total.toLocaleString(),      color: C.text },
+              { label: "Trámites con potencial de mejora",val: cargaCd.total.toString(),       color: C.steel3 },
+              { label: "Entidades involucradas",          val: entidadesTotal.toString(),      color: C.steel4 },
+              { label: "Sectores principales afectados",  val: cd.sectores.toString(),         color: C.alto },
+            ].map(kpi => (
+              <div key={kpi.label} className="rounded-xl p-4" style={{ backgroundColor: C.canvas, border: `1px solid ${C.border}` }}>
+                <p className="text-[10px] uppercase tracking-widest mb-2 leading-tight" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>{kpi.label}</p>
+                <p className="text-[26px] font-semibold leading-none" style={{ fontFamily: "Space Grotesk, sans-serif", color: kpi.color }}>{kpi.val}</p>
+              </div>
+            ))}
+          </div>
+          {/* Severity bar */}
+          <p className="text-[11px] font-medium mb-3" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>
+            Distribución por severidad · Total {cd.total.toLocaleString()} barreras
+          </p>
+          <div>
+            {(() => {
+              const segs = [
+                { label: "Crítico", val: sevCritico, color: C.critico },
+                { label: "Alto",    val: sevAlto,    color: C.alto },
+                { label: "Mediano", val: sevMediano, color: C.mediano },
+                { label: "Bajo",    val: sevBajo,    color: C.bajo },
+              ];
+              const tot = segs.reduce((s, x) => s + x.val, 0);
+              return (
+                <>
+                  <div className="flex h-5 rounded-lg overflow-hidden mb-3">
+                    {segs.map(s => (
+                      <div key={s.label} style={{ width: `${(s.val / tot) * 100}%`, backgroundColor: s.color }} title={`${s.label}: ${s.val}`} />
+                    ))}
+                  </div>
+                  <div className="flex gap-5 flex-wrap">
+                    {segs.map(s => (
+                      <div key={s.label} className="flex items-center gap-1.5">
+                        <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: s.color }} />
+                        <span className="text-[11px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>
+                          {s.label} <strong style={{ color: C.text }}>{s.val}</strong>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+
+          <Div />
+
+          {/* S4 — Distorsiones */}
+          <SecLabel num="4" title="Principales distorsiones regulatorias" />
+          <p className="text-[12px] mb-5 leading-relaxed" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>
+            Distribución de hallazgos de distorsión por eje y subdimensión.
+          </p>
+          <BarrasComposicion
+            label="Barreras por eje regulatorio"
+            total={distorsionesData.reduce((s, c) => s + c.total, 0)}
+            categorias={distorsionesData}
+          />
+
+          <Div />
+
+          {/* S5 — Carga */}
+          <SecLabel num="5" title="Carga regulatoria" />
+          <p className="text-[12px] leading-relaxed" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>
+            Trámites que requieren ajuste, por tipo de carga.
+          </p>
+          <p className="text-[12px] font-semibold mb-5" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>
+            {cargaTotal.toLocaleString()} en total.
+          </p>
+          <BarrasComposicion
+            label="Hallazgos de carga por tipo"
+            total={cargaTotal}
+            categorias={cargaBarrasData}
+          />
+
+          <Div />
+
+          {/* S6 — Acciones AMR */}
+          <SecLabel num="6" title="Principales acciones de mejora regulatoria" />
+          <div className="flex flex-col gap-3">
+            {accionesAMR.map((a, i) => (
+              <div key={i} className="flex items-start gap-4 p-4 rounded-xl" style={{ backgroundColor: C.canvas, border: `1px solid ${C.border}` }}>
+                <span className="flex-shrink-0 px-3 py-1 rounded-md text-[11px] font-semibold uppercase tracking-wide mt-0.5"
+                  style={{ backgroundColor: C.steel4, color: "white", fontFamily: "Space Grotesk, sans-serif", whiteSpace: "nowrap" }}>
+                  {a.verbo}
+                </span>
+                <p className="text-[12px] leading-relaxed" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text }}>{a.desc}</p>
               </div>
             ))}
           </div>
 
-          <Divider />
+          <Div />
 
-          <p className="text-[10px] uppercase tracking-widest mb-2" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Sección 2</p>
-          <h2 className="text-[22px] font-semibold mb-6" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>Fichas por barrera</h2>
-          <p className="text-[12px] mb-8 leading-relaxed" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>Cada ficha documenta una barrera regulatoria identificada, con su fuente normativa, impacto económico estimado y sugerencias de simplificación. El texto legal es de muestra hasta integrar la cita oficial.</p>
+          {/* S7 — Hallazgos destacados */}
+          <SecLabel num="7" title="Ejemplos de hallazgos" />
+          <p className="text-[12px] mb-6 leading-relaxed" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>
+            Los hallazgos con mayor impacto económico estimado del universo analizado. La ficha completa está disponible en el Reporte Operativo.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Distorsión cards */}
+            {distHallazgos.map((h, i) => (
+              <div key={i} className="rounded-xl overflow-hidden flex flex-col" style={{ border: `1px solid ${C.border}` }}>
+                <div className="px-4 py-3 flex items-center justify-between gap-2" style={{ backgroundColor: C.steel4 }}>
+                  <span className="text-[11px] font-medium truncate" style={{ color: "rgba(255,255,255,0.85)", fontFamily: "Space Grotesk, sans-serif" }}>
+                    Distorsión · {h.entidad}
+                  </span>
+                  <SevBadge nivel={h.severidad} />
+                </div>
+                <div className="p-4 flex flex-col gap-3 flex-1" style={{ backgroundColor: "white" }}>
+                  <p className="text-[13px] font-semibold leading-snug" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>{h.titulo}</p>
+                  <p className="text-[11px] italic leading-relaxed" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>
+                    "{h.cita}"
+                  </p>
+                  <div className="flex items-center justify-between gap-2 mt-auto pt-1">
+                    <AMRBadge label={h.accion} />
+                    <span className="text-[14px] font-semibold flex-shrink-0" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.steel4 }}>
+                      USD {h.costo}M
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {/* Carga cards */}
+            {cargaHallazgos.map((h, i) => (
+              <div key={i} className="rounded-xl overflow-hidden flex flex-col" style={{ border: `1px solid ${C.border}` }}>
+                <div className="px-4 py-3 flex items-center justify-between gap-2" style={{ backgroundColor: C.steel3 }}>
+                  <span className="text-[11px] font-medium truncate" style={{ color: "rgba(255,255,255,0.85)", fontFamily: "Space Grotesk, sans-serif" }}>
+                    Carga · {h.entidad}
+                  </span>
+                  <span className="text-[10px] px-2 py-0.5 rounded font-semibold uppercase flex-shrink-0"
+                    style={{ backgroundColor: "rgba(255,255,255,0.2)", color: "white", fontFamily: "Space Grotesk, sans-serif" }}>
+                    {h.tipo}
+                  </span>
+                </div>
+                <div className="p-4 flex flex-col gap-3 flex-1" style={{ backgroundColor: "white" }}>
+                  <p className="text-[13px] font-semibold leading-snug" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>{h.tramite}</p>
+                  <p className="text-[11px] italic leading-relaxed" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>
+                    "{h.cita}"
+                  </p>
+                  <div className="flex items-center justify-between gap-2 mt-auto pt-1">
+                    <AMRBadge label={h.accion} />
+                    <span className="text-[14px] font-semibold flex-shrink-0" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.steel4 }}>
+                      {h.costo}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
 
-          <FichaBarrera
-            num={1}
-            titulo="Bloqueo por Renovación de Registros Cafetaleros"
-            autoridad="IHCAFE"
-            norma="Decreto Ejecutivo 2023-44, Art. 12"
-            textoNormativo="La certificación de exportación deberá corresponder exactamente al volumen físico de sacos registrado en el lote de acopio declarado al momento de la solicitud, sin tolerancia de variación por merma natural ni pérdida durante el almacenamiento previo al despacho."
-            pasaje="sin tolerancia de variación por merma natural ni pérdida durante el almacenamiento previo al despacho"
-            barrera="Rigidez de inventario físico para certificación"
-            problema="Exigencia de coincidencia exacta entre el lote declarado y los sacos físicos, sin margen para merma natural (hasta 2%), genera cuellos de botella durante períodos de alta demanda."
-            afectado="Exportadores de café · Cooperativas cafetaleras"
-            impacto="USD 15,120/año por exportador"
-            tipoImpacto="Costo de Oportunidad"
-            sugerencia="Implementar un sistema de 'Cuenta Corriente de Exportación' que permita compensar variaciones de hasta 2% entre períodos de cosecha, eliminando la necesidad de inspección física por cada despacho individual."
-            tipoSugerencia="Desregulación"
-          />
+          {/* Footer */}
+          <div className="mt-12 pt-6 text-center" style={{ borderTop: `1px solid ${C.border}` }}>
+            <p className="text-[10px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>
+              Banco Interamericano de Desarrollo · Plataforma ALEPH · Datos simulados · © 2026
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
-          <FichaBarrera
-            num={2}
-            titulo="Reportes Semestrales Físicos Duplicados"
-            autoridad="Ministerio de Trabajo"
-            norma="Resolución MT-2019-088, Art. 5 y 6"
-            textoNormativo="El empleador deberá presentar ante la Dirección Regional de Trabajo, en formato físico original con sello y firma notarial, el reporte semestral de cotizaciones de cada trabajador, acompañado del comprobante de pago vigente y carnets de empleador en original y copia certificada."
-            pasaje="en formato físico original con sello y firma notarial"
-            barrera="Exigencia de formato físico notarial para reportes ya digitales"
-            problema="El Estado ya cuenta con los datos en formato digital mediante el sistema de facturación electrónica, pero la norma obliga a repetir el reporte en papel con certificación notarial, duplicando el costo administrativo."
-            afectado="Empresas textiles · Empleadores formales"
-            impacto="USD 2,160/año por empresa"
-            tipoImpacto="Carga Administrativa"
-            sugerencia="Eliminar la obligación de presentación física y reconocer el reporte digital ya disponible en el sistema tributario como válido para todos los efectos laborales, sin requerimiento de certificación adicional."
-            tipoSugerencia="Digitalización"
-          />
+// ─── Reporte PDF ───────────────────────────────────────────────────────────────
+function ReportePDFScreen({ context, onNavigate }: { context?: string; onNavigate: (v: View) => void }) {
+  // Detect strategic report type from JSON context (Panorama → Exportar PDF)
+  const ctx = (() => { try { return JSON.parse(context ?? "{}"); } catch { return {}; } })();
+  if (ctx.tipo === "estrategico") {
+    return <ReporteEstrategicoScreen pais={ctx.pais} onNavigate={onNavigate} />;
+  }
+
+  // ── Context parsing ──────────────────────────────────────────────────────────
+  const tipoHallazgo: "distorsion" | "carga" = ctx.tipo === "carga" ? "carga" : "distorsion";
+  const paisRaw: string = ctx.pais ?? "Bolivia";
+  const pais: Country = (["Argentina","Bolivia","Chile","Ecuador","Perú"].includes(paisRaw)) ? paisRaw as Country : "Bolivia";
+  const sectorActivo: string = ctx.sectores ?? ctx.sector ?? (tipoHallazgo === "carga" ? "Todos los sectores" : "Agroindustria Cafetalera");
+  const filtros: string[] = Array.isArray(ctx.filtros) ? ctx.filtros.filter((f: string) => !!f) : [];
+  const periodo: string = ctx.periodo ?? "enero 2015 – marzo 2026";
+  const fechaCtx: string = typeof ctx.fecha === "string" ? ctx.fecha.split(",")[0] : "Marzo 2026";
+  const paisCode = pais.slice(0, 3).toUpperCase();
+  const codigo = `ALEPH-${paisCode}-OP-2026-001`;
+
+  // ── Hallazgos de muestra ─────────────────────────────────────────────────────
+  // Valid eje→subdim: Entrada→Comercio|Competencia|Inversión; Operación→Competencia|Innovación|Inversión
+  // Valid tipoCarga→subdim per SUBDIMS_BY_TIPO_CARGA catalog
+  const DIST = [
+    {
+      id: "BARRE-2026-001", titulo: "Restricción de Operadores de Maquila",
+      sector: "Agroindustria Cafetalera", eje: "Entrada", subdimension: "Comercio",
+      entidad: "SENAVEX", instrumento: "Decreto PCM-027-2022, Art. 8",
+      textoNormativo: "Solo podrán operar como operadores de maquila en exportación cafetalera las empresas debidamente registradas con un mínimo de cinco años de operación continua y capital suscrito no inferior al monto establecido por resolución ministerial vigente.",
+      pasaje: "un mínimo de cinco años de operación continua",
+      tipoRestriccion: "Licencia", sujetos: "Empresas exportadoras · Cooperativas cafetaleras",
+      descripcion: "La norma restringe el acceso al mercado de maquila a operadores con antigüedad mínima de cinco años, excluyendo efectivamente a nuevas empresas y cooperativas. Dicha exigencia carece de sustento técnico demostrable y no tiene equivalente en marcos regulatorios regionales comparables.",
+      impacto: "USD 4.1M/año", canal: "Barrera de entrada a PYMEs",
+      accion: "Eliminar", descripcionAccion: "Suprimir el requisito de antigüedad mínima de cinco años y reemplazarlo por un sistema de habilitación basado en capacidad técnica verificable y cumplimiento de estándares fitosanitarios vigentes.",
+      severidad: "Crítico",
+    },
+    {
+      id: "BARRE-2026-002", titulo: "Capital Mínimo Desproporcionado para Intermediación Financiera",
+      sector: "Servicios Financieros y de Seguros", eje: "Entrada", subdimension: "Inversión",
+      entidad: "ASFI", instrumento: "Ley del Sistema Financiero, Art. 12",
+      textoNormativo: "Las entidades de intermediación financiera no bancaria deberán acreditar un capital mínimo integrado no inferior a cuatro millones de bolivianos antes de iniciar operaciones, debidamente certificado por auditor externo inscrito en el registro de la ASFI.",
+      pasaje: "cuatro millones de bolivianos antes de iniciar operaciones",
+      tipoRestriccion: "Capital mínimo", sujetos: "Cooperativas financieras · Entidades microfinancistas · Nuevos entrantes fintech",
+      descripcion: "El umbral de capital mínimo cuadruplica el promedio regional para entidades de intermediación no bancaria equivalentes, favoreciendo a operadores establecidos en detrimento de nuevos modelos de negocio y cooperativas de menor escala.",
+      impacto: "USD 3.5M/año", canal: "Capital productivo paralizado",
+      accion: "Proporcionalizar", descripcionAccion: "Establecer una escala de capital mínimo diferenciada por tipo y volumen de operación, alineada con el promedio regional, con revisión bienal por parte de ASFI.",
+      severidad: "Crítico",
+    },
+    {
+      id: "BARRE-2026-003", titulo: "Registros Superpuestos entre Entidades Supervisoras",
+      sector: "Servicios Financieros y de Seguros", eje: "Operación", subdimension: "Competencia",
+      entidad: "ASFI", instrumento: "Res. IICA 2021-88, Art. 4",
+      textoNormativo: "Toda entidad financiada con recursos externos cuyo monto supere el equivalente de cincuenta mil dólares deberá obtener registro independiente ante cada entidad fiscalizadora competente, sin que el registro en una de ellas exonere de la obligación ante las demás.",
+      pasaje: "sin que el registro en una de ellas exonere de la obligación ante las demás",
+      tipoRestriccion: "Autorización previa", sujetos: "Entidades financieras · Cooperativas con fondos externos",
+      descripcion: "La ausencia de reconocimiento mutuo entre organismos supervisores obliga a mantener expedientes paralelos ante cada fiscalizador, duplicando costos administrativos y generando inconsistencias que elevan el riesgo regulatorio percibido.",
+      impacto: "USD 3.2M/año", canal: "Costo de oportunidad",
+      accion: "Armonizar", descripcionAccion: "Establecer un protocolo de intercambio de información entre ASFI, BCB y entidades supervisoras para reconocimiento mutuo automático de registros, sin reducir el alcance de la supervisión.",
+      severidad: "Crítico",
+    },
+  ] as const;
+
+  const CARGA = [
+    {
+      id: "CARGA-2026-001", titulo: "Licencia de Operación con Requisitos Físicos Duplicados",
+      sector: "Agroindustria Cafetalera", tipoCarga: "Accesibilidad", subdimension: "Digitalización y accesibilidad",
+      entidad: "SENAVEX", fuente: "Res. Min. Comercio 2022-14", tipoTramite: "Licencia", usuarioAfectado: "Empresarial",
+      requisitos: ["Formulario físico en original y copia", "Certificado de registro mercantil vigente", "Declaración jurada notariada", "Visita de inspección presencial", "Pago de tasa municipal en efectivo"],
+      descripcion: "El trámite exige presencia física en tres dependencias distintas con documentos originales en cada visita. No existe interoperabilidad entre los sistemas de SENAVEX, la alcaldía y el registro mercantil, obligando al operador a presentar los mismos documentos de forma independiente ante cada entidad.",
+      costoEstimado: "USD 4.2M/año",
+      accion: "Digitalizar", descripcionAccion: "Implementar ventanilla única digital que integre los sistemas de SENAVEX, alcaldía y registro mercantil con validación cruzada automática, eliminando la obligatoriedad de presencia física en cada dependencia.",
+      severidad: "Crítico",
+    },
+    {
+      id: "CARGA-2026-002", titulo: "Declaración Semanal con Información Redundante",
+      sector: "Textil y Confección", tipoCarga: "Certidumbre", subdimension: "Discrecionalidad administrativa",
+      entidad: "Min. de Desarrollo Productivo", fuente: "Res. MEM-0012-2021, Art. 5", tipoTramite: "Declaración", usuarioAfectado: "Empresarial",
+      requisitos: ["Declaración jurada semanal en formulario físico", "Firma notarial de representante legal", "Comprobante de pago de aportes del período", "Copia de contratos de trabajo vigentes"],
+      descripcion: "La norma exige una declaración semanal cuyo contenido replica en un 90% la información ya reportada mensualmente mediante facturación electrónica. La decisión sobre equivalencia de documentos queda a discreción del inspector sin criterios objetivos publicados.",
+      costoEstimado: "USD 2.1M/año",
+      accion: "Simplificar", descripcionAccion: "Sustituir la declaración semanal por una referencia automática al sistema de facturación electrónica, con criterios objetivos de cumplimiento auditables que eliminen la discrecionalidad del inspector.",
+      severidad: "Alto",
+    },
+  ] as const;
+
+  const hallazgos = tipoHallazgo === "carga" ? CARGA : DIST;
+  const criticos = hallazgos.filter(h => h.severidad === "Crítico").length;
+  const hallazgosLabel = ctx.registros ?? `${hallazgos.length} hallazgos · ${criticos} crítico${criticos !== 1 ? "s" : ""} del sector`;
+
+  // ── Sub-components ───────────────────────────────────────────────────────────
+  const SevBadge = ({ nivel }: { nivel: string }) => {
+    const col = nivel === "Crítico" ? C.critico : nivel === "Alto" ? C.alto : nivel === "Mediano" ? C.mediano : C.bajo;
+    return (
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider"
+        style={{ backgroundColor: col + "22", color: col, border: `1px solid ${col}38`, fontFamily: "Space Grotesk, sans-serif" }}>
+        {nivel}
+      </span>
+    );
+  };
+
+  const AMRBadge = ({ label }: { label: string }) => (
+    <span className="inline-flex items-center px-2.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide"
+      style={{ backgroundColor: C.steel4 + "14", color: C.steel4, border: `1px solid ${C.steel4}28`, fontFamily: "Space Grotesk, sans-serif" }}>
+      {label}
+    </span>
+  );
+
+  const Field2Col = ({ fields }: { fields: { label: string; val: React.ReactNode }[] }) => (
+    <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+      {fields.map(({ label, val }) => (
+        <div key={label}>
+          <p className="text-[10px] uppercase tracking-widest mb-0.5 font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>{label}</p>
+          <p className="text-[12px] leading-snug" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text }}>{val}</p>
+        </div>
+      ))}
+    </div>
+  );
+
+  const CiteBox = ({ text, pasaje, fuente }: { text: string; pasaje: string; fuente: string }) => {
+    const parts = text.split(pasaje);
+    return (
+      <div className="rounded-lg p-4 italic text-[12px] leading-relaxed"
+        style={{ backgroundColor: "#F4F7FA", border: `1px solid ${C.border}`, fontFamily: "IBM Plex Sans, sans-serif", color: C.text }}>
+        <div className="flex gap-3">
+          <div className="w-1 flex-shrink-0 rounded-full self-stretch" style={{ backgroundColor: C.steel3 }} />
+          <p>
+            {parts[0]}
+            <mark style={{ backgroundColor: C.steel3 + "28", color: C.steel4, padding: "0 2px", borderRadius: 2, fontStyle: "normal", fontWeight: 600 }}>{pasaje}</mark>
+            {parts.slice(1).join(pasaje)}
+          </p>
+        </div>
+        <p className="text-[10px] mt-2 not-italic" style={{ color: C.textMuted }}>texto de muestra · {fuente}</p>
+      </div>
+    );
+  };
+
+  const ImpactBox = ({ monto, canal }: { monto: string; canal: string }) => (
+    <div className="rounded-lg p-4" style={{ backgroundColor: C.critico + "07", border: `1px solid ${C.critico}22` }}>
+      <div className="flex items-start justify-between gap-2 mb-1">
+        <p className="text-[10px] uppercase tracking-widest font-semibold" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.critico }}>Impacto económico estimado</p>
+        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium flex-shrink-0"
+          style={{ backgroundColor: C.critico + "15", color: C.critico, border: `1px solid ${C.critico}25`, fontFamily: "Space Grotesk, sans-serif" }}>
+          {canal}
+        </span>
+      </div>
+      <p className="text-[22px] font-semibold" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.steel4 }}>{monto}</p>
+      <p className="text-[10px] mt-0.5" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>simulado · modelo SCM</p>
+    </div>
+  );
+
+  const AMRBox = ({ accion, desc }: { accion: string; desc: string }) => (
+    <div className="rounded-lg p-4" style={{ backgroundColor: C.steel3 + "07", border: `1px solid ${C.steel3}22` }}>
+      <div className="flex items-center gap-2 mb-2">
+        <p className="text-[10px] uppercase tracking-widest font-semibold" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.steel3 }}>Acción de mejora regulatoria</p>
+        <AMRBadge label={accion} />
+      </div>
+      <p className="text-[12px] leading-relaxed" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text }}>{desc}</p>
+    </div>
+  );
+
+  const FichaDistorsion = ({ h, num }: { h: typeof DIST[number]; num: number }) => (
+    <div className="mb-10">
+      <p className="text-[10px] font-bold uppercase tracking-[2px] mb-0.5" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Ficha {num} · Distorsión</p>
+      <h3 className="text-[16px] font-semibold leading-tight mb-3" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>{h.titulo}</h3>
+      <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${C.border}` }}>
+        {/* Top stripe */}
+        <div className="px-5 py-3 flex items-center justify-between gap-3" style={{ backgroundColor: C.steel4 }}>
+          <span className="text-[11px] font-medium text-white flex-shrink-0" style={{ fontFamily: "Space Grotesk, sans-serif" }}>Distorsión regulatoria</span>
+          <SevBadge nivel={h.severidad} />
+          <span className="text-[11px] flex-shrink-0 text-right" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: "rgba(255,255,255,0.65)" }}>{h.entidad}</span>
+        </div>
+        <div className="p-5 md:p-6 flex flex-col gap-5" style={{ backgroundColor: "white" }}>
+          <Field2Col fields={[
+            { label: "ID hallazgo",          val: h.id },
+            { label: "Norma",                val: h.instrumento },
+            { label: "País",                 val: pais },
+            { label: "Tipo de hallazgo",     val: "Distorsión regulatoria" },
+            { label: "Sector",               val: h.sector },
+            { label: "Eje",                  val: h.eje },
+            { label: "Entidad que emite",    val: h.entidad },
+            { label: "Subdimensión",         val: h.subdimension },
+          ]} />
+          <CiteBox text={h.textoNormativo} pasaje={h.pasaje} fuente={h.instrumento} />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {[
+              { label: "Tipo de restricción",      val: <>{h.tipoRestriccion}</> },
+              { label: "Sujeto(s) afectado(s)",    val: <>{h.sujetos}</> },
+              { label: "Descripción del hallazgo", val: <>{h.descripcion}</> },
+            ].map(({ label, val }) => (
+              <div key={label}>
+                <p className="text-[10px] uppercase tracking-widest mb-1 font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>{label}</p>
+                <p className="text-[12px] leading-snug" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text }}>{val}</p>
+              </div>
+            ))}
+          </div>
+          <ImpactBox monto={h.impacto} canal={h.canal} />
+          <AMRBox accion={h.accion} desc={h.descripcionAccion} />
+        </div>
+      </div>
+    </div>
+  );
+
+  const FichaCarga = ({ h, num }: { h: typeof CARGA[number]; num: number }) => (
+    <div className="mb-10">
+      <p className="text-[10px] font-bold uppercase tracking-[2px] mb-0.5" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Ficha {num} · Carga</p>
+      <h3 className="text-[16px] font-semibold leading-tight mb-3" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>{h.titulo}</h3>
+      <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${C.border}` }}>
+        {/* Top stripe */}
+        <div className="px-5 py-3 flex items-center justify-between gap-3" style={{ backgroundColor: C.steel3 }}>
+          <span className="text-[11px] font-medium text-white flex-shrink-0" style={{ fontFamily: "Space Grotesk, sans-serif" }}>Carga regulatoria</span>
+          <SevBadge nivel={h.severidad} />
+          <span className="text-[11px] flex-shrink-0 text-right" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: "rgba(255,255,255,0.65)" }}>{h.entidad}</span>
+        </div>
+        <div className="p-5 md:p-6 flex flex-col gap-5" style={{ backgroundColor: "white" }}>
+          <Field2Col fields={[
+            { label: "ID hallazgo",                val: h.id },
+            { label: "Fuente oficial",             val: <span style={{ color: C.steel3, textDecoration: "underline", cursor: "pointer" }}>Ver trámite ↗</span> },
+            { label: "País",                       val: pais },
+            { label: "Tipo de trámite",            val: h.tipoTramite },
+            { label: "Sector",                     val: h.sector },
+            { label: "Usuario afectado",           val: h.usuarioAfectado },
+            { label: "Entidad que gestiona",       val: h.entidad },
+            { label: "Clasificación del hallazgo", val: `${h.tipoCarga} · ${h.subdimension}` },
+          ]} />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <p className="text-[10px] uppercase tracking-widest mb-2 font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Requisitos principales</p>
+              <ul className="flex flex-col gap-1.5">
+                {h.requisitos.map((r, i) => (
+                  <li key={i} className="flex items-start gap-2 text-[11px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text }}>
+                    <span className="flex-shrink-0 w-1 h-1 rounded-full mt-1.5" style={{ backgroundColor: C.steel3, marginTop: 7 }} />
+                    {r}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-widest mb-1 font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Descripción del hallazgo</p>
+              <p className="text-[12px] leading-snug" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text }}>{h.descripcion}</p>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-widest mb-1 font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Costo monetario estimado (SCM)</p>
+              <p className="text-[20px] font-semibold leading-none mb-1" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.steel4 }}>{h.costoEstimado}</p>
+              <p className="text-[10px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>simulado · modelo SCM</p>
+            </div>
+          </div>
+          <AMRBox accion={h.accion} desc={h.descripcionAccion} />
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="overflow-y-auto h-full" style={{ backgroundColor: C.canvas }}>
+      {/* Toolbar */}
+      <div className="sticky top-0 z-10 flex items-center justify-between px-4 md:px-8 py-3"
+        style={{ backgroundColor: C.card, borderBottom: `1px solid ${C.border}` }}>
+        <button className="flex items-center gap-1.5 text-[13px]"
+          style={{ color: C.steel3, fontFamily: "IBM Plex Sans, sans-serif", background: "none", border: "none", cursor: "pointer" }}
+          onClick={() => onNavigate({ screen: "reportes" })}>
+          ← Volver a Reportes
+        </button>
+        <div className="flex items-center gap-3">
+          <span className="text-[11px] hidden sm:inline" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>Reporte Operativo · Datos simulados</span>
+          <button className="flex items-center gap-2 px-4 py-2 rounded-lg text-[12px] font-semibold"
+            style={{ backgroundColor: C.steel4, color: "white", fontFamily: "Space Grotesk, sans-serif", border: "none", cursor: "pointer" }}>
+            <Download size={13} /> Descargar PDF
+          </button>
+        </div>
+      </div>
+
+      {/* Paper */}
+      <div className="max-w-[820px] mx-auto my-4 md:my-8 shadow-xl rounded-xl overflow-hidden">
+
+        {/* ── PORTADA ── */}
+        <div className="px-10 md:px-16 py-14 md:py-16 flex flex-col" style={{ backgroundColor: C.steel4, minHeight: 460 }}>
+          <div className="flex items-center gap-4 mb-auto">
+            <svg width="34" height="34" viewBox="0 0 48 48" fill="none">
+              <circle cx="24" cy="24" r="22" stroke={C.steel1} strokeWidth="2"/>
+              <circle cx="24" cy="24" r="14" stroke={C.steel2} strokeWidth="1.5"/>
+              <circle cx="24" cy="24" r="6"  stroke="#FAFBFC"  strokeWidth="1"/>
+              <circle cx="24" cy="24" r="3"  fill={C.steel1}/>
+            </svg>
+            <span className="text-[22px] tracking-[4px]" style={{ fontFamily: "Space Grotesk, sans-serif", fontWeight: 500, color: "white" }}>ALEPH</span>
+          </div>
+
+          <div className="mt-14">
+            <p className="text-[10px] uppercase tracking-[3px] mb-4" style={{ fontFamily: "Space Grotesk, sans-serif", color: "rgba(255,255,255,0.42)" }}>
+              Reporte Operativo de Inteligencia Regulatoria
+            </p>
+            <h1 className="text-[30px] font-semibold leading-tight mb-8" style={{ fontFamily: "Space Grotesk, sans-serif", color: "white" }}>
+              Ficha de Hallazgos —<br />
+              <span style={{ color: "rgba(255,255,255,0.75)" }}>
+                {sectorActivo && sectorActivo !== "Todos los sectores" ? sectorActivo : "Todos los sectores"}
+              </span>
+            </h1>
+
+            <div className="grid grid-cols-2 gap-x-12 gap-y-4 mb-8">
+              {[
+                { label: "Período",             val: periodo },
+                { label: "Fecha de corte",      val: fechaCtx },
+                { label: "Hallazgos incluidos", val: hallazgosLabel },
+                { label: "Código de informe",   val: codigo },
+              ].map(({ label, val }) => (
+                <div key={label}>
+                  <p className="text-[10px] uppercase tracking-wider mb-1" style={{ fontFamily: "Space Grotesk, sans-serif", color: "rgba(255,255,255,0.36)" }}>{label}</p>
+                  <p className="text-[13px] font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: "white" }}>{val}</p>
+                </div>
+              ))}
+            </div>
+
+            {filtros.length > 0 && (
+              <div className="mb-6">
+                <p className="text-[10px] uppercase tracking-wider mb-2" style={{ fontFamily: "Space Grotesk, sans-serif", color: "rgba(255,255,255,0.36)" }}>Filtros aplicados</p>
+                <div className="flex flex-wrap gap-2">
+                  {filtros.map((f, i) => (
+                    <span key={i} className="px-3 py-1 rounded-full text-[11px] font-medium"
+                      style={{ backgroundColor: "rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.85)", fontFamily: "IBM Plex Sans, sans-serif", border: "1px solid rgba(255,255,255,0.2)" }}>
+                      {f}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="pt-6" style={{ borderTop: "1px solid rgba(255,255,255,0.1)" }}>
+              <p className="text-[11px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: "rgba(255,255,255,0.3)" }}>
+                Banco Interamericano de Desarrollo · Plataforma ALEPH · © 2026
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* ── FICHAS ── */}
+        <div className="px-8 md:px-12 py-10" style={{ backgroundColor: "white" }}>
+          {tipoHallazgo === "distorsion"
+            ? DIST.map((h, i) => <FichaDistorsion key={h.id} h={h} num={i + 1} />)
+            : CARGA.map((h, i) => <FichaCarga key={h.id} h={h} num={i + 1} />)
+          }
         </div>
       </div>
     </div>
@@ -4432,8 +5000,6 @@ function DocumentacionScreen() {
         breadcrumb="Documentación del Sistema"
         title="Documentación del Sistema"
         subtitle="Catálogo de casos de uso y funcionalidades por módulo"
-        showExport
-        onExport={() => {}}
       />
       <div className="flex flex-col gap-10 mt-2">
         {DOC_MODULES.map(mod => (
@@ -4562,7 +5128,7 @@ export default function App() {
         if (adminTab === "catalogos") return <AdminCatalogosScreen />;
         return <AdminUsuariosScreen />;
       }
-      case "reportes": return <ReportesScreen onNavigate={navigate} />;
+      case "reportes": return <ReportesScreen prefill={(view as { screen: "reportes"; prefill?: ReportesPrefill }).prefill} onNavigate={navigate} />;
       case "reporte-pdf": return <ReportePDFScreen context={(view as { screen: "reporte-pdf"; context?: string }).context} onNavigate={navigate} />;
       case "documentacion": return <DocumentacionScreen />;
       case "placeholder": return <PlaceholderScreen label={view.label} />;
