@@ -17,6 +17,11 @@ function figmaAssetResolver() {
 }
 
 export default defineConfig({
+  // GitHub Pages sirve este proyecto desde /PlataformaALEPH/, no desde la raíz
+  // del dominio -- sin esto, los assets generados (JS/CSS con hash) se piden
+  // con rutas absolutas a "/", que en Pages resuelven al repo equivocado (o a
+  // github.io directamente) y el sitio carga en blanco.
+  base: '/PlataformaALEPH/',
   plugins: [
     figmaAssetResolver(),
     // The React and Tailwind plugins are both required for Make, even if
