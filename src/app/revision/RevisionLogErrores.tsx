@@ -146,19 +146,26 @@ function DetalleLog({ entry, onBack }: { entry: LogErrorEntry; onBack: () => voi
 // ─── Main component ─────────────────────────────────────────────────────────
 
 const PAISES_TODOS = "Todos los países";
+const TIPOS_TODOS = "Todos los tipos";
 
 export default function RevisionLogErrores() {
   const { logErrores } = useRevision();
   const [origen, setOrigen] = useState<LogOrigen | "Todos">("Todos");
   const [pais, setPais] = useState(PAISES_TODOS);
+  const [tipo, setTipo] = useState(TIPOS_TODOS);
   const [buscar, setBuscar] = useState("");
   const [selected, setSelected] = useState<LogErrorEntry | null>(null);
 
   const paises = Array.from(new Set(logErrores.map(e => e.pais))).filter(p => p !== "—");
+  // Derivado de logErrores (no hardcodeado): los datos de muestra incluyen
+  // "Trámite" y "Barrera regulatoria", más "Regulación" en un par de entradas --
+  // se listan las tres para no dejar registros reales fuera del filtro.
+  const tipos = Array.from(new Set(logErrores.map(e => e.tipo))).filter(t => t !== "—");
 
   const filtradas = logErrores.filter(e =>
     (origen === "Todos" || e.origen === origen) &&
     (pais === PAISES_TODOS || e.pais === pais) &&
+    (tipo === TIPOS_TODOS || e.tipo === tipo) &&
     (buscar.trim() === "" || e.hallazgoNombre.toLowerCase().includes(buscar.trim().toLowerCase()))
   );
 
@@ -204,6 +211,10 @@ export default function RevisionLogErrores() {
         <select value={pais} onChange={e => setPais(e.target.value)} style={fieldStyle}>
           <option value={PAISES_TODOS}>{PAISES_TODOS}</option>
           {paises.map(p => <option key={p}>{p}</option>)}
+        </select>
+        <select value={tipo} onChange={e => setTipo(e.target.value)} style={fieldStyle}>
+          <option value={TIPOS_TODOS}>{TIPOS_TODOS}</option>
+          {tipos.map(t => <option key={t}>{t}</option>)}
         </select>
         <input
           type="text"

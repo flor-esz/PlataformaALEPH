@@ -28,6 +28,7 @@ import {
   Cell,
 } from "recharts";
 import {
+  ChartBar,
   ChevronDown,
   ChevronRight,
   LogOut,
@@ -73,7 +74,7 @@ export function useIsMobile() {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Country = "Todos" | "Argentina" | "Bolivia" | "Chile" | "Ecuador" | "Perú";
-type Section = "dashboard" | "barreras" | "tramites" | "comparativa" | "repositorio" | "administracion" | "reportes" | "documentacion" | "revision";
+type Section = "dashboard" | "barreras" | "tramites" | "comparativa" | "repositorio" | "administracion" | "reportes" | "documentacion" | "revision"  | "indice";
 export type UserRole = "administrador" | "usuario-bid" | "asesor" | "analista" | "validador";
 const ROLE_LABEL: Record<UserRole, string> = {
   administrador: "Administrador",
@@ -104,7 +105,8 @@ type View =
   | { screen: "revision-ver-hallazgo"; id: string }
   | { screen: "revision-log-errores" }
   | { screen: "revision-log-errores-detalle"; id: string }
-  | { screen: "revision-notificaciones" };
+  | { screen: "revision-notificaciones" }
+  | { screen: "indice" };
 type AuthView = "login" | "recover" | "recover-sent" | "recover-new" | "recover-confirmed" | "recover-expired";
 
 type ReportesPrefill = {
@@ -973,6 +975,7 @@ function Sidebar({
         {navItem("Trámites", "tramites", <FileText size={18} />, () => nav(() => onNavigate({ screen: "tramites" })))}
         {navItem("Reportes", "reportes", <ClipboardList size={18} />, () => nav(() => onNavigate({ screen: "reportes" })))}
         {navItem("Documentación", "documentacion", <BookOpen size={18} />, () => nav(() => onNavigate({ screen: "documentacion" })))}
+        {navItem("Índice", "indice", <ChartBar size={18} />, () => nav(() => { onNavigate({ screen: "indice" });}))}
         {/* Revisión — visible para asesor, analista, validador y administrador,
             SIEMPRE expandible con los mismos 2 sub-ítems para los 4 roles:
             "Hallazgos" (Repositorio -- Etapa 1 del Asesor ahora vive ahí como
