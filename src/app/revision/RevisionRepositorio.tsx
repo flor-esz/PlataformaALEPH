@@ -36,6 +36,7 @@ const fieldStyle: React.CSSProperties = {
 
 function RowActions({
   row,
+  readOnly,
   canDecide,
   onVer,
   onEditar,
@@ -45,6 +46,8 @@ function RowActions({
   onRechazar,
 }: {
   row: Hallazgo;
+  /** Administrador: solo consulta en todo el pipeline, sin importar la etapa -- ve únicamente "Ver". */
+  readOnly: boolean;
   /** Etapa 4 es del Validador ("Decidir"/"Ajustar"); otros roles con acceso de lectura solo ven "Ver". */
   canDecide: boolean;
   onVer: (row: Hallazgo) => void;
@@ -54,6 +57,17 @@ function RowActions({
   onAsignar: (row: Hallazgo) => void;
   onRechazar: (row: Hallazgo) => void;
 }) {
+  // Administrador es de solo consulta en todo el pipeline (igual que un rol de
+  // lectura viendo trabajo ajeno en Etapa 4) -- nunca Editar/Asignar/Rechazar/
+  // Publicar directo/Decidir, sin importar la etapa de la fila.
+  if (readOnly) {
+    return (
+      <div className="flex items-center gap-1.5">
+        <IconActionButton icon={Eye} tooltip="Ver" variant="default" onClick={() => onVer(row)} />
+      </div>
+    );
+  }
+
   // Etapa 1: la única acción es "Ver" -- ese click ES la acción real (abre el
   // checklist propio del Asesor dueño, o la consulta de solo lectura si lo ve
   // otro rol; la ramificación vive en handleVer). No hay Aceptar/Rechazar como
@@ -296,6 +310,7 @@ export default function RevisionRepositorio({ userRole, userId, onNavigate }: Re
                   <td className="px-5 py-3">
                     <RowActions
                       row={row}
+                      readOnly={userRole === "administrador"}
                       canDecide={userRole === "validador" || userRole === "administrador"}
                       onVer={handleVer}
                       onEditar={handleEditar}
