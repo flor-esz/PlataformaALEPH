@@ -10,8 +10,14 @@ const RevisionRepositorio = lazy(() => import("./revision/RevisionRepositorio"))
 const RevisionAsesorDetalle = lazy(() => import("./revision/RevisionAsesorDetalle"));
 const RevisionAnalistaChecklist = lazy(() => import("./revision/RevisionAnalistaChecklist"));
 const RevisionTriageModalesDemo = lazy(() => import("./revision/RevisionTriageModales"));
+const RevisionDecisionFinal = lazy(() => import("./revision/RevisionDecisionFinal"));
+const RevisionAjuste = lazy(() => import("./revision/RevisionAjuste"));
+const RevisionDevolverAnalista = lazy(() => import("./revision/RevisionDevolverAnalista"));
+const RevisionVerHallazgo = lazy(() => import("./revision/RevisionVerHallazgo"));
+const RevisionLogErrores = lazy(() => import("./revision/RevisionLogErrores"));
+const RevisionNotificaciones = lazy(() => import("./revision/RevisionNotificaciones"));
 // store.tsx no importa nada de este archivo (ver comentario ahí) -> import estático seguro.
-import { RevisionProvider } from "./revision/store";
+import { RevisionProvider, useRevision, type Notificacion, type NotifKind } from "./revision/store";
 import { PanelTipoSubdimension } from "./components/ui/PanelTipoSubdimension";
 import type { TipoDato } from "./components/ui/PanelTipoSubdimension";
 import { BarrasComposicion } from "./components/ui/BarrasComposicion";
@@ -47,6 +53,11 @@ import {
   AlertCircle,
   Info,
   ClipboardCheck,
+  Inbox,
+  CornerUpLeft,
+  Ban,
+  FilterX,
+  Edit3,
 } from "lucide-react";
 
 // ─── Mobile hook ──────────────────────────────────────────────────────────────
@@ -91,9 +102,10 @@ type View =
   | { screen: "revision-decision-final"; id: string }
   | { screen: "revision-ajuste"; id: string }
   | { screen: "revision-devolver-analista"; id: string }
-  | { screen: "revision-candados"; id: string }
+  | { screen: "revision-ver-hallazgo"; id: string }
   | { screen: "revision-log-errores" }
-  | { screen: "revision-log-errores-detalle"; id: string };
+  | { screen: "revision-log-errores-detalle"; id: string }
+  | { screen: "revision-notificaciones" };
 type AuthView = "login" | "recover" | "recover-sent" | "recover-new" | "recover-confirmed" | "recover-expired";
 
 type ReportesPrefill = {
@@ -991,6 +1003,7 @@ function Sidebar({
   activeView,
   userRole, setUserRole,
   onNavigate,
+  onLogout,
   isDrawerOpen,
   onDrawerClose,
 }: {
@@ -1001,11 +1014,13 @@ function Sidebar({
   userRole: UserRole;
   setUserRole: (r: UserRole) => void;
   onNavigate: (v: View) => void;
+  onLogout: () => void;
   isDrawerOpen?: boolean;
   onDrawerClose?: () => void;
 }) {
   const isMobile = useIsMobile();
   const [adminOpen, setAdminOpen] = useState(activeView.screen === "administracion");
+  const [revisionOpen, setRevisionOpen] = useState(activeView.screen.startsWith("revision"));
   const [lang, setLang] = useState<"ES" | "EN">("ES");
 
   const nav = (fn: () => void) => { fn(); onDrawerClose?.(); };
@@ -1066,10 +1081,32 @@ function Sidebar({
         {navItem("Trámites", "tramites", <FileText size={18} />, () => nav(() => onNavigate({ screen: "tramites" })))}
         {navItem("Reportes", "reportes", <ClipboardList size={18} />, () => nav(() => onNavigate({ screen: "reportes" })))}
         {navItem("Documentación", "documentacion", <BookOpen size={18} />, () => nav(() => onNavigate({ screen: "documentacion" })))}
-        {/* Revisión — visible para asesor, analista, validador y administrador */}
-        {(userRole === "asesor" || userRole === "analista" || userRole === "validador" || userRole === "administrador") &&
-          navItem("Revisión", "revision", <ClipboardCheck size={18} />, () => nav(() => onNavigate({ screen: "revision-repositorio" })))
-        }
+        {/* Revisión — visible para asesor, analista, validador y administrador,
+            SIEMPRE expandible con los mismos 2 sub-ítems para los 4 roles:
+            "Hallazgos" (Repositorio -- Etapa 1 del Asesor ahora vive ahí como
+            una fila más, con su propia matriz de visibilidad por rol/etapa) y
+            "Log de errores". Antes el Asesor entraba directo a un hallazgo fijo
+            porque el Repositorio nunca incluía Etapa 1 en su matriz -- eso ya
+            se corrigió, así que todos los roles navegan igual. */}
+        {(userRole === "asesor" || userRole === "analista" || userRole === "validador" || userRole === "administrador") && (
+          <>
+            <button
+              className="w-full flex items-center gap-3 px-6 py-3 text-left relative"
+              style={{ color: activeSection === "revision" ? "#FAFBFC" : "#8FA3BA", fontFamily: "Space Grotesk, sans-serif", fontSize: 15, background: "none", border: "none" }}
+              onClick={() => { setRevisionOpen(!revisionOpen); if (!revisionOpen) { nav(() => onNavigate({ screen: "revision-repositorio" })); } }}
+            >
+              <ClipboardCheck size={18} />
+              <span className="flex-1">Revisión</span>
+              {revisionOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            </button>
+            {revisionOpen && (
+              <div className="ml-4 border-l pl-2" style={{ borderColor: "#2A3A4A" }}>
+                {navItem("Hallazgos", "revision", <ClipboardList size={16} />, () => nav(() => onNavigate({ screen: "revision-repositorio" })), activeView.screen === "revision-repositorio")}
+                {navItem("Log de errores", "revision", <FileText size={16} />, () => nav(() => onNavigate({ screen: "revision-log-errores" })), activeView.screen === "revision-log-errores")}
+              </div>
+            )}
+          </>
+        )}
         {/* Administración submenu — visible solo para Administrador */}
         {userRole === "administrador" && (
           <>
@@ -1102,7 +1139,11 @@ function Sidebar({
             <p className="text-[11px]" style={{ color: "#5A6A7A", fontFamily: "IBM Plex Sans, sans-serif" }}>{ROLE_LABEL[userRole]}</p>
           </div>
         </div>
-        <button className="flex items-center gap-3 text-[#8FA3BA] hover:text-white transition-colors" style={{ fontFamily: "Space Grotesk, sans-serif", fontSize: 15, background: "none", border: "none" }}>
+        <button
+          onClick={onLogout}
+          className="flex items-center gap-3 text-[#8FA3BA] hover:text-white transition-colors"
+          style={{ fontFamily: "Space Grotesk, sans-serif", fontSize: 15, background: "none", border: "none", cursor: "pointer" }}
+        >
           <LogOut size={18} />
           Salir
         </button>
@@ -1149,6 +1190,131 @@ export const HDR_BTN_SECONDARY: React.CSSProperties = {
   border: `1px solid ${C.border}`, borderRadius: 8, padding: "7px 14px", cursor: "pointer", whiteSpace: "nowrap",
 };
 
+// ─── Campana de notificaciones (Lote 7) ────────────────────────────────────
+// Vive aquí, no en src/app/revision/, a propósito: Header se usa en decenas de
+// lugares de este archivo (fuera de Revisión también) y siempre corre dentro
+// del <RevisionProvider> que envuelve el return de App() -- así que puede
+// llamar useRevision() con seguridad sin que cambie la firma de props de
+// Header ni haya que tocar sus demás usos. RevisionNotificaciones.tsx (la
+// pantalla "ver todas") sí vive en revision/ y se carga vía lazy() como el
+// resto -- por eso el mapeo ícono/color de abajo está duplicado ahí: no hay
+// un módulo intermedio "seguro" para compartirlo sin el riesgo de ciclo ya
+// documentado junto a los imports de revision/* arriba.
+const NOTIF_KIND_META: Record<NotifKind, { icon: React.ElementType; color: string; bg: string }> = {
+  asignacion: { icon: Inbox, color: C.steel4, bg: `${C.steel3}22` },
+  devolucion: { icon: CornerUpLeft, color: C.ambarTexto, bg: C.ambar2 },
+  publicado: { icon: Check, color: C.verde1, bg: C.verde2 },
+  "no-usado": { icon: Ban, color: C.ambarTexto, bg: C.ambar2 },
+  "descartado-triage": { icon: FilterX, color: C.ambarTexto, bg: C.ambar2 },
+};
+const NOTIF_ACCION_ICON: Record<string, React.ElementType> = {
+  "Abrir checklist": ArrowRight,
+  "Revisar y reenviar": Edit3,
+  "Ver publicado": Eye,
+  "Ver motivo": FileText,
+};
+
+function NotificationBell() {
+  const { notificaciones, currentUserId, onNavigate, marcarLeida, marcarTodasLeidas } = useRevision();
+  const [open, setOpen] = useState(false);
+  const mias = notificaciones.filter(n => n.destinatarioId === currentUserId);
+  const nuevas = mias.filter(n => !n.leida);
+  const anteriores = mias.filter(n => n.leida).slice(0, 3);
+  const hasUnread = nuevas.length > 0;
+
+  const handleAction = (n: Notificacion) => {
+    marcarLeida(n.id);
+    setOpen(false);
+    if (n.accion) onNavigate(n.accion.screen, n.accion.id);
+  };
+
+  const renderItem = (n: Notificacion) => {
+    const meta = NOTIF_KIND_META[n.kind];
+    const AccionIcon = n.accion ? (NOTIF_ACCION_ICON[n.accion.label] ?? ArrowRight) : null;
+    return (
+      <div key={n.id} className="flex items-start gap-2.5 px-4 py-3 border-b last:border-0" style={{ borderColor: C.border }}>
+        <span className="flex items-center justify-center flex-shrink-0" style={{ width: 28, height: 28, borderRadius: "50%", backgroundColor: meta.bg, marginTop: 1 }}>
+          <meta.icon size={13} color={meta.color} strokeWidth={2} />
+        </span>
+        <div className="min-w-0">
+          <p style={{ fontFamily: "Space Grotesk, sans-serif", fontSize: 12.5, fontWeight: 600, color: C.text }}>{n.titulo}</p>
+          <p style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 11, color: C.textMuted, marginTop: 1 }}>{n.subtitulo} · {n.fecha}</p>
+          {n.accion && (
+            <button
+              onClick={() => handleAction(n)}
+              className="flex items-center gap-1 mt-1"
+              style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: C.steel4, fontFamily: "IBM Plex Sans, sans-serif", fontSize: 11, fontWeight: 500 }}
+            >
+              {AccionIcon && <AccionIcon size={11} strokeWidth={2} />}
+              {n.accion.label}
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div style={{ position: "relative" }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-9 h-9 rounded-full flex items-center justify-center relative"
+        style={{ backgroundColor: C.steel2, border: "none", cursor: "pointer" }}
+      >
+        <Bell size={16} color="white" />
+        {hasUnread && (
+          <span style={{ position: "absolute", top: 5, right: 6, width: 7, height: 7, borderRadius: "50%", backgroundColor: C.critico, border: "1.5px solid white" }} />
+        )}
+      </button>
+      {open && (
+        <>
+          <div style={{ position: "fixed", inset: 0, zIndex: 40 }} onClick={() => setOpen(false)} />
+          <div
+            className="absolute right-0 rounded-lg overflow-hidden"
+            style={{ top: "calc(100% + 8px)", width: 360, maxWidth: "90vw", backgroundColor: C.card, border: `1px solid ${C.border}`, boxShadow: "0 12px 40px rgba(0,0,0,0.18)", zIndex: 50 }}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: C.border }}>
+              <p style={{ fontFamily: "Space Grotesk, sans-serif", fontSize: 14, fontWeight: 600, color: C.text }}>Notificaciones</p>
+              {hasUnread && (
+                <button onClick={marcarTodasLeidas} style={{ background: "none", border: "none", cursor: "pointer", color: C.textMuted, fontFamily: "IBM Plex Sans, sans-serif", fontSize: 11 }}>
+                  Marcar todas como leídas
+                </button>
+              )}
+            </div>
+            <div style={{ maxHeight: 420, overflowY: "auto" }}>
+              {mias.length === 0 ? (
+                <p className="px-4 py-6 text-center" style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 12, color: C.textMuted }}>Sin notificaciones todavía.</p>
+              ) : (
+                <>
+                  {nuevas.length > 0 && (
+                    <>
+                      <p className="px-4 pt-3 pb-1" style={{ fontFamily: "Space Grotesk, sans-serif", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.textMuted }}>Nuevas</p>
+                      {nuevas.map(renderItem)}
+                    </>
+                  )}
+                  {anteriores.length > 0 && (
+                    <>
+                      <p className="px-4 pt-3 pb-1" style={{ fontFamily: "Space Grotesk, sans-serif", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.textMuted }}>Anteriores</p>
+                      {anteriores.map(renderItem)}
+                    </>
+                  )}
+                </>
+              )}
+            </div>
+            <button
+              onClick={() => { setOpen(false); onNavigate("revision-notificaciones"); }}
+              className="w-full text-center py-2.5"
+              style={{ background: "none", borderWidth: 0, borderTopWidth: 1, borderStyle: "solid", borderColor: C.border, cursor: "pointer", color: C.steel4, fontFamily: "Space Grotesk, sans-serif", fontSize: 12, fontWeight: 500 }}
+            >
+              Ver todas las notificaciones
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export function Header({ breadcrumb, title, subtitle, actions }: { breadcrumb: string; title: string; subtitle?: string; actions?: React.ReactNode }) {
   const isMobile = useIsMobile();
   return (
@@ -1163,9 +1329,7 @@ export function Header({ breadcrumb, title, subtitle, actions }: { breadcrumb: s
           {actions}
           {!isMobile && (
             <>
-              <button className="w-9 h-9 rounded-full flex items-center justify-center" style={{ backgroundColor: C.steel2 }}>
-                <Bell size={16} color="white" />
-              </button>
+              <NotificationBell />
               <div className="flex items-center gap-2">
                 <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-semibold" style={{ backgroundColor: C.text, fontFamily: "Space Grotesk, sans-serif" }}>AM</div>
                 <span className="text-[14px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text }}>Ana Mejía</span>
@@ -5112,70 +5276,10 @@ function PlaceholderScreen({ label }: { label: string }) {
   );
 }
 
-// ─── Revisión: barra temporal de acceso directo entre pantallas ───────────────
-// TODO(handoff): reemplazar por navegación real (acciones de fila, botones de
-// confirmación de los modales, etc.) cuando se conecte cada bloque [CLAUDE CODE]
-// del docs/ALEPH_prompts_pipeline_hitl.md. Por ahora solo hace visibles/alcanzables
-// las pantallas ya construidas en src/app/revision/.
-type RevisionQuickNavKey =
-  | "revision-repositorio"
-  | "revision-asesor-detalle"
-  | "revision-analista-checklist"
-  | "revision-triage-modales";
-
-const REVISION_QUICK_LINKS: { key: RevisionQuickNavKey; label: string }[] = [
-  { key: "revision-repositorio", label: "Repositorio" },
-  { key: "revision-asesor-detalle", label: "Detalle Asesor (demo)" },
-  { key: "revision-analista-checklist", label: "Checklist Analista (demo)" },
-  { key: "revision-triage-modales", label: "Modales de Triage (demo)" },
-];
-
 function RevisionLoadingFallback() {
   return (
     <div className="p-8" style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 13, color: C.textMuted }}>
       Cargando…
-    </div>
-  );
-}
-
-function RevisionQuickNav({ onNavigate, current }: { onNavigate: (v: View) => void; current: string }) {
-  const go = (key: RevisionQuickNavKey) => {
-    if (key === "revision-asesor-detalle" || key === "revision-analista-checklist") {
-      onNavigate({ screen: key, id: "demo" });
-    } else {
-      onNavigate({ screen: key });
-    }
-  };
-  return (
-    <div
-      className="flex flex-wrap items-center gap-2 px-4 md:px-8 py-2 flex-shrink-0"
-      style={{ borderBottom: `1px solid ${C.border}`, backgroundColor: "#F8FAFC" }}
-    >
-      <span
-        className="text-[10px] uppercase tracking-widest mr-1"
-        style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}
-      >
-        Acceso directo (temporal):
-      </span>
-      {REVISION_QUICK_LINKS.map(link => (
-        <button
-          key={link.key}
-          onClick={() => go(link.key)}
-          style={{
-            fontFamily: "Space Grotesk, sans-serif",
-            fontSize: 11,
-            fontWeight: 500,
-            padding: "4px 10px",
-            borderRadius: 9999,
-            border: `1px solid ${current === link.key ? C.steel3 : C.border}`,
-            backgroundColor: current === link.key ? `${C.steel3}18` : "transparent",
-            color: current === link.key ? C.steel4 : C.textMuted,
-            cursor: "pointer",
-          }}
-        >
-          {link.label}
-        </button>
-      ))}
     </div>
   );
 }
@@ -5205,22 +5309,48 @@ export default function App() {
   const [authView, setAuthView] = useState<AuthView>("login");
   const [recoveryEmail, setRecoveryEmail] = useState("ana.mejia@iadb.org");
 
+  // No hay `return` temprano aquí a propósito: <RevisionProvider> (más abajo)
+  // tiene que envolver TANTO la pantalla de login COMO la app logueada, en la
+  // MISMA posición del árbol, para que "Salir" sea un simple cambio de estado
+  // de sesión (como en un backend real) y no un desmonte/remonte del store
+  // -- eso es justo el bug que se pidió arreglar: antes `loggedIn=false`
+  // devolvía un JSX totalmente por fuera del Provider, así que un logout real
+  // habría reseteado hallazgos/log_errores/notificaciones al volver a entrar.
+  let authScreen: React.ReactNode = null;
   if (!loggedIn) {
     switch (authView) {
       case "login":
-        return <LoginScreen onLogin={(role) => { setUserRole(role); setLoggedIn(true); }} onNavigate={setAuthView} />;
+        authScreen = <LoginScreen onLogin={(role) => { setUserRole(role); setLoggedIn(true); }} onNavigate={setAuthView} />;
+        break;
       case "recover":
-        return <RecoverScreen email={recoveryEmail} setEmail={setRecoveryEmail} onNavigate={setAuthView} />;
+        authScreen = <RecoverScreen email={recoveryEmail} setEmail={setRecoveryEmail} onNavigate={setAuthView} />;
+        break;
       case "recover-sent":
-        return <RecoverSentScreen email={recoveryEmail} onNavigate={setAuthView} />;
+        authScreen = <RecoverSentScreen email={recoveryEmail} onNavigate={setAuthView} />;
+        break;
       case "recover-new":
-        return <NewPasswordScreen email={recoveryEmail} onNavigate={setAuthView} />;
+        authScreen = <NewPasswordScreen email={recoveryEmail} onNavigate={setAuthView} />;
+        break;
       case "recover-confirmed":
-        return <PasswordConfirmedScreen onNavigate={setAuthView} />;
+        authScreen = <PasswordConfirmedScreen onNavigate={setAuthView} />;
+        break;
       case "recover-expired":
-        return <LinkExpiredScreen onNavigate={setAuthView} />;
+        authScreen = <LinkExpiredScreen onNavigate={setAuthView} />;
+        break;
     }
   }
+
+  // "Salir": cierra la sesión y vuelve al login -- limpia la navegación para
+  // que el próximo login (con cualquiera de los 5 roles) arranque en el
+  // dashboard, no en la pantalla de Revisión donde se haya quedado la sesión
+  // anterior. Deliberadamente NO toca el estado de src/app/revision/store.tsx:
+  // cerrar sesión no borra datos, igual que en un backend real.
+  const handleLogout = () => {
+    setLoggedIn(false);
+    setAuthView("login");
+    setView({ screen: "regional-dashboard" });
+    setActiveSection("dashboard");
+  };
 
   const navigate = (v: View) => {
     setView(v);
@@ -5255,6 +5385,24 @@ export default function App() {
       case "revision-analista-checklist":
         navigate({ screen: "revision-analista-checklist", id: id ?? "demo" });
         return;
+      case "revision-decision-final":
+        navigate({ screen: "revision-decision-final", id: id ?? "demo" });
+        return;
+      case "revision-ajuste":
+        navigate({ screen: "revision-ajuste", id: id ?? "demo" });
+        return;
+      case "revision-devolver-analista":
+        navigate({ screen: "revision-devolver-analista", id: id ?? "demo" });
+        return;
+      case "revision-ver-hallazgo":
+        navigate({ screen: "revision-ver-hallazgo", id: id ?? "demo" });
+        return;
+      case "revision-log-errores":
+        navigate({ screen: "revision-log-errores" });
+        return;
+      case "revision-notificaciones":
+        navigate({ screen: "revision-notificaciones" });
+        return;
       default:
         console.log("[revision] navegación aún no implementada:", screen, id);
     }
@@ -5279,57 +5427,88 @@ export default function App() {
       case "documentacion": return <DocumentacionScreen />;
       case "revision-repositorio":
         return (
-          <div className="h-full flex flex-col overflow-hidden">
-            <RevisionQuickNav onNavigate={navigate} current={view.screen} />
-            <div className="flex-1 overflow-hidden">
-              <Suspense fallback={<RevisionLoadingFallback />}>
-                <RevisionRepositorio
-                  userRole={userRole}
-                  userId={REVISION_DEMO_USER_ID[userRole]}
-                  onNavigate={revisionNavigate}
-                />
-              </Suspense>
-            </div>
-          </div>
+          <Suspense fallback={<RevisionLoadingFallback />}>
+            <RevisionRepositorio
+              userRole={userRole}
+              userId={REVISION_DEMO_USER_ID[userRole]}
+              onNavigate={revisionNavigate}
+            />
+          </Suspense>
         );
       case "revision-triage-modales":
-        return (
-          <div className="h-full flex flex-col overflow-hidden">
-            <RevisionQuickNav onNavigate={navigate} current={view.screen} />
-            <div className="flex-1 overflow-hidden">
-              <Suspense fallback={<RevisionLoadingFallback />}><RevisionTriageModalesDemo /></Suspense>
-            </div>
-          </div>
-        );
+        return <Suspense fallback={<RevisionLoadingFallback />}><RevisionTriageModalesDemo /></Suspense>;
       case "revision-asesor-detalle":
         return (
-          <div className="h-full flex flex-col overflow-hidden">
-            <RevisionQuickNav onNavigate={navigate} current={view.screen} />
-            <div className="flex-1 overflow-hidden">
-              <Suspense fallback={<RevisionLoadingFallback />}>
-                <RevisionAsesorDetalle
-                  onBack={() => navigate({ screen: "revision-repositorio" })}
-                  onReject={() => console.log("rechazar hallazgo")}
-                  onAccept={() => console.log("aceptar y enviar a etapa 2")}
-                />
-              </Suspense>
-            </div>
-          </div>
+          <Suspense fallback={<RevisionLoadingFallback />}>
+            <RevisionAsesorDetalle
+              id={view.id}
+              onBack={() => navigate({ screen: "revision-repositorio" })}
+              onReject={() => navigate({ screen: "revision-repositorio" })}
+              onAccept={() => navigate({ screen: "revision-repositorio" })}
+            />
+          </Suspense>
         );
       case "revision-analista-checklist":
         return (
-          <div className="h-full flex flex-col overflow-hidden">
-            <RevisionQuickNav onNavigate={navigate} current={view.screen} />
-            <div className="flex-1 overflow-hidden">
-              <Suspense fallback={<RevisionLoadingFallback />}>
-                <RevisionAnalistaChecklist
-                  onBack={() => navigate({ screen: "revision-repositorio" })}
-                  onSave={() => console.log("guardar avance")}
-                  onSend={() => console.log("enviar al validador")}
-                />
-              </Suspense>
-            </div>
-          </div>
+          <Suspense fallback={<RevisionLoadingFallback />}>
+            <RevisionAnalistaChecklist
+              id={view.id}
+              onBack={() => navigate({ screen: "revision-repositorio" })}
+              onSave={() => console.log("guardar avance")}
+              onSend={() => navigate({ screen: "revision-repositorio" })}
+            />
+          </Suspense>
+        );
+      case "revision-decision-final":
+        return (
+          <Suspense fallback={<RevisionLoadingFallback />}>
+            <RevisionDecisionFinal
+              id={view.id}
+              onBack={() => navigate({ screen: "revision-repositorio" })}
+              onResuelto={() => navigate({ screen: "revision-repositorio" })}
+              onAjustar={() => navigate({ screen: "revision-ajuste", id: view.id })}
+              onDevolver={() => navigate({ screen: "revision-devolver-analista", id: view.id })}
+            />
+          </Suspense>
+        );
+      case "revision-ajuste":
+        return (
+          <Suspense fallback={<RevisionLoadingFallback />}>
+            <RevisionAjuste
+              id={view.id}
+              onCancel={() => navigate({ screen: "revision-decision-final", id: view.id })}
+              onSave={() => navigate({ screen: "revision-decision-final", id: view.id })}
+            />
+          </Suspense>
+        );
+      case "revision-devolver-analista":
+        return (
+          <Suspense fallback={<RevisionLoadingFallback />}>
+            <RevisionDevolverAnalista
+              id={view.id}
+              onCancel={() => navigate({ screen: "revision-decision-final", id: view.id })}
+              onDevuelto={() => navigate({ screen: "revision-repositorio" })}
+            />
+          </Suspense>
+        );
+      case "revision-ver-hallazgo":
+        return (
+          <Suspense fallback={<RevisionLoadingFallback />}>
+            <RevisionVerHallazgo
+              id={view.id}
+              userId={REVISION_DEMO_USER_ID[userRole]}
+              canDecide={userRole === "validador" || userRole === "administrador"}
+              onNavigate={revisionNavigate}
+            />
+          </Suspense>
+        );
+      case "revision-log-errores":
+        return <Suspense fallback={<RevisionLoadingFallback />}><RevisionLogErrores /></Suspense>;
+      case "revision-notificaciones":
+        return (
+          <Suspense fallback={<RevisionLoadingFallback />}>
+            <RevisionNotificaciones onBack={() => navigate({ screen: "revision-repositorio" })} />
+          </Suspense>
         );
       case "placeholder": return <PlaceholderScreen label={view.label} />;
     }
@@ -5339,10 +5518,12 @@ export default function App() {
     activeCountry,
     activeSection, setActiveSection,
     activeView: view, userRole, setUserRole, onNavigate: navigate,
+    onLogout: handleLogout,
   };
 
   return (
-    <RevisionProvider>
+    <RevisionProvider currentUserId={REVISION_DEMO_USER_ID[userRole]} onNavigate={revisionNavigate}>
+    {!loggedIn ? authScreen : (
     <div className="flex flex-col h-screen overflow-hidden" style={{ backgroundColor: C.canvas, fontFamily: "IBM Plex Sans, sans-serif" }}>
       {/* Mobile sticky header */}
       {isMobile && (
@@ -5375,6 +5556,7 @@ export default function App() {
         </div>
       </div>
     </div>
+    )}
     </RevisionProvider>
   );
 }

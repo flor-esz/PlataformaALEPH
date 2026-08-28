@@ -16,7 +16,7 @@ function isVisibleForRole(h: Hallazgo, userRole: UserRole, userId: string): bool
   return false; // usuario-bid: la sección Revisión ni siquiera aparece en el sidebar para este rol.
 }
 
-const PAISES = ["Todos los países", "Argentina", "Brasil", "Chile", "Colombia", "Ecuador", "México", "Perú", "Uruguay"];
+const PAISES = ["Todos los países", "Argentina", "Bolivia", "Brasil", "Chile", "Colombia", "Ecuador", "México", "Perú", "Uruguay"];
 const TIPOS = ["Todos los tipos", "Barrera regulatoria", "Trámite", "Regulación"];
 
 // ─── Input / Select style (matches Administración modal) ──────────────────────
@@ -54,6 +54,19 @@ function RowActions({
   onAsignar: (row: Hallazgo) => void;
   onRechazar: (row: Hallazgo) => void;
 }) {
+  // Etapa 1: la única acción es "Ver" -- ese click ES la acción real (abre el
+  // checklist propio del Asesor dueño, o la consulta de solo lectura si lo ve
+  // otro rol; la ramificación vive en handleVer). No hay Aceptar/Rechazar como
+  // ícono rápido de fila a propósito: esas acciones requieren haber revisado
+  // los 7 campos del checklist primero, no se pueden hacer en un solo click.
+  if (row.stage === 1) {
+    return (
+      <div className="flex items-center gap-1.5">
+        <IconActionButton icon={Eye} tooltip="Ver" variant="default" onClick={() => onVer(row)} />
+      </div>
+    );
+  }
+
   if (row.stage === 2) {
     return (
       <div className="flex items-center gap-1.5">
@@ -129,29 +142,41 @@ export default function RevisionRepositorio({ userRole, userId, onNavigate }: Re
   // Asesor y Analista solo ven "lo suyo" -> filtrar por país no tiene sentido para ellos.
   const showPaisFilter = userRole === "administrador" || userRole === "validador";
 
-  const visibles = hallazgos.filter(h => isVisibleForRole(h, userRole, userId));
+  // El Repositorio es el pipeline ACTIVO (Etapas 2-4); los hallazgos "publicado"
+  // (Lote 2/5) se conservan en el store pero salen de esta vista -- Lote 6 es
+  // quien decide si tienen una vista propia (log_errores no es el lugar, ahí
+  // solo van los terminales por rechazo/descarte, no los exitosos).
+  const visibles = hallazgos.filter(h => h.estado !== "publicado" && isVisibleForRole(h, userRole, userId));
   const filtradas = visibles.filter(h =>
     (!showPaisFilter || pais === "Todos los países" || h.pais === pais) &&
     (tipo === "Todos los tipos" || h.tipo === tipo) &&
     (buscar.trim() === "" || h.nombre.toLowerCase().includes(buscar.trim().toLowerCase()))
   );
 
-  // "Ver"/"Editar" navegan a una pantalla real solo donde ya existe una construida.
-  // Etapa 2 no tiene pantalla de detalle propia en el pipeline documentado (sus
-  // acciones SON los 3 modales de Triage). Etapa 4 navegará a RevisionDecisionFinal
-  // cuando se construya en el Lote 5 -- hasta entonces queda en console.log a
-  // propósito, para no enlazar a un case que todavía no existe en el switch de
-  // renderView() (eso fue exactamente el bug de pantalla en blanco ya arreglado).
+  // "Ver" abre RevisionVerHallazgo -- la pantalla de consulta de solo lectura
+  // (con un set reducido de botones por etapa), nunca las pantallas de
+  // trabajo. "Editar"/"Decidir" (fila) siguen yendo directo a esas pantallas
+  // de trabajo, sin pasar por la consulta.
+  //
+  // Etapa 1 es la excepción, y es por ROL, no por etapa fija: si quien mira es
+  // el propio Asesor dueño del hallazgo, "Ver" va directo a RevisionAsesorDetalle
+  // (ahí SÍ se edita de verdad -- es su checklist de trabajo). Si lo ve
+  // Validador/Administrador (que ven "todo" en isVisibleForRole) mirando el
+  // trabajo de un Asesor que no es ellos mismos, va a RevisionVerHallazgo en su
+  // cuarta cara de solo lectura para Etapa 1.
   const handleVer = (row: Hallazgo) => {
-    if (row.stage === 3) { onNavigate("revision-analista-checklist", row.id); return; }
-    console.log("ver (sin pantalla de detalle todavía)", row.id, row.stage);
+    if (row.stage === 1 && row.asesorId === userId) {
+      onNavigate("revision-asesor-detalle", row.id);
+      return;
+    }
+    onNavigate("revision-ver-hallazgo", row.id);
   };
   const handleEditar = (row: Hallazgo) => {
     if (row.stage === 3) { onNavigate("revision-analista-checklist", row.id); return; }
-    console.log("editar (Lote 5: RevisionDecisionFinal)", row.id);
+    if (row.stage === 4) { onNavigate("revision-decision-final", row.id); return; }
   };
   const handleDecidir = (row: Hallazgo) => {
-    console.log("decidir (Lote 5: RevisionDecisionFinal)", row.id);
+    onNavigate("revision-decision-final", row.id);
   };
 
   return (

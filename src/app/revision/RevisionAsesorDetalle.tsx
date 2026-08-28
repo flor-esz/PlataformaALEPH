@@ -1,69 +1,14 @@
 import React, { useState } from "react";
 import { Bot, UserCog, Check, ArrowLeft } from "lucide-react";
 import { C, Header } from "../App";
+import { useRevision, defaultCamposEtapa1, type Etapa1FieldKey, type Etapa1Campos } from "./store";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-type FieldOrigin = "ia" | "asesor";
-
-interface FieldState {
-  value: string;
-  origin: FieldOrigin;
-  reviewed: boolean;
-}
-
-type FieldKey =
-  | "titulo"
-  | "textoNormativo"
-  | "pasaje"
-  | "diagnostico"
-  | "severidad"
-  | "clasificacion"
-  | "instrumento";
-
-type Fields = Record<FieldKey, FieldState>;
-
-// ─── Sample data ──────────────────────────────────────────────────────────────
-
-const INITIAL_FIELDS: Fields = {
-  titulo: {
-    value: "Restricción a Operadores Sin Planta Propia",
-    origin: "ia",
-    reviewed: false,
-  },
-  textoNormativo: {
-    value: `Artículo 12. — Requisitos para inscripción como exportador de café tostado.\n\nPara obtener la inscripción en el Registro de Exportadores de Café Tostado, el solicitante deberá acreditar la propiedad o arrendamiento a largo plazo (mínimo 5 años) de las instalaciones de tostado, incluyendo equipos industriales propios. No se admitirá la inscripción de personas naturales o jurídicas que operen mediante convenios de capacidad compartida, maquila o arrendamiento de capacidad instalada de terceros.\n\nEsta disposición busca garantizar la trazabilidad y calidad del café de exportación, vinculando la responsabilidad del exportador a instalaciones físicas verificables.`,
-    origin: "ia",
-    reviewed: false,
-  },
-  pasaje: {
-    value:
-      "No se admitirá la inscripción de personas naturales o jurídicas que operen mediante convenios de capacidad compartida, maquila o arrendamiento de capacidad instalada de terceros.",
-    origin: "ia",
-    reviewed: false,
-  },
-  diagnostico: {
-    value:
-      "El marco normativo desconoce los modelos de negocio modernos de tostadores que operan por maquila en plantas de terceros certificadas. Esta restricción impide el acceso al mercado internacional de exportadores artesanales y medianos que no pueden costear instalaciones propias, con un impacto estimado de USD 2.4 M en exportaciones no realizadas por ciclo.",
-    origin: "ia",
-    reviewed: false,
-  },
-  severidad: {
-    value: "Crítico",
-    origin: "asesor",
-    reviewed: true,
-  },
-  clasificacion: {
-    value: "Entrada",
-    origin: "ia",
-    reviewed: false,
-  },
-  instrumento: {
-    value: "Ley de Regulación de Exportaciones de Café PCM-2019",
-    origin: "asesor",
-    reviewed: true,
-  },
-};
+// Los tipos y el contenido de muestra de estos campos viven en store.tsx desde
+// que Etapa 1 pasó a tener hallazgos reales (cada uno con su propio checklist,
+// no uno solo compartido) -- ver defaultCamposEtapa1/camposEtapa1Tramite/
+// camposEtapa1Barrera ahí.
+type FieldKey = Etapa1FieldKey;
+type Fields = Etapa1Campos;
 
 const SEVERIDADES = ["Crítico", "Alto", "Mediano", "Bajo"];
 const CLASIFICACIONES = ["Entrada", "Operación", "Salida"];
@@ -218,19 +163,37 @@ const textareaStyle: React.CSSProperties = {
 // ─── Main component ───────────────────────────────────────────────────────────
 
 interface RevisionAsesorDetalleProps {
+  /** id del hallazgo real en src/app/revision/store.tsx (siempre Etapa 1). */
+  id: string;
   onBack?: () => void;
   onReject?: () => void;
   onAccept?: () => void;
 }
 
+// Fallback -- solo se usa si `id` no matchea ningún hallazgo real (no debería
+// pasar: RevisionRepositorio solo manda acá al dueño de un hallazgo real de
+// Etapa 1), para que la pantalla no quede vacía si igual ocurriera.
+const FALLBACK_PAIS = "Bolivia";
+const FALLBACK_TIPO = "Barrera regulatoria";
+const FALLBACK_SECTOR = "Agroindustria Cafetalera";
+
 export default function RevisionAsesorDetalle({
+  id,
   onBack,
   onReject,
   onAccept,
 }: RevisionAsesorDetalleProps) {
-  const [fields, setFields] = useState<Fields>(INITIAL_FIELDS);
+  const { hallazgos, enviarAEtapa2, rechazarPorAsesor } = useRevision();
+  const hallazgo = hallazgos.find(h => h.id === id) ?? null;
+
+  const [fields, setFields] = useState<Fields>(() => hallazgo?.camposEtapa1 ?? defaultCamposEtapa1());
   const [nota, setNota] = useState("");
   const [jerarquia, setJerarquia] = useState("Legal");
+  const [bloqueadoPorCandado, setBloqueadoPorCandado] = useState<string[] | null>(null);
+
+  const pais = hallazgo?.pais ?? FALLBACK_PAIS;
+  const tipo = hallazgo?.tipo ?? FALLBACK_TIPO;
+  const sector = hallazgo?.sector ?? FALLBACK_SECTOR;
 
   const updateField = (key: FieldKey, value: string) => {
     setFields((prev) => ({
@@ -244,6 +207,35 @@ export default function RevisionAsesorDetalle({
       ...prev,
       [key]: { ...prev[key], reviewed: !prev[key].reviewed },
     }));
+  };
+
+  // "Rechazar hallazgo" -> log_errores categoría "Asesor" (terminal: retira el
+  // hallazgo real de Etapa 1, nunca llega a Etapa 2). "Aceptar y enviar" ->
+  // transforma ese mismo hallazgo a Etapa 2 con los campos editados aquí;
+  // antes, enviarAEtapa2 corre los candados automáticos -- si alguno falla, el
+  // hallazgo se queda tal cual en Etapa 1 (no se pierde el borrador) y esta
+  // pantalla le avisa al Asesor en vez de navegar como si hubiera funcionado.
+  // `pais`/`tipo`/`sector` ahora sí son reales (vienen del hallazgo), no
+  // fijos -- cerraba un desajuste de datos documentado desde el Lote 3.
+  // TODO(Lote 7): disparar la notificación al Validador que pide el doc.
+  const handleReject = () => {
+    rechazarPorAsesor(id, nota.trim() || "Rechazado por el Asesor sin nota adicional.");
+    onReject?.();
+  };
+  const handleAccept = () => {
+    const resultado = enviarAEtapa2(id, {
+      nombre: fields.titulo.value,
+      pais,
+      tipo,
+      clasificacion: fields.clasificacion.value,
+      sector,
+    });
+    if (!resultado.ok) {
+      setBloqueadoPorCandado(resultado.motivos);
+      return;
+    }
+    setBloqueadoPorCandado(null);
+    onAccept?.();
   };
 
   const ALL_KEYS: FieldKey[] = [
@@ -296,7 +288,7 @@ export default function RevisionAsesorDetalle({
               color: C.textMuted,
             }}
           >
-            Agroindustria Cafetalera · Bolivia · Hace 1 día
+            {sector} · {pais} · {hallazgo?.hace ?? "Hace 1 día"}
           </span>
         </div>
 
@@ -347,7 +339,7 @@ export default function RevisionAsesorDetalle({
                   color: C.textMuted,
                 }}
               >
-                {fields.instrumento.value} · {jerarquia} · Bolivia · 2019
+                {fields.instrumento.value} · {jerarquia} · {pais}
               </p>
             </div>
 
@@ -501,6 +493,21 @@ export default function RevisionAsesorDetalle({
             </div>
           </div>
 
+          {/* Bloqueado por candados automáticos (src/app/revision/store.tsx#evaluarCandadosAutomaticos) */}
+          {bloqueadoPorCandado && (
+            <div
+              className="rounded-lg p-4"
+              style={{ backgroundColor: C.rojoClaro, border: `1px solid ${C.critico}55` }}
+            >
+              <p style={{ fontFamily: "Space Grotesk, sans-serif", fontSize: 13, fontWeight: 600, color: C.critico, marginBottom: 4 }}>
+                No se pudo enviar a Etapa 2
+              </p>
+              <p style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 12, color: C.critico, lineHeight: 1.5 }}>
+                {bloqueadoPorCandado.join(" · ")} Quedó registrado en log_errores (origen Sistema) y no llegó al repositorio.
+              </p>
+            </div>
+          )}
+
           {/* Action footer (below left column) */}
           <div
             className="rounded-lg p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
@@ -538,7 +545,7 @@ export default function RevisionAsesorDetalle({
             {/* Buttons */}
             <div className="flex items-center gap-3">
               <button
-                onClick={onReject}
+                onClick={handleReject}
                 style={{
                   fontFamily: "Space Grotesk, sans-serif",
                   fontSize: 13,
@@ -555,7 +562,7 @@ export default function RevisionAsesorDetalle({
               </button>
 
               <button
-                onClick={allReviewed ? onAccept : undefined}
+                onClick={allReviewed ? handleAccept : undefined}
                 style={{
                   fontFamily: "Space Grotesk, sans-serif",
                   fontSize: 13,
@@ -650,9 +657,8 @@ export default function RevisionAsesorDetalle({
               {/* Read-only metadata */}
               {(
                 [
-                  ["Sector", "Agroindustria Cafetalera"],
-                  ["País", "Bolivia"],
-                  ["Año instrumento", "2019"],
+                  ["Sector", sector],
+                  ["País", pais],
                 ] as [string, string][]
               ).map(([k, v]) => (
                 <div

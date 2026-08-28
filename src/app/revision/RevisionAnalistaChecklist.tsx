@@ -1,74 +1,8 @@
 import React, { useState } from "react";
-import { AlertTriangle, RefreshCw, ArrowLeft } from "lucide-react";
+import { AlertTriangle, RefreshCw, ArrowLeft, CornerUpLeft } from "lucide-react";
 import { C, Header } from "../App";
 import { StageChip } from "./shared/StageChip";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-type CriterionResult = "cumple" | "no-cumple" | null;
-
-interface Criterion {
-  id: string;
-  label: string;
-  result: CriterionResult;
-}
-
-interface EditableField {
-  id: string;
-  label: string;
-  actual: string;
-  fuente: string;
-  resuelve: string | null; // criterion id it resolves
-}
-
-// ─── Sample data ──────────────────────────────────────────────────────────────
-
-const INIT_JURIDICOS: Criterion[] = [
-  { id: "existencia",     label: "Existencia",     result: "cumple"    },
-  { id: "vigencia",       label: "Vigencia",        result: "cumple"    },
-  { id: "cita",           label: "Cita normativa",  result: "no-cumple" },
-  { id: "interpretacion", label: "Interpretación",  result: null        },
-  { id: "aplicabilidad",  label: "Aplicabilidad",   result: "cumple"    },
-];
-
-const INIT_ECONOMICOS: Criterion[] = [
-  { id: "friccion",         label: "Tipo de fricción",    result: "cumple"    },
-  { id: "causalidad",       label: "Causalidad",          result: "no-cumple" },
-  { id: "legitimidad",      label: "Legitimidad",         result: "cumple"    },
-  { id: "proporcionalidad", label: "Proporcionalidad",    result: "no-cumple" },
-  { id: "severidad_crit",   label: "Severidad",           result: null        },
-];
-
-const INIT_FIELDS: EditableField[] = [
-  {
-    id: "plazo",
-    label: "Plazo legal",
-    actual: "Indefinido (sin plazo establecido)",
-    fuente: "Ley de Regulación de Exportaciones PCM-2019, Art. 12",
-    resuelve: "proporcionalidad",
-  },
-  {
-    id: "costo",
-    label: "Costo estimado",
-    actual: "USD 4.1 M / año",
-    fuente: "Modelo SCM — Informe BID-LAB 2025, §3.2",
-    resuelve: "causalidad",
-  },
-  {
-    id: "severidad_field",
-    label: "Severidad",
-    actual: "Crítico",
-    fuente: "Matriz ALEPH v2 — criterio automático por costo > USD 1M",
-    resuelve: null,
-  },
-  {
-    id: "entidad",
-    label: "Entidad emisora",
-    actual: "Ministerio de Desarrollo Productivo y Economía Plural",
-    fuente: "Res. Min. Comercio 2022-14, Art. 3",
-    resuelve: "cita",
-  },
-];
+import { useRevision, richChecklist, FIELD_RESUELVE_CRITERIO, type Criterion, type CriterionResult, type ChecklistField } from "./store";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -169,9 +103,9 @@ function EditableFieldCard({
   criterionLabel,
   onChange,
 }: {
-  field: EditableField;
+  field: ChecklistField;
   criterionLabel: string | null;
-  onChange: (next: Partial<EditableField>) => void;
+  onChange: (next: Partial<ChecklistField>) => void;
 }) {
   return (
     <div
@@ -270,20 +204,35 @@ function EditableFieldCard({
 // ─── Main component ───────────────────────────────────────────────────────────
 
 interface RevisionAnalistaChecklistProps {
+  /** id del hallazgo real en src/app/revision/store.tsx. Si no existe ahí (ej. el
+   *  acceso directo de demo usa id="demo"), la pantalla sigue funcionando con los
+   *  datos de muestra de abajo -- "Enviar al Validador" simplemente no tendrá una
+   *  fila real que mover. */
+  id: string;
   onBack?: () => void;
   onSave?: () => void;
   onSend?: () => void;
 }
 
 export default function RevisionAnalistaChecklist({
+  id,
   onBack,
   onSave,
   onSend,
 }: RevisionAnalistaChecklistProps) {
-  const [juridicos, setJuridicos] = useState<Criterion[]>(INIT_JURIDICOS);
-  const [economicos, setEconomicos] = useState<Criterion[]>(INIT_ECONOMICOS);
-  const [fields, setFields] = useState<EditableField[]>(INIT_FIELDS);
-  const [dictamen, setDictamen] = useState("");
+  const { hallazgos, actualizarChecklist, enviarAValidador } = useRevision();
+  const hallazgo = hallazgos.find(h => h.id === id) ?? null;
+
+  // Estado local para edición responsiva; se inicializa una sola vez (al montar,
+  // por eso el inicializador perezoso) desde el checklist real del hallazgo --
+  // ver src/app/revision/store.tsx. "Guardar avance" y "Enviar al Validador" son
+  // los puntos explícitos donde esto se escribe de vuelta al store (no hay
+  // autosave continuo). Si el id no existe en el store (ej. acceso directo de
+  // demo), cae a richChecklist() para que el formulario no quede vacío.
+  const [juridicos, setJuridicos] = useState<Criterion[]>(() => hallazgo?.criteriosJuridicos ?? richChecklist().criteriosJuridicos);
+  const [economicos, setEconomicos] = useState<Criterion[]>(() => hallazgo?.criteriosEconomicos ?? richChecklist().criteriosEconomicos);
+  const [fields, setFields] = useState<ChecklistField[]>(() => hallazgo?.camposChecklist ?? richChecklist().camposChecklist);
+  const [dictamen, setDictamen] = useState(() => hallazgo?.dictamen ?? "");
 
   const allCriteria = [...juridicos, ...economicos];
   const noCumpleList = allCriteria.filter((c) => c.result === "no-cumple");
@@ -307,10 +256,12 @@ export default function RevisionAnalistaChecklist({
     return found?.label ?? null;
   };
 
-  // A field's "resuelve" chip is only shown when the linked criterion is "no-cumple"
+  // A field's "resuelve" chip solo se muestra cuando el criterio que ese campo
+  // resuelve (según FIELD_RESUELVE_CRITERIO) está actualmente en "no-cumple".
   const resolveChip = (field: EditableField): string | null => {
-    if (!field.resuelve) return null;
-    return noCumpleIds.has(field.resuelve) ? getCriterionLabel(field.resuelve) : null;
+    const criterionId = FIELD_RESUELVE_CRITERIO[field.id] ?? null;
+    if (!criterionId) return null;
+    return noCumpleIds.has(criterionId) ? getCriterionLabel(criterionId) : null;
   };
 
   const sectionCard = (
@@ -385,7 +336,7 @@ export default function RevisionAnalistaChecklist({
               color: C.textMuted,
             }}
           >
-            Hallazgo BARRE-2026-001 · Bolivia
+            {hallazgo ? `${hallazgo.nombre} · ${hallazgo.pais}` : "Hallazgo BARRE-2026-001 · Bolivia (muestra)"}
           </span>
         </div>
         <Header
@@ -420,7 +371,7 @@ export default function RevisionAnalistaChecklist({
           }}
         >
           Aprobado en Etapa 1 por Asesor{" "}
-          <strong style={{ color: C.text }}>Carlos Mendoza</strong>
+          <strong style={{ color: C.text }}>{hallazgo?.asesorNombre ?? "Carlos Mendoza"}</strong>
         </span>
         <span style={{ color: C.border, fontSize: 14 }}>·</span>
         <span
@@ -430,10 +381,29 @@ export default function RevisionAnalistaChecklist({
             color: C.textMuted,
           }}
         >
-          Asignado hace 2 días · Prioridad{" "}
-          <strong style={{ color: C.ambarTexto }}>Alta</strong>
+          {hallazgo?.hace ?? "Asignado hace 2 días"} · Prioridad{" "}
+          <strong style={{ color: C.ambarTexto }}>{hallazgo?.prioridad ?? "Alta"}</strong>
         </span>
       </div>
+
+      {/* ── Motivo de devolución del Validador (Lote 5: RevisionDecisionFinal /
+          RevisionDevolverAnalista escriben devueltoPorValidador+motivoDevolucion) ── */}
+      {hallazgo?.devueltoPorValidador && hallazgo.motivoDevolucion && (
+        <div
+          className="rounded-lg px-4 py-3 flex items-start gap-3"
+          style={{ backgroundColor: C.ambar2, border: `1px solid ${C.ambar1}55` }}
+        >
+          <CornerUpLeft size={16} color={C.ambarTexto} strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} />
+          <div>
+            <p style={{ fontFamily: "Space Grotesk, sans-serif", fontSize: 13, fontWeight: 600, color: C.ambarTexto, marginBottom: 2 }}>
+              Devuelto por el Validador
+            </p>
+            <p style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 12, color: C.ambarTexto, opacity: 0.9 }}>
+              {hallazgo.motivoDevolucion}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* ── Criteria columns ──────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -590,7 +560,7 @@ export default function RevisionAnalistaChecklist({
 
         <div className="flex items-center gap-3">
           <button
-            onClick={() => { console.log("guardar avance"); onSave?.(); }}
+            onClick={() => { actualizarChecklist(id, { criteriosJuridicos: juridicos, criteriosEconomicos: economicos, camposChecklist: fields }); onSave?.(); }}
             style={{
               fontFamily: "Space Grotesk, sans-serif",
               fontSize: 13,
@@ -607,7 +577,7 @@ export default function RevisionAnalistaChecklist({
           </button>
 
           <button
-            onClick={() => { console.log("enviar al validador"); onSend?.(); }}
+            onClick={() => { enviarAValidador(id, { dictamen, criteriosJuridicos: juridicos, criteriosEconomicos: economicos, camposChecklist: fields }); onSend?.(); }}
             style={{
               fontFamily: "Space Grotesk, sans-serif",
               fontSize: 13,
