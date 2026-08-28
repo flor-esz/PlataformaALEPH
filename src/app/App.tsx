@@ -83,7 +83,6 @@ const ROLE_LABEL: Record<UserRole, string> = {
   validador: "Validador BID",
 };
 type View =
-  | { screen: "regional-dashboard" }
   | { screen: "country-dashboard"; country: string }
   | { screen: "barreras"; sector?: string }
   | { screen: "barrera-detail"; id: string }
@@ -172,22 +171,6 @@ const COUNTRY_COLORS: Record<string, string> = {
   Chile:     C.bajo,
 };
 
-const DONUT_CRITICAS = [
-  { name: "Argentina", value: 94, color: CAT[0] },
-  { name: "Bolivia",   value: 91, color: CAT[1] },
-  { name: "Ecuador",   value: 62, color: CAT[2] },
-  { name: "Perú",      value: 50, color: CAT[3] },
-  { name: "Chile",     value: 44, color: CAT[4] },
-];
-
-const DONUT_COSTO = [
-  { name: "Argentina", value: 13.1, color: CAT[0] },
-  { name: "Ecuador",   value: 11.7, color: CAT[1] },
-  { name: "Bolivia",   value: 11.2, color: CAT[2] },
-  { name: "Perú",      value: 9.4,  color: CAT[3] },
-  { name: "Chile",     value: 7.1,  color: CAT[4] },
-];
-
 const HN_SECTORES = [
   { sector: "Autopartes y Arneses", barreras: 90, altas: 46, criticas: 21, tramites: 71 },
   { sector: "Agroindustria Cafetalera", barreras: 65, altas: 45, criticas: 15, tramites: 64 },
@@ -248,13 +231,6 @@ const COUNTRY_SECTORS: Record<string, SectorEntry[]> = {
     { sector: "Gas Natural",                             barreras:  0, altas:  0, criticas:  0, tramites:  0, analizado: false },
   ],
 };
-
-const HN_SEVERITY = [
-  { name: "Crítico", value: 91, color: C.critico },
-  { name: "Alto", value: 229, color: C.alto },
-  { name: "Mediano", value: 59, color: C.mediano },
-  { name: "Bajo", value: 18, color: C.bajo },
-];
 
 const HN_TIPOS_NEW = [
   { name: "Entrada",    value: 187, color: C.steel3 },
@@ -569,19 +545,6 @@ const COUNTRY_CARGA: Record<string, { total: number; criticas: number }> = {
   Perú:      { total: 319, criticas: 41 },
 };
 
-const DONUT_SECTOR = [
-  { name: "Construcción", value: 92, color: CAT[0] },
-  { name: "Financiero",   value: 78, color: CAT[1] },
-  { name: "Autopartes",   value: 71, color: CAT[2] },
-  { name: "Café",         value: 64, color: CAT[3] },
-  { name: "Textil",       value: 56, color: CAT[4] },
-  { name: "Fibras",       value: 36, color: "#BDD0DD" },
-];
-
-// Sorted desc by value — used for horizontal ranking bars
-const RANKING_CRITICAS = [...DONUT_CRITICAS].sort((a, b) => b.value - a.value);
-const RANKING_SECTOR    = [...DONUT_SECTOR].sort((a, b) => b.value - a.value);
-
 const JERARQUIA_NORMATIVA_DATA: BarrasComposicionCategoria[] = [
   { nombre: "Argentina", total: 421, componentes: [
     { nombre: "Constitucional",  valor: 8   },
@@ -767,48 +730,6 @@ const COUNTRY_BARRERAS_DATA: Record<Country, {
   return result;
 })();
 
-const BARRERAS_CRITICAS_LIST = [
-  { instrumento: "Reglamento Gral. Registros Sanitarios", tipo: "Restricción de mercado local",         pais: "Bolivia",    costo: 4.2 },
-  { instrumento: "Decreto PCM-027-2022",                  tipo: "Autorización ex-ante por lote",        pais: "Bolivia",    costo: 4.1 },
-  { instrumento: "Ley del Sistema Financiero",            tipo: "Registros superpuestos",               pais: "Argentina",  costo: 3.9 },
-  { instrumento: "Reglamento SENASA",                     tipo: "Obligación de reporte físico",         pais: "Ecuador",    costo: 3.7 },
-  { instrumento: "Decreto 1188-A",                        tipo: "Requisito de planta propia",           pais: "Bolivia",    costo: 3.5 },
-  { instrumento: "Ley ZOLI Art. 12",                      tipo: "Restricción de venta local",           pais: "Bolivia",    costo: 3.4 },
-  { instrumento: "Res. IICA 2021-88",                     tipo: "Registro duplicado inter-agencias",    pais: "Ecuador",    costo: 3.2 },
-  { instrumento: "Decreto Ejecutivo 447",                 tipo: "Monopolio de distribución",            pais: "Argentina",  costo: 3.1 },
-  { instrumento: "Ley 843 Art. 92",                       tipo: "Tasa de habilitación excesiva",        pais: "Bolivia",    costo: 2.9 },
-  { instrumento: "Código de Comercio Art. 88",            tipo: "Reserva de actividad",                 pais: "Ecuador",    costo: 2.8 },
-  { instrumento: "Regl. Aduanero CAC",                    tipo: "Canal rojo obligatorio",               pais: "Perú",       costo: 2.7 },
-  { instrumento: "Ley de Telecomunicaciones",             tipo: "Monopolio de espectro",                pais: "Chile",      costo: 2.6 },
-  { instrumento: "Decreto 2891 Arg.",                     tipo: "Aprobación ministerial previa",        pais: "Argentina",  costo: 2.4 },
-  { instrumento: "Res. MEM-0012",                         tipo: "Contrato mínimo de 5 años",            pais: "Perú",       costo: 2.3 },
-  { instrumento: "NOM-SFP-2022",                          tipo: "Certificación redundante",             pais: "Ecuador",    costo: 2.1 },
-  { instrumento: "Ley Inversión Extranjera Art. 5",       tipo: "Tope de capital mínimo",               pais: "Argentina",  costo: 2.0 },
-  { instrumento: "Reglamento SENAVEX",                    tipo: "Visado físico obligatorio",            pais: "Bolivia",    costo: 1.9 },
-  { instrumento: "Decreto MEFP-044",                      tipo: "Declaración presencial requerida",     pais: "Bolivia",    costo: 1.8 },
-];
-
-const TRAMITES_PRIORITARIOS_LIST = [
-  { tramite: "Permiso de Construcción",         pais: "Argentina", tipo: "Empresarial", costo: "$4.2M" },
-  { tramite: "Registro Sanitario",              pais: "Ecuador",   tipo: "Empresarial", costo: "$4.2M" },
-  { tramite: "Licencia de Operación",           pais: "Bolivia",   tipo: "Empresarial", costo: "$4.2M" },
-  { tramite: "Apertura de Empresa",             pais: "Argentina", tipo: "Empresarial", costo: "$3.9M" },
-  { tramite: "Certificado de Exportación",      pais: "Bolivia",   tipo: "Empresarial", costo: "$3.7M" },
-  { tramite: "Habilitación Sanitaria",          pais: "Ecuador",   tipo: "Empresarial", costo: "$3.5M" },
-  { tramite: "Inscripción Tributaria",          pais: "Perú",      tipo: "Ciudadano",   costo: "$3.2M" },
-  { tramite: "Declaración Aduanera",            pais: "Chile",     tipo: "Empresarial", costo: "$3.1M" },
-  { tramite: "Permiso Ambiental",               pais: "Argentina", tipo: "Empresarial", costo: "$2.9M" },
-  { tramite: "Registro de Marca",               pais: "Bolivia",   tipo: "Empresarial", costo: "$2.7M" },
-  { tramite: "Carnet de Salud",                 pais: "Perú",      tipo: "Ciudadano",   costo: "$2.5M" },
-  { tramite: "Declaración ISV Mensual",         pais: "Bolivia",   tipo: "Empresarial", costo: "$2.3M" },
-  { tramite: "Solicitud de Crédito PYME",       pais: "Ecuador",   tipo: "Empresarial", costo: "$2.1M" },
-  { tramite: "Registro de Propiedad",           pais: "Argentina", tipo: "Ciudadano",   costo: "$1.9M" },
-  { tramite: "Permiso de Trabajo",              pais: "Chile",     tipo: "Ciudadano",   costo: "$1.7M" },
-  { tramite: "Licencia de Conducir Comercial",  pais: "Perú",      tipo: "Ciudadano",   costo: "$1.5M" },
-  { tramite: "Certificado Fitosanitario",       pais: "Ecuador",   tipo: "Empresarial", costo: "$1.4M" },
-  { tramite: "Habilitación de Vehículo Carga",  pais: "Argentina", tipo: "Empresarial", costo: "$1.2M" },
-];
-
 // ─── Barreras nivel-4 list (Bolivia) ──────────────────────────────────────────
 const BARRERAS_NIVEL4_LIST = [
   { id: "bloqueo-renovacion",   titulo: "Bloqueo por Renovación de Registros",        irr: 4, clasificacion: "Operación",  subdimension: "Certidumbre procedimental",             jerarquia: "Reglamentario",  sector: "Agroindustria Cafetalera",              entidad: "ARSA",                                               instrumento: "Regl. Gral. Registros Sanitarios, Art. 47" },
@@ -967,35 +888,6 @@ function KpiCard({ label, value, valueSuffix, sub, valueColor, tooltip }: {
   );
 }
 
-function DonutChart({ data, total, label }: { data: { name: string; value: number; color: string }[]; total: string; label: string }) {
-  return (
-    <div className="flex gap-6 items-center">
-      <div className="relative" style={{ width: 120, height: 120 }}>
-        <PieChart width={120} height={120}>
-          <Pie data={data} cx={55} cy={55} innerRadius={36} outerRadius={55} dataKey="value" startAngle={90} endAngle={-270} strokeWidth={0}>
-            {data.map((d, i) => <Cell key={i} fill={d.color} />)}
-          </Pie>
-        </PieChart>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-[18px] font-semibold" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>{total}</span>
-          <span className="text-[9px] uppercase tracking-wide" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{label}</span>
-        </div>
-      </div>
-      <div className="flex flex-col gap-1.5">
-        {data.map((d, i) => (
-          <div key={i} className="flex items-center justify-between gap-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif" }}>
-            <div className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: d.color }} />
-              <span style={{ color: C.text }}>{d.name}</span>
-            </div>
-            <span className="font-medium" style={{ color: C.text }}>{d.value}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 function Sidebar({
   activeCountry,
@@ -1074,8 +966,8 @@ function Sidebar({
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-2">
         {navItem("Panorama", "dashboard", <BarChart2 size={18} />, () => nav(() => {
-          if (activeCountry === "Todos") onNavigate({ screen: "regional-dashboard" });
-          else onNavigate({ screen: "country-dashboard", country: activeCountry });
+          // Panorama siempre está anclado a un país — sin modo agregado "Todos".
+          onNavigate({ screen: "country-dashboard", country: activeCountry === "Todos" ? "Bolivia" : activeCountry });
         }))}
         {navItem("Barreras", "barreras", <AlertTriangle size={18} />, () => nav(() => onNavigate({ screen: "barreras" })))}
         {navItem("Trámites", "tramites", <FileText size={18} />, () => nav(() => onNavigate({ screen: "tramites" })))}
@@ -1342,7 +1234,7 @@ export function Header({ breadcrumb, title, subtitle, actions }: { breadcrumb: s
   );
 }
 
-// ─── Helpers for RegionalDashboard ────────────────────────────────────────────
+// ─── Section divider (used across dashboard screens) ──────────────────────────
 function SectionDivider({ label }: { label: string }) {
   return (
     <div className="mt-10 mb-6">
@@ -1354,258 +1246,8 @@ function SectionDivider({ label }: { label: string }) {
   );
 }
 
-function HorizontalRankingCard({ label, bars }: { label: string; bars: { name: string; value: number; color: string }[] }) {
-  const maxVal = Math.max(...bars.map(b => b.value));
-  return (
-    <div className="rounded-lg p-6 h-full flex flex-col" style={{ backgroundColor: C.card }}>
-      <p className="text-[11px] uppercase tracking-widest mb-5 font-medium leading-snug" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>{label}</p>
-      <div className="flex flex-col gap-3 flex-1 justify-center">
-        {bars.map((b) => (
-          <div key={b.name} className="flex items-center gap-3">
-            <span className="flex-shrink-0 text-right text-[11px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted, width: 76, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={b.name}>{b.name}</span>
-            <div className="flex-1 rounded-full overflow-hidden" style={{ height: 12, backgroundColor: "#E6ECF3" }}>
-              <div className="h-full rounded-full" style={{ width: `${(b.value / maxVal) * 100}%`, backgroundColor: b.color }} />
-            </div>
-            <span className="flex-shrink-0 text-right text-[12px] font-semibold" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted, width: 28 }}>{b.value}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ─── Screen 1 — Regional Dashboard ────────────────────────────────────────────
-function RegionalDashboard({ country = "Todos", onCountryChange, onNavigate }: { country?: Country; onCountryChange?: (c: Country) => void; onNavigate: (v: View) => void }) {
-  const PAGE_SIZE = 10;
-  const [barrerasPage, setBarrerasPage] = useState(0);
-  const [tramitesPage, setTramitesPage] = useState(0);
-  const barrerasPageCount = Math.ceil(BARRERAS_CRITICAS_LIST.length / PAGE_SIZE);
-  const tramitesPageCount = Math.ceil(TRAMITES_PRIORITARIOS_LIST.length / PAGE_SIZE);
-  const barrerasRows = BARRERAS_CRITICAS_LIST.slice(barrerasPage * PAGE_SIZE, (barrerasPage + 1) * PAGE_SIZE);
-  const tramitesRows = TRAMITES_PRIORITARIOS_LIST.slice(tramitesPage * PAGE_SIZE, (tramitesPage + 1) * PAGE_SIZE);
-
-  function Pagination({ page, count, onPage }: { page: number; count: number; onPage: (p: number) => void }) {
-    if (count <= 1) return null;
-    return (
-      <div className="flex items-center justify-between px-5 py-3 border-t" style={{ borderColor: C.border }}>
-        <span style={{ fontSize: 12, color: C.textMuted, fontFamily: "IBM Plex Sans, sans-serif" }}>
-          {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE)} de 91
-        </span>
-        <div className="flex gap-1.5">
-          {[...Array(count)].map((_, i) => (
-            <button key={i} onClick={() => onPage(i)}
-              style={{
-                width: 26, height: 26, borderRadius: 6, border: "none",
-                backgroundColor: i === page ? C.steel4 : C.border,
-                color: i === page ? "white" : C.textMuted,
-                fontFamily: "Space Grotesk, sans-serif", fontSize: 11, fontWeight: 600, cursor: "pointer",
-              }}>
-              {i + 1}
-            </button>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="p-4 md:p-8 overflow-y-auto h-full">
-      <Header breadcrumb="Regulaciones › Panorama" title="Panel Regional"
-        actions={
-          <button style={HDR_BTN_SECONDARY} onClick={() => onNavigate({ screen: "reporte-pdf", context: JSON.stringify({ tipo: "estrategico", pais: country, fecha: new Date().toLocaleString("es-BO") }) })}>
-            <Download size={13} /><span className="hidden sm:inline">Exportar PDF</span><span className="sm:hidden">PDF</span>
-          </button>
-        }
-      />
-
-      {/* Country selector — first control in filter bar */}
-      {onCountryChange && (
-        <div className="flex flex-wrap gap-2 mb-5">
-          <select
-            className="grow"
-            style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text, backgroundColor: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: "7px 10px", fontSize: 12, outline: "none", cursor: "pointer", minHeight: 36 }}
-            value={country}
-            onChange={e => onCountryChange(e.target.value as Country)}
-          >
-            <option value="Todos">Todos los países</option>
-            <option value="Argentina">Argentina</option>
-            <option value="Bolivia">Bolivia</option>
-            <option value="Chile">Chile</option>
-            <option value="Ecuador">Ecuador</option>
-            <option value="Perú">Perú</option>
-          </select>
-        </div>
-      )}
-
-      <BandaCobertura text="1,842 instrumentos auditados · Periodo cubierto: enero 2015 – marzo 2026 · Última actualización: 12 de marzo de 2026" />
-
-      {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
-        <KpiCard label="Instrumentos auditados" value="1,842" sub="leyes, decretos, reglamentos" />
-        <KpiCard label="Barreras identificadas" value="2,914" sub="en 5 países" />
-        <KpiCard label="Trámites identificados" value="1,205" sub="ciudadanos y empresariales" />
-        <KpiCard label="Barreras críticas" value="341" sub="atención inmediata" valueColor={C.critico} />
-        <KpiCard
-          label="Costo estimado de trámites"
-          value="USD 48.6 M"
-          sub="simulado · anual"
-          valueColor={C.steel4}
-          tooltip="Esta metodología mide el tiempo que le toma al solicitante todo el proceso de identificar los requerimientos de trámite, presentarlo ante una autoridad y esperar una resolución final; no contempla costos financieros, como pagos de derechos o costo de insumos para preparar el trámite."
-        />
-      </div>
-
-      {/* Charts row — 3 columns */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 items-stretch">
-        <HorizontalRankingCard
-          label="Ranking — Barreras críticas por país"
-          bars={RANKING_CRITICAS}
-        />
-        <BarrasComposicion
-          label="Instrumentos por jerarquía normativa"
-          total={1842}
-          categorias={JERARQUIA_NORMATIVA_DATA}
-        />
-        <HorizontalRankingCard
-          label="Barreras por sector"
-          bars={RANKING_SECTOR}
-        />
-      </div>
-
-      {/* ── BARRERAS REGULATORIAS ── */}
-      <SectionDivider label="Barreras Regulatorias" />
-
-      <BarrasComposicion
-        label="Barreras por clasificación"
-        total={397}
-        categorias={CLASIFICACION_BARRERAS_DATA}
-        className="mb-4"
-      />
-
-      <div className="rounded-lg overflow-hidden mb-6" style={{ backgroundColor: C.card }}>
-        <div className="px-5 py-4 flex items-center justify-between border-b" style={{ borderColor: C.border }}>
-          <p className="text-[11px] uppercase tracking-widest font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>
-            Barreras prioritarias <span style={{ color: C.critico }}>(91)</span>
-          </p>
-          <button className="text-[11px] px-3 py-1 rounded-full font-medium" style={{ backgroundColor: C.steel4, color: "white", fontFamily: "Space Grotesk, sans-serif", border: "none" }}
-            onClick={() => onNavigate({ screen: "barreras" })}>Ver todas</button>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[500px]">
-            <thead>
-              <tr style={{ borderBottom: `1px solid ${C.border}` }}>
-                {["Instrumento", "Tipo", "País", "Costo sim."].map(h => (
-                  <th key={h} className="px-4 py-2.5 text-left text-[10px] uppercase tracking-widest" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {barrerasRows.map((row, i) => (
-                <tr key={i} className="hover:bg-[#F4F7FB] transition-colors cursor-pointer" style={{ borderBottom: `1px solid ${C.border}` }}
-                  onClick={() => onNavigate({ screen: "barreras" })}>
-                  <td className="px-4 py-2.5 text-[11px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text, maxWidth: 200 }}>{row.instrumento}</td>
-                  <td className="px-4 py-2.5 text-[11px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted, maxWidth: 160 }}>{row.tipo}</td>
-                  <td className="px-4 py-2.5 text-[11px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{row.pais}</td>
-                  <td className="px-4 py-2.5 text-[12px] font-semibold" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.steel4 }}>${row.costo}M</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <Pagination page={barrerasPage} count={barrerasPageCount} onPage={setBarrerasPage} />
-      </div>
-
-      {/* ── TRÁMITES ── */}
-      <SectionDivider label="Trámites" />
-
-      <BarrasComposicion
-        label="Carga por tipo"
-        total={612}
-        categorias={CARGA_TIPO_BOL_DATA}
-        className="mb-4"
-      />
-
-      <div className="rounded-lg overflow-hidden mb-6" style={{ backgroundColor: C.card }}>
-        <div className="px-5 py-4 flex items-center justify-between border-b" style={{ borderColor: C.border }}>
-          <p className="text-[11px] uppercase tracking-widest font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>
-            Trámites prioritarios <span style={{ color: C.steel3 }}>({TRAMITES_PRIORITARIOS_LIST.length})</span>
-          </p>
-          <button className="text-[11px] px-3 py-1 rounded-full font-medium" style={{ backgroundColor: C.steel4, color: "white", fontFamily: "Space Grotesk, sans-serif", border: "none" }}
-            onClick={() => onNavigate({ screen: "tramites" })}>Ver todas</button>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[500px]">
-            <thead>
-              <tr style={{ borderBottom: `1px solid ${C.border}` }}>
-                {["Trámite", "País", "Tipo", "Costo"].map(h => (
-                  <th key={h} className="px-4 py-2.5 text-left text-[10px] uppercase tracking-widest" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {tramitesRows.map((row, i) => (
-                <tr key={i} className="hover:bg-[#F4F7FB] transition-colors cursor-pointer" style={{ borderBottom: `1px solid ${C.border}` }}
-                  onClick={() => onNavigate({ screen: "tramites" })}>
-                  <td className="px-4 py-2.5 text-[11px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text, maxWidth: 200 }}>{row.tramite}</td>
-                  <td className="px-4 py-2.5 text-[11px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{row.pais}</td>
-                  <td className="px-4 py-2.5 text-[11px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{row.tipo}</td>
-                  <td className="px-4 py-2.5 text-[12px] font-semibold" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.steel4 }}>{row.costo}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <Pagination page={tramitesPage} count={tramitesPageCount} onPage={setTramitesPage} />
-      </div>
-
-      {/* Country cards */}
-      <p className="text-[11px] uppercase tracking-widest mb-3" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Países activos</p>
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        {Object.entries(COUNTRY_DATA).map(([country, d]) => {
-          const carga = COUNTRY_CARGA[country] ?? { total: 0, criticas: 0 };
-          return (
-            <div key={country} className="rounded-lg p-5 flex flex-col gap-3 cursor-pointer hover:shadow-md transition-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}
-              onClick={() => onNavigate({ screen: "country-dashboard", country })}>
-              <div className="flex items-center justify-between">
-                <span className="text-[12px] uppercase tracking-widest font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>{country}</span>
-                <span className="text-[9px] uppercase tracking-widest px-2 py-0.5 rounded-full" style={{ backgroundColor: "#DCE6F2", color: C.steel3, fontFamily: "IBM Plex Sans, sans-serif" }}>Vigente</span>
-              </div>
-              <div className="grid grid-cols-2 gap-x-2 gap-y-2.5">
-                <div>
-                  <p className="text-[20px] font-semibold leading-tight" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>{d.barreras}</p>
-                  <p className="text-[10px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>Barreras</p>
-                </div>
-                <div>
-                  <p className="text-[20px] font-semibold leading-tight" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.critico }}>{d.criticas}</p>
-                  <p className="text-[10px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>Críticas</p>
-                </div>
-                <div>
-                  <p className="text-[20px] font-semibold leading-tight" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>{d.tramites}</p>
-                  <p className="text-[10px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>Trámites</p>
-                </div>
-                <div>
-                  <p className="text-[13px] font-semibold leading-tight" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.steel4 }}>{d.costo}</p>
-                  <p className="text-[10px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>Costo sim.</p>
-                </div>
-              </div>
-              <div className="flex items-center justify-between py-2 border-t" style={{ borderColor: C.border }}>
-                <span className="text-[10px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>Carga (total / críticas)</span>
-                <span className="text-[12px] font-semibold" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>
-                  {carga.total} / <span style={{ color: C.critico }}>{carga.criticas}</span>
-                </span>
-              </div>
-              <div className="flex items-center justify-between border-t pt-2" style={{ borderColor: C.border }}>
-                <span className="text-[11px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{d.sectores} Sectores</span>
-                <button className="text-[11px] px-4 py-1 rounded-full" style={{ backgroundColor: C.alto, color: "white", fontFamily: "IBM Plex Sans, sans-serif", border: "none" }}>Ver</button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ─── Screen 2 — Country Dashboard ─────────────────────────────────────────────
+// ─── Panorama Regulatorio (Country Dashboard) ─────────────────────────────────
+// Screen fusionado: siempre anclado a UN país (sin modo agregado "Todos").
 function CountryDashboard({ country, onCountryChange, onNavigate }: { country: string; onCountryChange?: (c: Country) => void; onNavigate: (v: View) => void }) {
   const d = COUNTRY_DATA[country];
   const [showSectors, setShowSectors] = useState(false);
@@ -1620,7 +1262,7 @@ function CountryDashboard({ country, onCountryChange, onNavigate }: { country: s
     <div className="p-4 md:p-8 overflow-y-auto h-full">
       <button className="flex items-center gap-1 text-[12px] mb-4" style={{ color: C.textMuted, fontFamily: "IBM Plex Sans, sans-serif", background: "none", border: "none" }}
         onClick={() => setShowSectors(false)}>← Volver a {country}</button>
-      <p className="text-[11px] uppercase tracking-widest mb-1" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>Regulaciones › Panorama › {country} › Sectores</p>
+      <p className="text-[11px] uppercase tracking-widest mb-1" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>Regulaciones › Panorama Regulatorio › {country} › Sectores</p>
       <h1 className="text-[28px] font-semibold mb-1" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>Sectores — {country}</h1>
       <p className="text-[13px] mb-6" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{analyzedSectors.length} de {countrySectors.length} sectores con análisis activo</p>
       <div className="rounded-lg overflow-hidden" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
@@ -1663,10 +1305,53 @@ function CountryDashboard({ country, onCountryChange, onNavigate }: { country: s
     </div>
   );
 
+  // ── Datos derivados para el país activo ─────────────────────────────────────
+  // Jerarquía normativa: JERARQUIA_NORMATIVA_DATA ya trae, por país, un desglose
+  // real en 5 niveles (Constitucional/Legal/Reglamentario/Administrativo/Técnico)
+  // cuya suma coincide con el total del país. Antes se usaba "una fila por país"
+  // (comparativo regional); aquí se reproyecta a "una fila por nivel" del país activo.
+  const jerarquiaPais = JERARQUIA_NORMATIVA_DATA.find(c => c.nombre === country);
+  const instrumentos = jerarquiaPais?.total ?? 0;
+  const jerarquiaNivelData: BarrasComposicionCategoria[] = (jerarquiaPais?.componentes ?? []).map(nivel => ({
+    nombre: nivel.nombre,
+    total: nivel.valor,
+    componentes: [{ nombre: nivel.nombre, valor: nivel.valor }],
+  }));
+
+  // Clasificación/carga: no hay desglose independiente por país para estas dos
+  // vistas, así que se escala la composición canónica de Bolivia con el mismo
+  // factor que ya usa ReportePdf (f = total de barreras del país / total de Bolivia).
+  const cdBarreras = COUNTRY_BARRERAS_DATA[country as Country] ?? COUNTRY_BARRERAS_DATA["Bolivia"];
+  const f = cdBarreras.total / 397;
+  const scaleBC = (data: BarrasComposicionCategoria[]): BarrasComposicionCategoria[] =>
+    data.map(cat => ({
+      nombre: cat.nombre,
+      total: Math.round(cat.total * f),
+      componentes: cat.componentes.map(c => ({ nombre: c.nombre, valor: Math.round(c.valor * f) })),
+    }));
+  const clasificacionData = scaleBC(CLASIFICACION_BARRERAS_DATA);
+  const clasificacionTotal = clasificacionData.reduce((s, c) => s + c.total, 0);
+  const cargaTipoData = scaleBC(CARGA_TIPO_BOL_DATA);
+  const cargaTipoTotal = cargaTipoData.reduce((s, c) => s + c.total, 0);
+
+  // Por sector: COUNTRY_SECTORS ya trae, por país, barreras/tramites reales por
+  // sector analizado — se reutiliza directamente, sin escalar ni inventar nada.
+  const barrerasPorSectorData: BarrasComposicionCategoria[] = analyzedSectors.map(s => ({
+    nombre: s.sector,
+    total: s.barreras,
+    componentes: [{ nombre: s.sector, valor: s.barreras }],
+  }));
+  const barrerasPorSectorTotal = analyzedSectors.reduce((sum, s) => sum + s.barreras, 0);
+  const tramitesPorSectorData: BarrasComposicionCategoria[] = analyzedSectors.map(s => ({
+    nombre: s.sector,
+    total: s.tramites,
+    componentes: [{ nombre: s.sector, valor: s.tramites }],
+  }));
+  const tramitesPorSectorTotal = analyzedSectors.reduce((sum, s) => sum + s.tramites, 0);
 
   return (
     <div className="p-4 md:p-8 overflow-y-auto h-full">
-      <Header breadcrumb={`Regulaciones › Panorama › ${country}`} title={country} subtitle="Análisis activo · Actualizado marzo 2026"
+      <Header breadcrumb="Regulaciones › Panorama Regulatorio" title="Panorama Regulatorio" subtitle={`${country} · Análisis activo · Actualizado marzo 2026`}
         actions={
           <button style={HDR_BTN_SECONDARY} onClick={() => onNavigate({ screen: "reporte-pdf", context: JSON.stringify({ tipo: "estrategico", pais: country, fecha: new Date().toLocaleString("es-BO") }) })}>
             <Download size={13} /><span className="hidden sm:inline">Exportar PDF</span><span className="sm:hidden">PDF</span>
@@ -1674,7 +1359,7 @@ function CountryDashboard({ country, onCountryChange, onNavigate }: { country: s
         }
       />
 
-      {/* Country selector — first control in filter bar */}
+      {/* Country selector — sin "Todos los países": esta pantalla siempre está anclada a un país */}
       {onCountryChange && (
         <div className="flex flex-wrap gap-2 mb-5">
           <select
@@ -1683,7 +1368,6 @@ function CountryDashboard({ country, onCountryChange, onNavigate }: { country: s
             value={country}
             onChange={e => onCountryChange(e.target.value as Country)}
           >
-            <option value="Todos">Todos los países</option>
             <option value="Argentina">Argentina</option>
             <option value="Bolivia">Bolivia</option>
             <option value="Chile">Chile</option>
@@ -1693,84 +1377,52 @@ function CountryDashboard({ country, onCountryChange, onNavigate }: { country: s
         </div>
       )}
 
+      <BandaCobertura text={`${instrumentos.toLocaleString("es")} instrumentos auditados en ${country} · Periodo cubierto: enero 2015 – marzo 2026 · Última actualización: 12 de marzo de 2026`} />
+
       {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        <KpiCard label="Total regulaciones" value="512" sub="instrumentos auditados" />
-        <KpiCard label="Total barreras / Críticas" value={`397 / 91`} sub="barreras regulatorias" valueColor={C.text} />
-        <KpiCard label="Total trámites / Costo" value="360" sub="USD 12.4 M sim. / año" />
-        <KpiCard label="Índice Regulatorio" value="54/100" sub="Riesgo medio-alto" valueColor={C.steel4} />
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+        <KpiCard label="Instrumentos auditados" value={instrumentos.toLocaleString("es")} sub="leyes, decretos, reglamentos" />
+        <KpiCard label="Barreras identificadas" value={d.barreras.toLocaleString("es")} sub={country} />
+        <KpiCard label="Trámites identificados" value={d.tramites.toLocaleString("es")} sub="ciudadanos y empresariales" />
       </div>
 
-      {/* Split panel: Barreras | Costos */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        {/* Barreras */}
-        <div className="rounded-lg p-6" style={{ backgroundColor: C.card }}>
-          <h3 className="text-[13px] uppercase tracking-widest font-medium mb-4" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Barreras</h3>
-          <div className="flex gap-6 mb-4">
-            <DonutChart data={HN_SEVERITY} total="397" label="barreras" />
-          </div>
-          <p className="text-[12px] mb-3 font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Por sector</p>
-          <div className="flex flex-col gap-2.5">
-            {HN_SECTORES.map((s) => {
-              const max = 90;
-              return (
-                <div key={s.sector} className="flex items-center gap-3">
-                  <span className="text-[11px] flex-shrink-0 leading-tight" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text, width: 110 }}>{s.sector.split(" ").slice(0, 2).join(" ")}</span>
-                  <div className="flex-1 flex flex-col gap-1">
-                    <div className="flex items-center gap-1.5">
-                      <div className="flex-1 rounded-full overflow-hidden h-[8px]" style={{ backgroundColor: "#E6ECF3" }}>
-                        <div className="h-full rounded-full" style={{ width: `${(s.barreras / max) * 100}%`, backgroundColor: C.steel3 }} />
-                      </div>
-                      <span className="text-[11px] font-semibold w-[24px] text-right flex-shrink-0" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>{s.barreras}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <div className="flex-1 rounded-full overflow-hidden h-[8px]" style={{ backgroundColor: "#E6ECF3" }}>
-                        <div className="h-full rounded-full" style={{ width: `${(s.criticas / max) * 100}%`, backgroundColor: C.critico }} />
-                      </div>
-                      <span className="text-[11px] font-semibold w-[24px] text-right flex-shrink-0" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.critico }}>{s.criticas}</span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-            <div className="flex items-center gap-4 mt-1">
-              <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: C.steel3 }} /><span className="text-[10px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>Barreras</span></div>
-              <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: C.critico }} /><span className="text-[10px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>Críticas</span></div>
-            </div>
-          </div>
-          <button className="mt-4 flex items-center gap-2 text-sm font-medium" style={{ color: C.steel3, fontFamily: "Space Grotesk, sans-serif", background: "none", border: "none" }}
-            onClick={() => onNavigate({ screen: "barreras" })}>
-            Ver todas las barreras <ArrowRight size={14} />
-          </button>
-        </div>
+      <BarrasComposicion
+        label="Instrumentos por jerarquía normativa"
+        total={instrumentos}
+        categorias={jerarquiaNivelData}
+        className="mb-6"
+      />
 
-        {/* Costos */}
-        <div className="rounded-lg p-6" style={{ backgroundColor: C.card }}>
-          <h3 className="text-[13px] uppercase tracking-widest font-medium mb-4" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Costos de trámites <span className="normal-case text-[10px]">(simulado)</span></h3>
-          <p className="text-[12px] mb-3 font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Costo por sector</p>
-          <div className="flex flex-col gap-2.5">
-            {HN_SECTORES.map((s) => (
-              <div key={s.sector} className="flex items-center gap-3">
-                <span className="text-[11px] flex-shrink-0 leading-tight" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text, width: 110 }}>{s.sector.split(" ").slice(0, 2).join(" ")}</span>
-                <div className="flex-1 rounded-full overflow-hidden h-[10px]" style={{ backgroundColor: "#E6ECF3" }}>
-                  <div className="h-full rounded-full" style={{ width: `${(s.tramites / 71) * 100}%`, backgroundColor: C.steel2 }} />
-                </div>
-                <span className="text-[11px] font-semibold w-[24px] text-right flex-shrink-0" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>{s.tramites}</span>
-              </div>
-            ))}
-          </div>
-          <p className="text-[12px] mt-4 mb-2 font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Por tipo</p>
-          <div className="flex gap-4">
-            <DonutChart
-              data={[{ name: "Empresarial", value: 218, color: C.steel3 }, { name: "Ciudadano", value: 142, color: C.bajo }]}
-              total="360" label="trámites"
-            />
-          </div>
-          <button className="mt-4 flex items-center gap-2 text-sm font-medium" style={{ color: C.steel3, fontFamily: "Space Grotesk, sans-serif", background: "none", border: "none" }}
-            onClick={() => onNavigate({ screen: "tramites" })}>
-            Ver todos los trámites <ArrowRight size={14} />
-          </button>
-        </div>
+      {/* ── BARRERAS REGULATORIAS ── */}
+      <SectionDivider label="Barreras Regulatorias" />
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 items-stretch">
+        <BarrasComposicion
+          label="Barreras por clasificación"
+          total={clasificacionTotal}
+          categorias={clasificacionData}
+        />
+        <BarrasComposicion
+          label="Barreras por sector"
+          total={barrerasPorSectorTotal}
+          categorias={barrerasPorSectorData}
+        />
+      </div>
+
+      {/* ── TRÁMITES ── */}
+      <SectionDivider label="Trámites" />
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 items-stretch">
+        <BarrasComposicion
+          label="Carga por tipo"
+          total={cargaTipoTotal}
+          categorias={cargaTipoData}
+        />
+        <BarrasComposicion
+          label="Trámites por sector"
+          total={tramitesPorSectorTotal}
+          categorias={tramitesPorSectorData}
+        />
       </div>
 
       {/* Sector table */}
@@ -4526,7 +4178,7 @@ function ReporteEstrategicoScreen({ pais: rawPais, onNavigate }: {
         style={{ backgroundColor: C.card, borderBottom: `1px solid ${C.border}` }}>
         <button className="flex items-center gap-1.5 text-[13px]"
           style={{ color: C.steel3, fontFamily: "IBM Plex Sans, sans-serif", background: "none", border: "none", cursor: "pointer" }}
-          onClick={() => isRegional ? onNavigate({ screen: "regional-dashboard" }) : onNavigate({ screen: "country-dashboard", country: pais })}>
+          onClick={() => onNavigate({ screen: "country-dashboard", country: isRegional ? "Bolivia" : pais })}>
           ← Volver a Panorama
         </button>
         <div className="flex items-center gap-3">
@@ -5304,7 +4956,7 @@ export default function App() {
   // TODO: shared country state is temporary — replace when the advisor-per-country flow is built
   const [activeCountry, setActiveCountry] = useState<Country>("Todos");
   const [activeSection, setActiveSection] = useState<Section>("dashboard");
-  const [view, setView] = useState<View>({ screen: "regional-dashboard" });
+  const [view, setView] = useState<View>({ screen: "country-dashboard", country: "Bolivia" });
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [authView, setAuthView] = useState<AuthView>("login");
   const [recoveryEmail, setRecoveryEmail] = useState("ana.mejia@iadb.org");
@@ -5348,14 +5000,13 @@ export default function App() {
   const handleLogout = () => {
     setLoggedIn(false);
     setAuthView("login");
-    setView({ screen: "regional-dashboard" });
+    setView({ screen: "country-dashboard", country: "Bolivia" });
     setActiveSection("dashboard");
   };
 
   const navigate = (v: View) => {
     setView(v);
     setDrawerOpen(false);
-    if (v.screen === "regional-dashboard") { setActiveSection("dashboard"); }
     if (v.screen === "country-dashboard") { setActiveSection("dashboard"); setActiveCountry(v.country as Country); }
     if (v.screen === "barreras" || v.screen === "barrera-detail") setActiveSection("barreras");
     if (v.screen === "tramites" || v.screen === "tramite-detail") setActiveSection("tramites");
@@ -5410,8 +5061,7 @@ export default function App() {
 
   const renderView = () => {
     switch (view.screen) {
-      case "regional-dashboard": return <RegionalDashboard country={activeCountry} onCountryChange={c => { setActiveCountry(c); if (c === "Todos") navigate({ screen: "regional-dashboard" }); else navigate({ screen: "country-dashboard", country: c }); }} onNavigate={navigate} />;
-      case "country-dashboard": return <CountryDashboard country={view.country} onCountryChange={c => { setActiveCountry(c); if (c === "Todos") navigate({ screen: "regional-dashboard" }); else navigate({ screen: "country-dashboard", country: c }); }} onNavigate={navigate} />;
+      case "country-dashboard": return <CountryDashboard country={view.country} onCountryChange={c => { setActiveCountry(c); navigate({ screen: "country-dashboard", country: c === "Todos" ? "Bolivia" : c }); }} onNavigate={navigate} />;
       case "barreras": return <BarrerasScreen initialSector={view.sector} country={activeCountry} onCountryChange={c => setActiveCountry(c)} onNavigate={navigate} />;
       case "barrera-detail": return <BarreraDetail id={view.id} onNavigate={navigate} />;
       case "tramites": return <TramitesScreen country={activeCountry} onCountryChange={c => setActiveCountry(c)} onNavigate={navigate} />;
