@@ -22,6 +22,13 @@ import { PanelTipoSubdimension } from "./components/ui/PanelTipoSubdimension";
 import type { TipoDato } from "./components/ui/PanelTipoSubdimension";
 import { BarrasComposicion } from "./components/ui/BarrasComposicion";
 import type { BarrasComposicionCategoria } from "./components/ui/BarrasComposicion";
+// PanelRegional importa { C, Header, KpiCard, ... } de vuelta desde este archivo
+// (mismo ciclo App.tsx <-> otros módulos documentado arriba), pero a diferencia
+// de revision/*.tsx nunca los usa en el top-level de su módulo -- solo dentro
+// del cuerpo de la función PanelRegional(), que React recién ejecuta en render,
+// momento en el que este módulo ya terminó de inicializar C, COUNTRY_DATA, etc.
+// Por eso el import puede ser estático (no hace falta lazy()).
+import PanelRegional from "./PanelRegional";
 import {
   PieChart,
   Pie,
@@ -73,8 +80,8 @@ export function useIsMobile() {
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type Country = "Todos" | "Argentina" | "Bolivia" | "Chile" | "Ecuador" | "Perú";
-type Section = "dashboard" | "barreras" | "tramites" | "comparativa" | "repositorio" | "administracion" | "reportes" | "documentacion" | "revision"  | "indice";
+export type Country = "Todos" | "Argentina" | "Bolivia" | "Chile" | "Ecuador" | "Perú";
+type Section = "dashboard" | "barreras" | "tramites" | "comparativa" | "repositorio" | "impacto-economico" | "administracion" | "reportes" | "documentacion" | "revision"  | "indice";
 export type UserRole = "administrador" | "usuario-bid" | "asesor" | "analista" | "validador";
 const ROLE_LABEL: Record<UserRole, string> = {
   administrador: "Administrador",
@@ -83,7 +90,8 @@ const ROLE_LABEL: Record<UserRole, string> = {
   analista: "Analista jurídico-económico",
   validador: "Validador BID",
 };
-type View =
+export type View =
+  | { screen: "panel-regional" }
   | { screen: "country-dashboard"; country: string }
   | { screen: "barreras"; sector?: string }
   | { screen: "barrera-detail"; id: string }
@@ -157,12 +165,26 @@ const SEVERITY_COLOR: Record<string, string> = {
 const CAT = ["#26456B", "#3E6E9E", "#5E8FC2", "#7FA8D4", "#A0C1E0"];
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
-const COUNTRY_DATA: Record<string, { barreras: number; criticas: number; tramites: number; costo: string; sectores: number }> = {
+export const COUNTRY_DATA: Record<string, { barreras: number; criticas: number; tramites: number; costo: string; sectores: number }> = {
   Argentina: { barreras: 698, criticas: 94, tramites: 312, costo: "USD 13.1 M", sectores: 6 },
   Bolivia:   { barreras: 632, criticas: 87, tramites: 428, costo: "USD 11.2 M", sectores: 6 },
   Chile:     { barreras: 445, criticas: 48, tramites: 195, costo: "USD 7.1 M",  sectores: 4 },
   Ecuador:   { barreras: 581, criticas: 68, tramites: 221, costo: "USD 11.7 M", sectores: 6 },
   Perú:      { barreras: 534, criticas: 56, tramites: 280, costo: "USD 9.4 M",  sectores: 5 },
+};
+
+// Lista real de países activos (sin "Todos") — fuente única para Panel Regional
+// y cualquier otra pantalla que necesite iterar/contar países reales.
+export const COUNTRIES: Country[] = Object.keys(COUNTRY_DATA) as Country[];
+
+// Cobertura % por país — dato de muestra, sin fuente real todavía.
+// TODO: reemplazar con dato real cuando exista un campo de cobertura en el modelo de datos.
+export const COBERTURA_MUESTRA: Record<Exclude<Country, "Todos">, number> = {
+  Argentina: 92,
+  Bolivia: 88,
+  Chile: 95,
+  Ecuador: 85,
+  Perú: 90,
 };
 
 const COUNTRY_COLORS: Record<string, string> = {
@@ -547,7 +569,7 @@ const COUNTRY_CARGA: Record<string, { total: number; criticas: number }> = {
   Perú:      { total: 319, criticas: 41 },
 };
 
-const JERARQUIA_NORMATIVA_DATA: BarrasComposicionCategoria[] = [
+export const JERARQUIA_NORMATIVA_DATA: BarrasComposicionCategoria[] = [
   { nombre: "Argentina", total: 421, componentes: [
     { nombre: "Constitucional",  valor: 8   },
     { nombre: "Legal",           valor: 76  },
@@ -859,7 +881,7 @@ function KpiTooltip({ content }: { content: string }) {
   );
 }
 
-function BandaCobertura({ text }: { text: string }) {
+export function BandaCobertura({ text }: { text: string }) {
   return (
     <div className="flex items-center gap-2 mb-5 px-4 py-2.5 rounded-lg"
       style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
@@ -870,7 +892,7 @@ function BandaCobertura({ text }: { text: string }) {
   );
 }
 
-function KpiCard({ label, value, valueSuffix, sub, valueColor, tooltip }: {
+export function KpiCard({ label, value, valueSuffix, sub, valueColor, tooltip }: {
   label: string; value: string; valueSuffix?: string; sub?: string; valueColor?: string; tooltip?: string;
 }) {
   return (
@@ -951,12 +973,7 @@ function Sidebar({
       {/* Logo + close */}
       <div className="px-6 pt-7 pb-5 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-            <circle cx="14" cy="14" r="13" stroke={C.steel2} strokeWidth="1.5" />
-            <circle cx="14" cy="14" r="8" stroke={C.steel3} strokeWidth="1" />
-            <circle cx="14" cy="14" r="3" fill={C.steel2} />
-          </svg>
-          <span className="text-white text-[22px] tracking-wider" style={{ fontFamily: "Space Grotesk, sans-serif", fontWeight: 500, letterSpacing: 3 }}>ALEPH</span>
+          <span className="text-white text-[22px] tracking-wider" style={{ fontFamily: "Space Grotesk, sans-serif", fontWeight: 500, letterSpacing: 3 }}>RegLAC</span>
         </div>
         {isMobile && (
           <button onClick={onDrawerClose} style={{ background: "none", border: "none", color: "#8FA3BA" }}>
@@ -967,15 +984,15 @@ function Sidebar({
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-2">
-        {navItem("Panorama", "dashboard", <BarChart2 size={18} />, () => nav(() => {
-          // Panorama siempre está anclado a un país — sin modo agregado "Todos".
-          onNavigate({ screen: "country-dashboard", country: activeCountry === "Todos" ? "Bolivia" : activeCountry });
+        {navItem("Panorama Regulatorio", "dashboard", <BarChart2 size={18} />, () => nav(() => {
+          onNavigate({ screen: "panel-regional" });
         }))}
-        {navItem("Barreras", "barreras", <AlertTriangle size={18} />, () => nav(() => onNavigate({ screen: "barreras" })))}
-        {navItem("Trámites", "tramites", <FileText size={18} />, () => nav(() => onNavigate({ screen: "tramites" })))}
+        {navItem("Barreras Regulatorias", "barreras", <AlertTriangle size={18} />, () => nav(() => onNavigate({ screen: "barreras" })))}
+        {navItem("Trámites con potencial de mejora", "tramites", <FileText size={18} />, () => nav(() => onNavigate({ screen: "tramites" })))}
+        {navItem("Impacto económico", "impacto-economico", <Globe size={18} />, () => nav(() => onNavigate({ screen: "placeholder", label: "Impacto económico" })))}
         {navItem("Reportes", "reportes", <ClipboardList size={18} />, () => nav(() => onNavigate({ screen: "reportes" })))}
         {navItem("Documentación", "documentacion", <BookOpen size={18} />, () => nav(() => onNavigate({ screen: "documentacion" })))}
-        {navItem("Índice", "indice", <ChartBar size={18} />, () => nav(() => { onNavigate({ screen: "indice" });}))}
+        {navItem("Índice / IDR", "indice", <ChartBar size={18} />, () => nav(() => { onNavigate({ screen: "indice" });}))}
         {/* Revisión — visible para asesor, analista, validador y administrador,
             SIEMPRE expandible con los mismos 2 sub-ítems para los 4 roles:
             "Hallazgos" (Repositorio -- Etapa 1 del Asesor ahora vive ahí como
@@ -991,7 +1008,7 @@ function Sidebar({
               onClick={() => { setRevisionOpen(!revisionOpen); if (!revisionOpen) { nav(() => onNavigate({ screen: "revision-repositorio" })); } }}
             >
               <ClipboardCheck size={18} />
-              <span className="flex-1">Revisión</span>
+              <span className="flex-1">Validación HITL</span>
               {revisionOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
             </button>
             {revisionOpen && (
@@ -1083,6 +1100,12 @@ export const HDR_BTN_SECONDARY: React.CSSProperties = {
   backgroundColor: "transparent", color: C.text,
   fontFamily: "Space Grotesk, sans-serif", fontSize: 12, fontWeight: 500,
   border: `1px solid ${C.border}`, borderRadius: 8, padding: "7px 14px", cursor: "pointer", whiteSpace: "nowrap",
+};
+// Variante píldora de HDR_BTN_SECONDARY — acciones secundarias de header
+// ("Ver trámites" / "Ver barreras").
+export const HDR_BTN_PILL: React.CSSProperties = {
+  ...HDR_BTN_SECONDARY,
+  borderRadius: 999,
 };
 
 // ─── Campana de notificaciones (Lote 7) ────────────────────────────────────
@@ -5010,6 +5033,7 @@ export default function App() {
   const navigate = (v: View) => {
     setView(v);
     setDrawerOpen(false);
+    if (v.screen === "panel-regional") setActiveSection("dashboard");
     if (v.screen === "country-dashboard") { setActiveSection("dashboard"); setActiveCountry(v.country as Country); }
     if (v.screen === "barreras" || v.screen === "barrera-detail") setActiveSection("barreras");
     if (v.screen === "tramites" || v.screen === "tramite-detail") setActiveSection("tramites");
@@ -5018,8 +5042,8 @@ export default function App() {
     if (v.screen === "documentacion") setActiveSection("documentacion");
     if (v.screen.startsWith("revision")) setActiveSection("revision");
     if (v.screen === "placeholder") {
-      const s = (v as { screen: "placeholder"; label: string }).label.toLowerCase() as Section;
-      setActiveSection(s === "comparativa" ? "comparativa" : "repositorio");
+      const label = (v as { screen: "placeholder"; label: string }).label;
+      setActiveSection(label === "Comparativa" ? "comparativa" : label === "Impacto económico" ? "impacto-economico" : "repositorio");
     }
   };
 
@@ -5064,6 +5088,7 @@ export default function App() {
 
   const renderView = () => {
     switch (view.screen) {
+      case "panel-regional": return <PanelRegional onNavigate={navigate} />;
       case "country-dashboard": return <CountryDashboard country={view.country} onCountryChange={c => { setActiveCountry(c); navigate({ screen: "country-dashboard", country: c === "Todos" ? "Bolivia" : c }); }} onNavigate={navigate} />;
       case "barreras": return <BarrerasScreen initialSector={view.sector} country={activeCountry} onCountryChange={c => setActiveCountry(c)} onNavigate={navigate} />;
       case "barrera-detail": return <BarreraDetail id={view.id} onNavigate={navigate} />;
@@ -5182,12 +5207,7 @@ export default function App() {
       {isMobile && (
         <header className="flex items-center justify-between px-4 h-14 flex-shrink-0 z-30" style={{ backgroundColor: C.sidebar }}>
           <div className="flex items-center gap-2">
-            <svg width="22" height="22" viewBox="0 0 28 28" fill="none">
-              <circle cx="14" cy="14" r="13" stroke={C.steel2} strokeWidth="1.5" />
-              <circle cx="14" cy="14" r="8" stroke={C.steel3} strokeWidth="1" />
-              <circle cx="14" cy="14" r="3" fill={C.steel2} />
-            </svg>
-            <span className="text-white text-[18px] tracking-widest" style={{ fontFamily: "Space Grotesk, sans-serif", fontWeight: 500, letterSpacing: 3 }}>ALEPH</span>
+            <span className="text-white text-[18px] tracking-widest" style={{ fontFamily: "Space Grotesk, sans-serif", fontWeight: 500, letterSpacing: 3 }}>RegLAC</span>
           </div>
           <button onClick={() => setDrawerOpen(!drawerOpen)} style={{ background: "none", border: "none", color: "#8FA3BA", padding: 8 }}>
             {drawerOpen ? <X size={22} /> : <Menu size={22} />}
