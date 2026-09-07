@@ -4982,7 +4982,7 @@ export default function App() {
   // TODO: shared country state is temporary — replace when the advisor-per-country flow is built
   const [activeCountry, setActiveCountry] = useState<Country>("Todos");
   const [activeSection, setActiveSection] = useState<Section>("dashboard");
-  const [view, setView] = useState<View>({ screen: "country-dashboard", country: "Bolivia" });
+  const [view, setView] = useState<View>({ screen: "panel-regional" });
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [authView, setAuthView] = useState<AuthView>("login");
   const [recoveryEmail, setRecoveryEmail] = useState("ana.mejia@iadb.org");
