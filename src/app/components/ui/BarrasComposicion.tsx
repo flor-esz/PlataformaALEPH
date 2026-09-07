@@ -36,6 +36,9 @@ export type BarrasComposicionProps = {
   total: number | string;
   categorias: BarrasComposicionCategoria[];
   className?: string;
+  // Control opcional (ej. un <select> visual) mostrado a la derecha del label
+  // en el header. No afecta el layout cuando se omite.
+  headerRight?: React.ReactNode;
 };
 
 // ─── Build a stable color map: first-encounter order across all bars ───────────
@@ -129,6 +132,7 @@ export function BarrasComposicion({
   total,
   categorias,
   className,
+  headerRight,
 }: BarrasComposicionProps) {
   const colorMap = buildColorMap(categorias);
   const maxTotal =
@@ -142,9 +146,9 @@ export function BarrasComposicion({
     <Card
       className={["gap-0 overflow-hidden", className ?? ""].join(" ").trim()}
     >
-      {/* ── Header: label only (no selector) ── */}
+      {/* ── Header: label, con control opcional a la derecha ── */}
       <div
-        className="px-5 py-4"
+        className="px-5 py-4 flex items-center justify-between gap-3"
         style={{ borderBottom: "1px solid #DCE3EB" }}
       >
         <p
@@ -160,6 +164,7 @@ export function BarrasComposicion({
         >
           {label}
         </p>
+        {headerRight}
       </div>
 
       {/* ── Total figure ── */}

@@ -22,6 +22,11 @@ import { PanelTipoSubdimension } from "./components/ui/PanelTipoSubdimension";
 import type { TipoDato } from "./components/ui/PanelTipoSubdimension";
 import { BarrasComposicion } from "./components/ui/BarrasComposicion";
 import type { BarrasComposicionCategoria } from "./components/ui/BarrasComposicion";
+import { IrrGeneralCard } from "./components/ui/IrrGeneralCard";
+import { EvolucionInstrumentosPanel } from "./components/ui/EvolucionInstrumentosPanel";
+import { DocumentosEstructuraPanel } from "./components/ui/DocumentosEstructuraPanel";
+import { FuentesTrazabilidadTable } from "./components/ui/FuentesTrazabilidadTable";
+import { TablaExploratoria } from "./components/ui/TablaExploratoria";
 // PanelRegional importa { C, Header, KpiCard, ... } de vuelta desde este archivo
 // (mismo ciclo App.tsx <-> otros módulos documentado arriba), pero a diferencia
 // de revision/*.tsx nunca los usa en el top-level de su módulo -- solo dentro
@@ -185,6 +190,162 @@ export const COBERTURA_MUESTRA: Record<Exclude<Country, "Todos">, number> = {
   Chile: 95,
   Ecuador: 85,
   Perú: 90,
+};
+
+// ─── Panel País — datos derivados y de muestra ─────────────────────────────────
+// Proporción N2–N6 usada tanto acá como en Panel Regional (210/486/512/398/236
+// sobre un total de 1,842). dato de muestra — pendiente valores reales N2–N6
+// con Franco/Juanjo.
+const JERARQUIA_N2N6_LABELS = ["N2 Legislativo", "N3 Reglamentario", "N4 Resolutivo / Agencias", "N5 Técnico-operativo", "N6 Procedimental/Trámites"];
+const JERARQUIA_N2N6_RATIOS = [0.114, 0.264, 0.278, 0.216, 0.128];
+
+// Reparte totalInstrumentos entre los 5 niveles N2–N6 según JERARQUIA_N2N6_RATIOS,
+// ajustando el último nivel para que la suma cuadre exacto con el total.
+function buildJerarquiaN2N6(totalInstrumentos: number): BarrasComposicionCategoria[] {
+  const valores = JERARQUIA_N2N6_RATIOS.map(r => Math.round(totalInstrumentos * r));
+  const sumaSinUltimo = valores.slice(0, -1).reduce((s, v) => s + v, 0);
+  valores[valores.length - 1] = totalInstrumentos - sumaSinUltimo;
+  return JERARQUIA_N2N6_LABELS.map((nombre, i) => ({
+    nombre,
+    total: valores[i],
+    componentes: [{ nombre, valor: valores[i] }],
+  }));
+}
+
+// Curva histórica de instrumentos — dato de muestra, no hay snapshot histórico
+// real todavía. TODO: reemplazar por valores reales por año cuando existan.
+const EVOLUCION_ANIOS = [2015, 2018, 2021, 2024, 2026];
+const EVOLUCION_FACTORES = [0.63, 0.75, 0.84, 0.94, 1.00];
+
+function buildEvolucion(totalActual: number): { anio: number; total: number; segmentos: { nombre: string; valor: number; color: string }[] }[] {
+  return EVOLUCION_ANIOS.map((anio, i) => {
+    const total = Math.round(totalActual * EVOLUCION_FACTORES[i]);
+    const niveles = buildJerarquiaN2N6(total);
+    return {
+      anio,
+      total,
+      segmentos: niveles.map((n, j) => ({ nombre: n.nombre, valor: n.total, color: CAT[j % CAT.length] })),
+    };
+  });
+}
+
+// Trámites y respaldo normativo — dato de muestra, pendiente definir metodología
+// real. Se aplican sobre COUNTRY_DATA[país].tramites (real) ajustando el último
+// segmento para que la suma cuadre exacto con el total real de trámites.
+const RESPALDO_RATIOS = { conRespaldo: 0.779, sinRespaldo: 0.221 };
+const TIPO_USUARIO_RATIOS = { empresarial: 0.471, ciudadano: 0.393, mixto: 0.136 };
+
+// % no estructurado por nivel N2–N6 (mismo orden) — dato de muestra, igual para
+// los 5 países por ahora.
+const DOC_ESTRUCTURA_PCT_MUESTRA = [6, 12, 18, 25, 35];
+
+// IRR general por país en escala 0–100 — dato de muestra, sin fuente real.
+// TODO: falta decidir si esta escala (0–100) o la escala 1–4 de irrPromedio
+// (COUNTRY_BARRERAS_DATA / KpiCard "IRR promedio" en BarrerasScreen) es la
+// oficial — son dos escalas conviviendo hoy.
+const IRR_GENERAL_MUESTRA: Record<Exclude<Country, "Todos">, number> = {
+  Argentina: 58.4,
+  Bolivia: 61.3,
+  Chile: 66.0,
+  Ecuador: 55.7,
+  Perú: 63.8,
+};
+
+// Fuentes oficiales / procesadas / entidades emisoras por país — dato de
+// muestra, sin fuente real (mismo pendiente que Panel Regional).
+const FUENTES_MUESTRA: Record<Exclude<Country, "Todos">, { oficiales: number; procesadas: number; entidadesEmisoras: number }> = {
+  Argentina: { oficiales: 6, procesadas: 5, entidadesEmisoras: 9 },
+  Bolivia:   { oficiales: 5, procesadas: 4, entidadesEmisoras: 8 },
+  Chile:     { oficiales: 3, procesadas: 3, entidadesEmisoras: 5 },
+  Ecuador:   { oficiales: 5, procesadas: 4, entidadesEmisoras: 7 },
+  Perú:      { oficiales: 4, procesadas: 3, entidadesEmisoras: 6 },
+};
+
+// Entidades gestoras por país — derivado de COUNTRY_DATA[país].sectores (real),
+// no hay fuente propia todavía. dato de muestra.
+const ENTIDADES_GESTORAS_MUESTRA: Record<Exclude<Country, "Todos">, number> = COUNTRIES.reduce((acc, pais) => {
+  acc[pais as Exclude<Country, "Todos">] = Math.round(COUNTRY_DATA[pais].sectores * 1.6);
+  return acc;
+}, {} as Record<Exclude<Country, "Todos">, number>);
+
+// Instrumentos por cantidad de palabras, 5 valores por nivel N2→N6 (decrecientes)
+// — dato de muestra.
+const INSTRUMENTOS_POR_PALABRAS_MUESTRA: Record<Exclude<Country, "Todos">, number[]> = {
+  Argentina: [35, 29, 26, 24, 21],
+  Bolivia:   [26, 22, 20, 18, 16],
+  Chile:     [29, 25, 22, 21, 18],
+  Ecuador:   [28, 23, 21, 19, 17],
+  Perú:      [34, 29, 26, 24, 21],
+};
+
+// Fuentes y trazabilidad por país, 4 filas de muestra c/u — dato de muestra,
+// sin fuente real. TODO: definir si esto se conecta a un catálogo real de
+// instrumentos individuales (hoy el modelo de datos solo tiene agregados).
+const FUENTES_TRAZABILIDAD_MUESTRA: Record<Exclude<Country, "Todos">, {
+  fuente: string; estado: "Completo" | "Parcial" | "Pendiente"; ultimaCaptura: string; errores: number | null; capturados: number; totalEsperado: number;
+}[]> = {
+  Argentina: [
+    { fuente: "Gaceta Oficial de Argentina", estado: "Completo",  ultimaCaptura: "12 mar 2026", errores: null, capturados: 128, totalEsperado: 128 },
+    { fuente: "Congreso de la Nación",       estado: "Parcial",   ultimaCaptura: "05 mar 2026", errores: 3,    capturados: 54,  totalEsperado: 61  },
+    { fuente: "Ministerio de Economía",      estado: "Completo",  ultimaCaptura: "12 mar 2026", errores: null, capturados: 76,  totalEsperado: 76  },
+    { fuente: "AFIP",                        estado: "Pendiente", ultimaCaptura: "20 feb 2026", errores: null, capturados: 0,   totalEsperado: 42  },
+  ],
+  Bolivia: [
+    { fuente: "Gaceta Oficial de Bolivia",             estado: "Completo",  ultimaCaptura: "12 mar 2026", errores: null, capturados: 112, totalEsperado: 112 },
+    { fuente: "Asamblea Legislativa Plurinacional",    estado: "Parcial",   ultimaCaptura: "04 mar 2026", errores: 5,    capturados: 48,  totalEsperado: 58  },
+    { fuente: "Ministerio de Economía y Finanzas Públicas", estado: "Completo", ultimaCaptura: "12 mar 2026", errores: null, capturados: 69, totalEsperado: 69 },
+    { fuente: "SENAPI",                                 estado: "Pendiente", ultimaCaptura: "18 feb 2026", errores: null, capturados: 0,   totalEsperado: 33  },
+  ],
+  Chile: [
+    { fuente: "Diario Oficial de Chile",                    estado: "Completo",  ultimaCaptura: "12 mar 2026", errores: null, capturados: 96, totalEsperado: 96 },
+    { fuente: "Congreso Nacional",                          estado: "Parcial",   ultimaCaptura: "06 mar 2026", errores: 2,    capturados: 41, totalEsperado: 47 },
+    { fuente: "Ministerio de Economía, Fomento y Turismo",  estado: "Completo",  ultimaCaptura: "12 mar 2026", errores: null, capturados: 58, totalEsperado: 58 },
+    { fuente: "INAPI",                                      estado: "Pendiente", ultimaCaptura: "22 feb 2026", errores: null, capturados: 0,  totalEsperado: 29 },
+  ],
+  Ecuador: [
+    { fuente: "Registro Oficial de Ecuador",                 estado: "Completo",  ultimaCaptura: "12 mar 2026", errores: null, capturados: 101, totalEsperado: 101 },
+    { fuente: "Asamblea Nacional",                           estado: "Parcial",   ultimaCaptura: "05 mar 2026", errores: 4,    capturados: 44,  totalEsperado: 52  },
+    { fuente: "Ministerio de Producción, Comercio Exterior", estado: "Completo",  ultimaCaptura: "12 mar 2026", errores: null, capturados: 63,  totalEsperado: 63  },
+    { fuente: "SENADI",                                      estado: "Pendiente", ultimaCaptura: "19 feb 2026", errores: null, capturados: 0,   totalEsperado: 31  },
+  ],
+  Perú: [
+    { fuente: "Gaceta Oficial de Perú",  estado: "Completo",  ultimaCaptura: "12 mar 2026", errores: null, capturados: 105, totalEsperado: 105 },
+    { fuente: "Asamblea Legislativa",    estado: "Parcial",   ultimaCaptura: "05 mar 2026", errores: 3,    capturados: 45,  totalEsperado: 53  },
+    { fuente: "Ministerio de Economía",  estado: "Completo",  ultimaCaptura: "12 mar 2026", errores: null, capturados: 62,  totalEsperado: 62  },
+    { fuente: "SENAPI",                  estado: "Pendiente", ultimaCaptura: "21 feb 2026", errores: null, capturados: 0,   totalEsperado: 30  },
+  ],
+};
+
+// Tabla exploratoria por país, 3 filas de muestra c/u — dato de muestra, sin
+// fuente real (mismo pendiente de catálogo real señalado arriba).
+const TABLA_EXPLORATORIA_MUESTRA: Record<Exclude<Country, "Todos">, {
+  nombre: string; tipo: string; entidad: string; sector: string; año: number; jerarquia: string; vigencia: "Vigente" | "Por confirmar"; estado: "Analizado" | "Procesado";
+}[]> = {
+  Argentina: [
+    { nombre: "Decreto 1188-A",                    tipo: "Decreto",               entidad: "Min. de Economía y Finanzas Públicas", sector: "Servicios Financieros y de Seguros", año: 2021, jerarquia: "Reglamentario",  vigencia: "Vigente",       estado: "Analizado" },
+    { nombre: "Ley de Inversión Extranjera Art. 5", tipo: "Ley",                   entidad: "Congreso de la Nación",                 sector: "Construcción y Obra Pública",        año: 2018, jerarquia: "Legal",          vigencia: "Vigente",       estado: "Analizado" },
+    { nombre: "Res. MEM-0012",                      tipo: "Resolución",            entidad: "Min. de Desarrollo Productivo",         sector: "Textil y Confección",                año: 2023, jerarquia: "Administrativo", vigencia: "Por confirmar", estado: "Procesado" },
+  ],
+  Bolivia: [
+    { nombre: "Decreto Ejecutivo 447", tipo: "Decreto",     entidad: "Alcaldía Municipal de La Paz",        sector: "Construcción y Obra Pública",      año: 2020, jerarquia: "Administrativo", vigencia: "Vigente",       estado: "Analizado" },
+    { nombre: "Ley 843 Art. 92",       tipo: "Ley",         entidad: "Asamblea Legislativa Plurinacional",  sector: "Construcción y Obra Pública",      año: 2016, jerarquia: "Legal",          vigencia: "Vigente",       estado: "Analizado" },
+    { nombre: "Res. IICA 2021-88",     tipo: "Resolución",  entidad: "ASFI",                                sector: "Servicios Financieros y de Seguros", año: 2021, jerarquia: "Reglamentario", vigencia: "Por confirmar", estado: "Procesado" },
+  ],
+  Chile: [
+    { nombre: "D.S. 92",       tipo: "Decreto Supremo",     entidad: "Min. de Economía, Fomento y Turismo", sector: "Minería y Exportaciones",  año: 2022, jerarquia: "Reglamentario",  vigencia: "Vigente",       estado: "Analizado" },
+    { nombre: "Ley 21.000",    tipo: "Ley",                 entidad: "Congreso Nacional",                    sector: "Servicios Financieros",    año: 2019, jerarquia: "Legal",          vigencia: "Vigente",       estado: "Analizado" },
+    { nombre: "Res. Ex. 340",  tipo: "Resolución Exenta",   entidad: "SII",                                  sector: "Agroindustria",            año: 2024, jerarquia: "Administrativo", vigencia: "Por confirmar", estado: "Procesado" },
+  ],
+  Ecuador: [
+    { nombre: "Decreto PCM-027-2022",   tipo: "Decreto",     entidad: "Presidencia de la República",               sector: "Textil y Confección",   año: 2022, jerarquia: "Reglamentario",  vigencia: "Vigente",       estado: "Analizado" },
+    { nombre: "Ley ZOLI Art. 12",       tipo: "Ley",         entidad: "Asamblea Nacional",                          sector: "Textil y Confección",   año: 2017, jerarquia: "Legal",          vigencia: "Vigente",       estado: "Analizado" },
+    { nombre: "Res. MEM-0012-2021",     tipo: "Resolución",  entidad: "Min. de Producción, Comercio Exterior",      sector: "Petróleo y Gas",        año: 2021, jerarquia: "Administrativo", vigencia: "Por confirmar", estado: "Procesado" },
+  ],
+  Perú: [
+    { nombre: "D.S. 4523",  tipo: "Decreto Supremo",      entidad: "Ministerio de Economía y Finanzas", sector: "Servicios Financieros y de Seguros", año: 2022, jerarquia: "Reglamentario",  vigencia: "Vigente",       estado: "Analizado" },
+    { nombre: "Ley 1178",   tipo: "Ley",                  entidad: "Congreso de la República",           sector: "Agroindustria",                      año: 2019, jerarquia: "Legal",          vigencia: "Vigente",       estado: "Analizado" },
+    { nombre: "R.M. 220",   tipo: "Resolución Ministerial", entidad: "Ministerio de la Producción",      sector: "Manufactura",                        año: 2024, jerarquia: "Administrativo", vigencia: "Por confirmar", estado: "Procesado" },
+  ],
 };
 
 const COUNTRY_COLORS: Record<string, string> = {
@@ -1276,114 +1437,60 @@ function SectionDivider({ label }: { label: string }) {
 // Screen fusionado: siempre anclado a UN país (sin modo agregado "Todos").
 function CountryDashboard({ country, onCountryChange, onNavigate }: { country: string; onCountryChange?: (c: Country) => void; onNavigate: (v: View) => void }) {
   const d = COUNTRY_DATA[country];
-  const [showSectors, setShowSectors] = useState(false);
   if (!d) return null;
 
-  const countrySectors = COUNTRY_SECTORS[country] ?? HN_SECTORES.map(s => ({ ...s, analizado: true }));
-  const analyzedSectors = countrySectors.filter(s => s.analizado);
-  const PREVIEW_COUNT = 4;
-
-  // ── Full sectors view ──────────────────────────────────────────────────────
-  if (showSectors) return (
-    <div className="p-4 md:p-8 overflow-y-auto h-full">
-      <button className="flex items-center gap-1 text-[12px] mb-4" style={{ color: C.textMuted, fontFamily: "IBM Plex Sans, sans-serif", background: "none", border: "none" }}
-        onClick={() => setShowSectors(false)}>← Volver a {country}</button>
-      <p className="text-[11px] uppercase tracking-widest mb-1" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>Regulaciones › Panorama Regulatorio › {country} › Sectores</p>
-      <h1 className="text-[28px] font-semibold mb-1" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>Sectores — {country}</h1>
-      <p className="text-[13px] mb-6" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{analyzedSectors.length} de {countrySectors.length} sectores con análisis activo</p>
-      <div className="rounded-lg overflow-hidden" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
-        <table className="w-full">
-          <thead>
-            <tr style={{ borderBottom: `1px solid ${C.border}` }}>
-              {["Sector", "Barreras", "Altas", "Críticas", "Trámites", "Estado", ""].map(h => (
-                <th key={h} className="px-5 py-3 text-left text-[11px] uppercase tracking-widest" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {countrySectors.map((s, i) => (
-              <tr key={i} style={{ borderBottom: `1px solid ${C.border}`, opacity: s.analizado ? 1 : 0.65 }}>
-                <td className="px-5 py-3 text-[13px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text }}>{s.sector}</td>
-                <td className="px-5 py-3 text-[13px] font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: s.analizado ? C.text : C.textMuted }}>{s.analizado ? s.barreras : "—"}</td>
-                <td className="px-5 py-3 text-[13px]" style={{ fontFamily: "Space Grotesk, sans-serif", color: s.analizado ? C.alto : C.textMuted }}>{s.analizado ? s.altas : "—"}</td>
-                <td className="px-5 py-3 text-[13px] font-semibold" style={{ fontFamily: "Space Grotesk, sans-serif", color: s.analizado ? C.critico : C.textMuted }}>{s.analizado ? s.criticas : "—"}</td>
-                <td className="px-5 py-3 text-[13px]" style={{ fontFamily: "Space Grotesk, sans-serif", color: s.analizado ? C.text : C.textMuted }}>{s.analizado ? s.tramites : "—"}</td>
-                <td className="px-5 py-3">
-                  {s.analizado ? (
-                    <span className="text-[11px] px-2.5 py-1 rounded-full font-medium" style={{ backgroundColor: "#E6F4EA", color: "#2D7A3A", fontFamily: "IBM Plex Sans, sans-serif" }}>Analizado</span>
-                  ) : (
-                    <span className="text-[11px] px-2.5 py-1 rounded-full" style={{ backgroundColor: C.border, color: C.textMuted, fontFamily: "IBM Plex Sans, sans-serif" }}>Sin análisis</span>
-                  )}
-                </td>
-                <td className="px-5 py-3">
-                  {s.analizado && (
-                    <button className="text-[11px] flex items-center gap-1" style={{ color: C.steel3, fontFamily: "IBM Plex Sans, sans-serif", background: "none", border: "none" }}
-                      onClick={() => onNavigate({ screen: "barreras", sector: s.sector })}>
-                      Ver barreras <ChevronRight size={12} />
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-
   // ── Datos derivados para el país activo ─────────────────────────────────────
-  // Jerarquía normativa: JERARQUIA_NORMATIVA_DATA ya trae, por país, un desglose
-  // real en 5 niveles (Constitucional/Legal/Reglamentario/Administrativo/Técnico)
-  // cuya suma coincide con el total del país. Antes se usaba "una fila por país"
-  // (comparativo regional); aquí se reproyecta a "una fila por nivel" del país activo.
-  const jerarquiaPais = JERARQUIA_NORMATIVA_DATA.find(c => c.nombre === country);
-  const instrumentos = jerarquiaPais?.total ?? 0;
-  const jerarquiaNivelData: BarrasComposicionCategoria[] = (jerarquiaPais?.componentes ?? []).map(nivel => ({
-    nombre: nivel.nombre,
-    total: nivel.valor,
-    componentes: [{ nombre: nivel.nombre, valor: nivel.valor }],
-  }));
+  const paisKey = country as Exclude<Country, "Todos">;
+  const instrumentos = JERARQUIA_NORMATIVA_DATA.find(c => c.nombre === country)?.total ?? 0;
 
-  // Clasificación/carga: no hay desglose independiente por país para estas dos
-  // vistas, así que se escala la composición canónica de Bolivia con el mismo
-  // factor que ya usa ReportePdf (f = total de barreras del país / total de Bolivia).
-  const cdBarreras = COUNTRY_BARRERAS_DATA[country as Country] ?? COUNTRY_BARRERAS_DATA["Bolivia"];
-  const f = cdBarreras.total / 397;
-  const scaleBC = (data: BarrasComposicionCategoria[]): BarrasComposicionCategoria[] =>
-    data.map(cat => ({
-      nombre: cat.nombre,
-      total: Math.round(cat.total * f),
-      componentes: cat.componentes.map(c => ({ nombre: c.nombre, valor: Math.round(c.valor * f) })),
-    }));
-  const clasificacionData = scaleBC(CLASIFICACION_BARRERAS_DATA);
-  const clasificacionTotal = clasificacionData.reduce((s, c) => s + c.total, 0);
-  const cargaTipoData = scaleBC(CARGA_TIPO_BOL_DATA);
-  const cargaTipoTotal = cargaTipoData.reduce((s, c) => s + c.total, 0);
+  const fuentes = FUENTES_MUESTRA[paisKey] ?? FUENTES_MUESTRA["Bolivia"];
+  const irrGeneral = IRR_GENERAL_MUESTRA[paisKey] ?? IRR_GENERAL_MUESTRA["Bolivia"];
 
-  // Por sector: COUNTRY_SECTORS ya trae, por país, barreras/tramites reales por
-  // sector analizado — se reutiliza directamente, sin escalar ni inventar nada.
-  const barrerasPorSectorData: BarrasComposicionCategoria[] = analyzedSectors.map(s => ({
-    nombre: s.sector,
-    total: s.barreras,
-    componentes: [{ nombre: s.sector, valor: s.barreras }],
+  const instrumentosPorPalabras = INSTRUMENTOS_POR_PALABRAS_MUESTRA[paisKey] ?? INSTRUMENTOS_POR_PALABRAS_MUESTRA["Bolivia"];
+  const instrumentosPorPalabrasData: BarrasComposicionCategoria[] = JERARQUIA_N2N6_LABELS.map((nombre, i) => ({
+    nombre,
+    total: instrumentosPorPalabras[i],
+    componentes: [{ nombre, valor: instrumentosPorPalabras[i] }],
   }));
-  const barrerasPorSectorTotal = analyzedSectors.reduce((sum, s) => sum + s.barreras, 0);
-  const tramitesPorSectorData: BarrasComposicionCategoria[] = analyzedSectors.map(s => ({
-    nombre: s.sector,
-    total: s.tramites,
-    componentes: [{ nombre: s.sector, valor: s.tramites }],
-  }));
-  const tramitesPorSectorTotal = analyzedSectors.reduce((sum, s) => sum + s.tramites, 0);
+  const instrumentosPorPalabrasTotal = instrumentosPorPalabras.reduce((s, v) => s + v, 0);
+
+  const docEstructuraFilas = JERARQUIA_N2N6_LABELS.map((nombre, i) => ({ nombre, pctNoEstructurado: DOC_ESTRUCTURA_PCT_MUESTRA[i] }));
+
+  const fuentesTrazabilidad = FUENTES_TRAZABILIDAD_MUESTRA[paisKey] ?? FUENTES_TRAZABILIDAD_MUESTRA["Bolivia"];
+  const tablaExploratoria = TABLA_EXPLORATORIA_MUESTRA[paisKey] ?? TABLA_EXPLORATORIA_MUESTRA["Bolivia"];
+
+  // Trámites y respaldo normativo — se ajusta el último segmento de cada
+  // reparto para que la suma cuadre exacto con d.tramites (real).
+  const conRespaldo = Math.round(d.tramites * RESPALDO_RATIOS.conRespaldo);
+  const sinRespaldo = d.tramites - conRespaldo;
+  const entidadesGestoras = ENTIDADES_GESTORAS_MUESTRA[paisKey] ?? ENTIDADES_GESTORAS_MUESTRA["Bolivia"];
+
+  const tramitesEmpresarial = Math.round(d.tramites * TIPO_USUARIO_RATIOS.empresarial);
+  const tramitesCiudadano = Math.round(d.tramites * TIPO_USUARIO_RATIOS.ciudadano);
+  const tramitesMixto = d.tramites - tramitesEmpresarial - tramitesCiudadano;
+  const tipoUsuarioFilas = [
+    { nombre: "Empresarial", valor: tramitesEmpresarial, color: C.steel4 },
+    { nombre: "Ciudadano",   valor: tramitesCiudadano,   color: C.steel3 },
+    { nombre: "Mixto",       valor: tramitesMixto,        color: C.steel2 },
+  ];
+
+  const headerActions = (
+    <>
+      <button style={HDR_BTN_PILL} onClick={() => onNavigate({ screen: "tramites" })}>Ver trámites</button>
+      <button style={HDR_BTN_PILL} onClick={() => onNavigate({ screen: "barreras" })}>Ver barreras</button>
+      <button style={HDR_BTN_PRIMARY} onClick={() => onNavigate({ screen: "reportes" })}>
+        <Download size={13} /><span className="hidden sm:inline">Generar reporte</span><span className="sm:hidden">Reporte</span>
+      </button>
+      {/* TODO: dropdown de opciones de descarga */}
+      <button style={HDR_BTN_SECONDARY}>
+        Descargar <ChevronDown size={13} />
+      </button>
+    </>
+  );
 
   return (
     <div className="p-4 md:p-8 overflow-y-auto h-full">
-      <Header breadcrumb="Regulaciones › Panorama Regulatorio" title="Panorama Regulatorio" subtitle={`${country} · Análisis activo · Actualizado marzo 2026`}
-        actions={
-          <button style={HDR_BTN_SECONDARY} onClick={() => onNavigate({ screen: "reporte-pdf", context: JSON.stringify({ tipo: "estrategico", pais: country, fecha: new Date().toLocaleString("es-BO") }) })}>
-            <Download size={13} /><span className="hidden sm:inline">Exportar PDF</span><span className="sm:hidden">PDF</span>
-          </button>
-        }
-      />
+      <Header breadcrumb={`Panorama Regulatorio › Panel País › ${country}`} title={`Panel ${country}`} actions={headerActions} />
 
       {/* Country selector — sin "Todos los países": esta pantalla siempre está anclada a un país */}
       {onCountryChange && (
@@ -1403,98 +1510,77 @@ function CountryDashboard({ country, onCountryChange, onNavigate }: { country: s
         </div>
       )}
 
-      <BandaCobertura text={`${instrumentos.toLocaleString("es")} instrumentos auditados en ${country} · Periodo cubierto: enero 2015 – marzo 2026 · Última actualización: 12 de marzo de 2026`} />
+      <BandaCobertura text={`Periodo de análisis: enero 2015 – marzo 2026 · última actualización 12 mar 2026 · cobertura ${COBERTURA_MUESTRA[paisKey] ?? COBERTURA_MUESTRA["Bolivia"]}%`} />
 
-      {/* KPIs */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
-        <KpiCard label="Instrumentos auditados" value={instrumentos.toLocaleString("es")} sub="leyes, decretos, reglamentos" />
-        <KpiCard label="Barreras identificadas" value={d.barreras.toLocaleString("es")} sub={country} />
+      <EvolucionInstrumentosPanel anios={buildEvolucion(instrumentos)} className="mb-6" onVerTodo={() => onNavigate({ screen: "indice" })} />
+
+      {/* KPIs fila 1 — datos reales */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+        <KpiCard label="Instrumentos analizados" value={instrumentos.toLocaleString("es")} sub="leyes, decretos, reglamentos" />
         <KpiCard label="Trámites identificados" value={d.tramites.toLocaleString("es")} sub="ciudadanos y empresariales" />
+        <KpiCard label="Sectores cubiertos" value={String(d.sectores)} sub={country} />
       </div>
 
-      <BarrasComposicion
-        label="Instrumentos por jerarquía normativa"
-        total={instrumentos}
-        categorias={jerarquiaNivelData}
-        className="mb-6"
-      />
-
-      {/* ── BARRERAS REGULATORIAS ── */}
-      <SectionDivider label="Barreras Regulatorias" />
+      {/* KPIs fila 2 — Fuentes: dato de muestra, sin fuente real aún; IRR general: escala 0–100 de muestra */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+        <KpiCard label="Fuentes oficiales" value={String(fuentes.oficiales)} />
+        <KpiCard label="Fuentes procesadas" value={String(fuentes.procesadas)} />
+        <KpiCard label="Entidades emisoras" value={String(fuentes.entidadesEmisoras)} />
+        {/* TODO: 0–100 sin metodología definida — conviven con la escala 1–4 de
+            irrPromedio (COUNTRY_BARRERAS_DATA / KpiCard "IRR promedio" en
+            BarrerasScreen). Falta decidir cuál es la oficial. */}
+        <IrrGeneralCard valor={irrGeneral} onVerDetalle={() => onNavigate({ screen: "indice" })} />
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 items-stretch">
         <BarrasComposicion
-          label="Barreras por clasificación"
-          total={clasificacionTotal}
-          categorias={clasificacionData}
+          label="Instrumentos por jerarquía normativa"
+          total={instrumentos}
+          categorias={buildJerarquiaN2N6(instrumentos)}
         />
         <BarrasComposicion
-          label="Barreras por sector"
-          total={barrerasPorSectorTotal}
-          categorias={barrerasPorSectorData}
+          label="Instrumentos por: Cantidad de palabras"
+          total={instrumentosPorPalabrasTotal}
+          categorias={instrumentosPorPalabrasData}
+          headerRight={
+            <select
+              defaultValue="palabras"
+              // TODO: sin lógica de cambio de medida todavía
+              style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 11, color: C.textMuted, backgroundColor: "transparent", border: `1px solid ${C.border}`, borderRadius: 6, padding: "3px 8px", cursor: "pointer" }}
+            >
+              <option value="palabras">Cantidad de palabras</option>
+            </select>
+          }
         />
       </div>
 
-      {/* ── TRÁMITES ── */}
-      <SectionDivider label="Trámites" />
+      <DocumentosEstructuraPanel filas={docEstructuraFilas} className="mb-6" onVerTabla={() => onNavigate({ screen: "indice" })} />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 items-stretch">
-        <BarrasComposicion
-          label="Carga por tipo"
-          total={cargaTipoTotal}
-          categorias={cargaTipoData}
-        />
-        <BarrasComposicion
-          label="Trámites por sector"
-          total={tramitesPorSectorTotal}
-          categorias={tramitesPorSectorData}
-        />
-      </div>
+      <FuentesTrazabilidadTable filas={fuentesTrazabilidad} onVerDetalle={() => onNavigate({ screen: "indice" })} />
 
-      {/* Sector table */}
-      <div className="rounded-lg" style={{ backgroundColor: C.card }}>
-        <div className="p-5 border-b flex items-center justify-between" style={{ borderColor: C.border }}>
-          <h3 className="text-[13px] uppercase tracking-widest font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Sectores auditados</h3>
-          <span className="text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{analyzedSectors.length} de {countrySectors.length} sectores</span>
-        </div>
-        <div className="overflow-x-auto">
-        <table className="w-full min-w-[480px]">
-          <thead>
-            <tr style={{ borderBottom: `1px solid ${C.border}` }}>
-              {["Sector", "Barreras", "Altas", "Críticas", "Trámites", ""].map(h => (
-                <th key={h} className="px-5 py-3 text-left text-[11px] uppercase tracking-widest" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {analyzedSectors.slice(0, PREVIEW_COUNT).map((s, i) => (
-              <tr key={i} style={{ borderBottom: `1px solid ${C.border}` }}>
-                <td className="px-5 py-3 text-[13px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text }}>{s.sector}</td>
-                <td className="px-5 py-3 text-[13px] font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>{s.barreras}</td>
-                <td className="px-5 py-3 text-[13px]" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.alto }}>{s.altas}</td>
-                <td className="px-5 py-3 text-[13px] font-semibold" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.critico }}>{s.criticas}</td>
-                <td className="px-5 py-3 text-[13px]" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>{s.tramites}</td>
-                <td className="px-5 py-3">
-                  <button className="text-[11px] flex items-center gap-1" style={{ color: C.steel3, fontFamily: "IBM Plex Sans, sans-serif", background: "none", border: "none" }}
-                    onClick={() => onNavigate({ screen: "barreras", sector: s.sector })}>
-                    Ver barreras <ChevronRight size={12} />
-                  </button>
-                </td>
-              </tr>
+      <SectionDivider label="Trámites y respaldo normativo" />
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-8 items-stretch">
+        <KpiCard label="Con respaldo normativo identificado" value={conRespaldo.toLocaleString("es")} />
+        <KpiCard label="Sin respaldo normativo identificado" value={sinRespaldo.toLocaleString("es")} />
+        <KpiCard label="Entidades gestoras" value={String(entidadesGestoras)} />
+        <div className="rounded-lg p-5" style={{ backgroundColor: C.card }}>
+          <p className="text-[11px] uppercase tracking-widest font-medium mb-3" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Tipo de usuario</p>
+          <div className="flex flex-col gap-2.5">
+            {tipoUsuarioFilas.map(f => (
+              <div key={f.nombre} className="flex items-center gap-2.5">
+                <span className="flex-shrink-0" style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 11, color: C.textMuted, width: 72 }}>{f.nombre}</span>
+                <div className="flex-1 rounded-full overflow-hidden" style={{ height: 10, backgroundColor: C.border }}>
+                  <div style={{ width: `${d.tramites > 0 ? (f.valor / d.tramites) * 100 : 0}%`, height: "100%", backgroundColor: f.color }} />
+                </div>
+                <span className="flex-shrink-0 text-right" style={{ fontFamily: "Space Grotesk, sans-serif", fontSize: 12, fontWeight: 600, color: C.textMuted, width: 32 }}>{f.valor}</span>
+              </div>
             ))}
-          </tbody>
-        </table>
-        </div>
-        {countrySectors.length > PREVIEW_COUNT && (
-          <div className="px-5 py-3 border-t" style={{ borderColor: C.border }}>
-            <button className="flex items-center gap-1.5 text-[13px] font-medium"
-              style={{ color: C.steel3, fontFamily: "Space Grotesk, sans-serif", background: "none", border: "none" }}
-              onClick={() => setShowSectors(true)}>
-              Ver todos los sectores ({countrySectors.length}) <ChevronRight size={13} />
-            </button>
           </div>
-        )}
+        </div>
       </div>
+
+      <TablaExploratoria filas={tablaExploratoria} onVerTablaCompleta={() => onNavigate({ screen: "indice" })} />
     </div>
   );
 }

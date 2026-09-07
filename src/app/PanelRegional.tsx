@@ -22,6 +22,10 @@ import { EstadoProcesamientoPanel } from "./components/ui/EstadoProcesamientoPan
 // Vista agregada de los COUNTRIES.length países activos — punto de entrada de
 // "Panorama Regulatorio" antes de anclar a un país específico (CountryDashboard).
 function PanelRegional({ onNavigate }: { onNavigate: (v: View) => void }) {
+  // Reutilizada por el <select> de país y por el botón "Ver panorama del
+  // país →" de cada tarjeta — un solo lugar para la navegación a Panel País.
+  const irAPanoramaDePais = (pais: Country) => onNavigate({ screen: "country-dashboard", country: pais });
+
   // ── KPIs fila 1 — calculados a partir de datos reales existentes ───────────
   const instrumentosAnalizados = JERARQUIA_NORMATIVA_DATA.reduce((sum, c) => sum + c.total, 0);
   const tramitesIdentificados = COUNTRIES.reduce((sum, pais) => sum + (COUNTRY_DATA[pais]?.tramites ?? 0), 0);
@@ -57,15 +61,19 @@ function PanelRegional({ onNavigate }: { onNavigate: (v: View) => void }) {
         }
       />
 
-      {/* Selector de país — sin lógica de filtrado real todavía */}
+      {/* Selector de país — lleva a Panel País, mismo destino que "Ver panorama
+          del país →" en las tarjetas de abajo. "Todos los países" no navega. */}
       <div className="flex flex-wrap gap-2 mb-5">
         <select
           className="grow"
           style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text, backgroundColor: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: "7px 10px", fontSize: 12, outline: "none", cursor: "pointer", minHeight: 36 }}
-          defaultValue="Todos"
-          // TODO: filtrar por país cuando haya selección != Todos
+          defaultValue="Todos los países"
+          onChange={(e) => {
+            const v = e.target.value;
+            if (v !== "Todos los países") irAPanoramaDePais(v as Country);
+          }}
         >
-          <option value="Todos">Todos los países</option>
+          <option value="Todos los países">Todos los países</option>
           {COUNTRIES.map(pais => <option key={pais} value={pais}>{pais}</option>)}
         </select>
       </div>
@@ -139,7 +147,7 @@ function PanelRegional({ onNavigate }: { onNavigate: (v: View) => void }) {
               <button
                 className="w-full"
                 style={{ backgroundColor: C.steel4, color: "white", fontFamily: "Space Grotesk, sans-serif", fontSize: 11, fontWeight: 600, borderRadius: 8, padding: 8, border: "none", cursor: "pointer" }}
-                onClick={() => onNavigate({ screen: "country-dashboard", country: pais })}
+                onClick={() => irAPanoramaDePais(pais)}
               >
                 Ver panorama del país →
               </button>
