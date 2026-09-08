@@ -3405,7 +3405,7 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
           <KpiCard label="Hallazgos de barreras" value={cd.total.toLocaleString("es-BO")} />
           <KpiCard label="Hallazgos críticos" value={String(cd.criticas)} valueColor={C.critico} />
-          <KpiCard label="Severidad promedio" value={severidadPromedio} sub={`IRR ${cd.irrPromedio}/4`} />
+          <KpiCard label="Severidad promedio" value={severidadPromedio} sub={`IDR ${cd.irrPromedio}/4`} />
           <KpiCard label="Sectores afectados" value={String(cd.sectores)} />
           {/* TODO: primer cruce Barreras↔Validación HITL, no existe ese cálculo real todavía */}
           <KpiCard label="% Validado HITL" value={String(validadoHitlRegional)} valueSuffix="%" />
@@ -3449,14 +3449,14 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
         <div className="rounded-lg" style={{ backgroundColor: C.card }}>
           <div className="p-5 border-b" style={{ borderColor: C.border }}>
             <h3 className="text-[13px] uppercase tracking-widest font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>
-              Top 3 barreras según IRR por país
+              Top 3 barreras según IDR por país
             </h3>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[900px]">
               <thead>
                 <tr style={{ borderBottom: `1px solid ${C.border}` }}>
-                  {["País", "IRR", "Clasificación", "Subdimensión", "Sector", "Instrumento", "Estado HITL"].map(h => (
+                  {["País", "IDR", "Clasificación", "Subdimensión", "Sector", "Instrumento", "Estado HITL"].map(h => (
                     <th key={h} className="px-4 py-3 text-left text-[11px] uppercase tracking-widest whitespace-nowrap"
                       style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>{h}</th>
                   ))}
@@ -3557,7 +3557,7 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
               <KpiCard label="Total barreras" value={cd.total.toLocaleString("es-BO")} sub={countryLabel} />
               <KpiCard label="Barreras críticas" value={String(cd.criticas)} sub="nivel 4 · atención prioritaria" valueColor={C.critico} />
-              <KpiCard label="IRR promedio" value={severidadLabel(Number(cd.irrPromedio))} sub={`IRR ${cd.irrPromedio}/4 · Escala 1 a 4`} />
+              <KpiCard label="IDR promedio" value={severidadLabel(Number(cd.irrPromedio))} sub={`IDR ${cd.irrPromedio}/4 · Escala 1 a 4`} />
               <KpiCard label="Sectores afectados" value={String(cd.sectores)} sub="con barreras registradas" />
               {/* TODO: primer cruce Barreras↔Validación HITL, no existe ese cálculo real todavía */}
               <KpiCard label="% Validado HITL" value={String(VALIDADO_HITL_MUESTRA[country])} valueSuffix="%" />
@@ -3572,7 +3572,7 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
         return (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4" style={{ alignItems: "stretch" }}>
             <PanelTipoSubdimension
-              label="IRR por clasificación"
+              label="IDR por clasificación"
               tipos={["Entrada", "Operación"]}
               datos={cd.clasificacion}
               className="h-full"
@@ -3649,7 +3649,7 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
           <div className="rounded-lg" style={{ backgroundColor: C.card }}>
             <div className="p-5 border-b flex items-center justify-between" style={{ borderColor: C.border }}>
               <h3 className="text-[13px] uppercase tracking-widest font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>
-                Top 3 barreras según IRR{" "}
+                Top 3 barreras según IDR{" "}
                 <span style={{ color: C.critico }}>({esBolivia ? (filtered.length < BARRERAS_NIVEL4_LIST.length ? filtered.length : 91) : tablaFilas.length})</span>
               </h3>
               <span style={{ fontSize: 12, color: C.textMuted, fontFamily: "IBM Plex Sans, sans-serif" }}>
@@ -3660,7 +3660,7 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
               <table className="w-full min-w-[1100px]">
                 <thead>
                   <tr style={{ borderBottom: `1px solid ${C.border}` }}>
-                    {["Barrera", "IRR", "Severidad", "Clasificación", "Subdimensión", "Jerarquía", "Sector", "Instrumento", "Canal", "Estado HITL"].map(h => (
+                    {["Barrera", "IDR", "Severidad", "Clasificación", "Subdimensión", "Jerarquía", "Sector", "Instrumento", "Canal", "Estado HITL"].map(h => (
                       <th key={h} className="px-4 py-3 text-left text-[11px] uppercase tracking-widest whitespace-nowrap"
                         style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>{h}</th>
                     ))}
@@ -4792,14 +4792,14 @@ function DistorsionDetail({ id, onNavigate }: { id: string; onNavigate: (v: View
               ["Tipo de carga",           d.tipoCarga],
               ["Subdimensión",            d.subdimension],
               ["Etapa del ciclo de vida", d.etapaCicloVida],
-              ["IRR",                     `${d.irr} · ${IRR_LABELS[d.irr]}`],
+              ["IDR",                     `${d.irr} · ${IRR_LABELS[d.irr]}`],
               ["Trámite",                 tramite?.nombre ?? d.tramiteNombre],
             ] as [string, string][]).map(([k, v]) => (
               <div key={k} className="flex justify-between py-2 border-b last:border-0" style={{ borderColor: C.border }}>
                 <span className="text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{k}</span>
                 <span className="text-[12px] font-medium text-right" style={{
                   fontFamily: "Space Grotesk, sans-serif",
-                  color: k === "IRR" && d.irr === 4 ? C.critico : C.text,
+                  color: k === "IDR" && d.irr === 4 ? C.critico : C.text,
                   maxWidth: "60%",
                 }}>{v}</span>
               </div>
@@ -6424,7 +6424,7 @@ function ReporteEstrategicoScreen({ pais: rawPais, onNavigate }: {
 
   // ── Mensajes principales ────────────────────────────────────────────────────
   const mensajes = [
-    `Se identificaron ${cd.total.toLocaleString()} barreras regulatorias con potencial de ajuste en ${paisLabel}. De estas, ${cd.criticas} presentan impacto crítico (IRR 4) con efecto directo sobre la competitividad del sector privado.`,
+    `Se identificaron ${cd.total.toLocaleString()} barreras regulatorias con potencial de ajuste en ${paisLabel}. De estas, ${cd.criticas} presentan impacto crítico (IDR 4) con efecto directo sobre la competitividad del sector privado.`,
     `Las barreras de entrada concentran ${distorsionesData[0]?.total ?? 0} hallazgos, con la subdimensión de Comercio como la más restrictiva. El 40% de los instrumentos identificados requieren acción normativa en el corto plazo.`,
     `La carga regulatoria acumulada genera costos de cumplimiento estimados en USD ${(cargaCd.total * 4.2 / 397).toFixed(1)}M anuales para el sector empresarial. Los trámites de mayor fricción concentran el 68% del costo total identificado.`,
     `Digitalización e interoperabilidad son las principales palancas de reforma. ${cargaBarrasData[1]?.total ?? 0} hallazgos de accesibilidad señalan oportunidades concretas de simplificación sin modificación legislativa.`,

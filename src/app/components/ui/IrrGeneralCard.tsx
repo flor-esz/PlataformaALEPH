@@ -17,7 +17,7 @@ export function IrrGeneralCard({ valor, onVerDetalle }: IrrGeneralCardProps) {
         className="uppercase tracking-widest"
         style={{ fontFamily: "Space Grotesk, sans-serif", fontSize: 11, color: "#CFE0F0" }}
       >
-        IRR general
+        IDR general
       </p>
       <p
         className="font-semibold leading-none"
@@ -40,7 +40,7 @@ export function IrrGeneralCard({ valor, onVerDetalle }: IrrGeneralCardProps) {
           cursor: "pointer",
         }}
       >
-        Ver detalle del IRR →
+        Ver detalle del IDR →
       </button>
     </div>
   );
