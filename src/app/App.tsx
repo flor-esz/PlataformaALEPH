@@ -649,8 +649,972 @@ const TRAMITES_TEXTIL = [
   },
 ];
 
-const ALL_TRAMITES = [...TRAMITES_CAFE, ...TRAMITES_TEXTIL];
-const ALL_BARRERAS = [...BARRERAS_CAFE, ...BARRERAS_TEXTIL];
+// Plantilla estándar de 8 pasos — idéntica a la que ya usan TRAMITES_CAFE/
+// TRAMITES_TEXTIL (mismo nombre/descripción en los 7 pasos sin fricción);
+// solo el paso 3 (con fricción) se personaliza por trámite.
+function pasosEstandarMuestra(friccionDetalle: string, simplificacion: string) {
+  return [
+    { id: 1, nombre: "Identificación y comprensión de requisitos", descripcion: "Esfuerzo cognitivo para leer, interpretar y asimilar el marco legal, instructivos y fichas del trámite", friccion: false, tiempo: "30 min", costo: "USD 0" },
+    { id: 2, nombre: "Generación de nueva información", descripcion: "Producción de documentos sustantivos desde cero (memorias, planes, diagramas) exigidos por la norma", friccion: false, tiempo: "1 h", costo: "USD 10" },
+    { id: 3, nombre: "Recolección de información pre-existente", descripcion: "Búsqueda, impresión, fotocopiado y cotejo de documentos ya existentes en el archivo del solicitante.", friccion: true, friccionDetalle, simplificacion, tiempo: "3 h", costo: "USD 60" },
+    { id: 4, nombre: "Reuniones con personal interno", descripcion: "Coordinación dentro de la organización para firmas de representación legal o validación del expediente", friccion: false, tiempo: "2 h", costo: "USD 80" },
+    { id: 5, nombre: "Llenado de formatos y/o elaboración de solicitudes y reportes", descripcion: "Captura de datos en formularios gubernamentales físicos o plataformas electrónicas oficiales.", friccion: false, tiempo: "1 h", costo: "USD 120" },
+    { id: 6, nombre: "Contratación y reuniones con servicios externos", descripcion: "Interacción logística para coordinar notarios, peritos o auditores exigidos por ley.", friccion: false, tiempo: "1.5 h", costo: "USD 70" },
+    { id: 7, nombre: "Creación y administración de archivos de respaldo", descripcion: "Resguardo y ordenamiento de expedientes físicos/digitales para futuras inspecciones de la autoridad.", friccion: false, tiempo: "1 h", costo: "USD 50" },
+    { id: 8, nombre: "Pagos, espera en oficinas públicas y translados", descripcion: "Fricción física por el canal de atención presencial: transporte, filas y transacciones físicas.", friccion: false, tiempo: "1 h", costo: "USD 30" },
+  ];
+}
+
+// Registros completos de muestra para las filas de TRAMITES_PRIORITARIOS_MUESTRA
+// que no tienen trámite real correspondiente en TRAMITES_CAFE/TRAMITES_TEXTIL
+// (Bolivia "Certificado de Exportación y de Origen" y "Declaración Jurada
+// Mensual de ISV" SÍ lo tienen — no se duplican acá). Misma forma que un
+// trámite real: id, nombre, entidad, tipo, etapa, sector, prioritario, costo,
+// pasos, diagnostico, barrerasAfectadas. Se concatenan a ALL_TRAMITES más
+// abajo para que TramiteDetail() los encuentre igual que a los reales, sin
+// ninguna rama especial de código.
+// dato de muestra — TODO: falta catálogo real de trámites individuales para
+// Argentina, Chile, Ecuador y Perú (y estos 2 adicionales de Bolivia).
+const TRAMITES_MUESTRA = [
+  // dato de muestra
+  {
+    id: "certificado-de-origen-mercosur-ar",
+    nombre: "Certificado de Origen Mercosur",
+    entidad: "Dirección General de Aduanas",
+    etapa: "Operación",
+    tipo: "Empresarial",
+    sector: "Agroindustria y Commodities",
+    prioritario: true,
+    costo: { monetario: "USD 380/operación", tiempo: "10 h", frecuencia: "Alta (30 ops/año)", cargaTotal: "USD 11,400/año", plazoDias: 4 },
+    barrerasAfectadas: [],
+    diagnostico: "El certificado de origen sigue exigiendo trámite físico paralelo al sistema aduanero digital, duplicando el esfuerzo del exportador y generando demoras que afectan el cumplimiento de plazos de embarque con compradores del Mercosur.",
+    pasos: pasosEstandarMuestra(
+      "Se exige presentar el certificado de origen en papel membretado con firma húmeda del despachante, aun cuando la operación completa se gestiona por el sistema informático María (Aduana digital).",
+      "Aceptar firma electrónica avanzada del despachante y eliminar el requisito de papel membretado para operaciones ya validadas en el sistema aduanero digital."
+    ),
+  },
+  // dato de muestra
+  {
+    id: "habilitacion-municipal-comercial-ar",
+    nombre: "Habilitación Municipal Comercial",
+    entidad: "Municipalidad de Buenos Aires",
+    etapa: "Apertura",
+    tipo: "Empresarial",
+    sector: "Comercio y Servicios",
+    prioritario: false,
+    costo: { monetario: "USD 210/trámite", tiempo: "8 h", frecuencia: "Baja (1 vez, renovación cada 5 años)", cargaTotal: "USD 210/trámite", plazoDias: 20 },
+    barrerasAfectadas: [],
+    diagnostico: "La habilitación comercial depende de una inspección presencial con disponibilidad muy limitada, lo que retrasa la apertura de nuevos locales varias semanas más allá del tiempo administrativo del trámite en sí.",
+    pasos: pasosEstandarMuestra(
+      "La inspección previa de habilitación debe agendarse presencialmente y solo se realiza los días martes, generando esperas de hasta 6 semanas antes de poder operar.",
+      "Habilitar agenda de inspección en línea con múltiples días disponibles y permitir operación provisional bajo declaración jurada mientras se programa la visita."
+    ),
+  },
+  // dato de muestra
+  {
+    id: "registro-de-marca-y-producto-ar",
+    nombre: "Registro de Marca y Producto",
+    entidad: "INPI",
+    etapa: "Apertura",
+    tipo: "Empresarial",
+    sector: "Manufactura y Consumo",
+    prioritario: false,
+    costo: { monetario: "USD 320/registro", tiempo: "6 h", frecuencia: "Baja (cada 10 años)", cargaTotal: "USD 320/registro", plazoDias: 240 },
+    barrerasAfectadas: [],
+    diagnostico: "El plazo de examen de fondo se extiende más de 8 meses sin distinguir entre solicitudes nuevas y renovaciones de marcas sin oposición, dejando a las empresas sin certeza jurídica sobre su marca durante ese período.",
+    pasos: pasosEstandarMuestra(
+      "El examen de fondo de la solicitud de marca se realiza en estricto orden de ingreso sin priorización posible, incluso para renovaciones de marcas ya registradas previamente.",
+      "Crear una vía expedita de examen para renovaciones y marcas sin oposición de terceros, reduciendo el plazo de resolución de 240 a 60 días."
+    ),
+  },
+  // dato de muestra
+  {
+    id: "declaracion-jurada-de-iva-ar",
+    nombre: "Declaración Jurada de IVA",
+    entidad: "AFIP",
+    etapa: "Operación",
+    tipo: "Empresarial",
+    sector: "Multisectorial",
+    prioritario: false,
+    costo: { monetario: "USD 150/mes", tiempo: "5 h", frecuencia: "Mensual (12/año)", cargaTotal: "USD 1,800/año", plazoDias: 1 },
+    barrerasAfectadas: [],
+    diagnostico: "La declaración mensual duplica información que AFIP ya posee a través de la facturación electrónica, generando horas de trabajo administrativo evitables en un trámite de alta frecuencia.",
+    pasos: pasosEstandarMuestra(
+      "El aplicativo exige reingresar manualmente el detalle de comprobantes de proveedores que ya están cargados en el sistema de facturación electrónica de AFIP.",
+      "Prellenar automáticamente el detalle de comprobantes desde el sistema de facturación electrónica, dejando solo la validación final a cargo del contribuyente."
+    ),
+  },
+  // dato de muestra
+  {
+    id: "habilitacion-municipal-de-negocio-bo",
+    nombre: "Habilitación Municipal de Negocio",
+    entidad: "Alcaldía Municipal de La Paz",
+    etapa: "Apertura",
+    tipo: "Empresarial",
+    sector: "Comercio y Servicios",
+    prioritario: false,
+    costo: { monetario: "USD 180/trámite", tiempo: "9 h", frecuencia: "Baja (1 vez, renovación anual)", cargaTotal: "USD 180/trámite", plazoDias: 25 },
+    barrerasAfectadas: [],
+    diagnostico: "La falta de un catastro digital de uso de suelo obliga a una verificación manual caso por caso, generando demoras de varias semanas antes de poder habilitar un nuevo local comercial.",
+    pasos: pasosEstandarMuestra(
+      "La verificación de compatibilidad de uso de suelo se realiza de forma manual cruzando planos físicos, sin un sistema de consulta digital por dirección.",
+      "Digitalizar el catastro de uso de suelo para que la compatibilidad se verifique automáticamente al ingresar la dirección del local."
+    ),
+  },
+  // dato de muestra — distinto del real "Obtención de Registro Sanitario de
+  // Alimentos" (id "registro-sanitario"): el nombre no coincide exacto, así
+  // que no se reusa ese id (ver TODO de la tarea anterior sobre este
+  // near-miss).
+  {
+    id: "registro-sanitario-de-alimentos-arsa-bo",
+    nombre: "Registro Sanitario de Alimentos (ARSA)",
+    entidad: "ARSA — Agencia de Regulación Sanitaria",
+    etapa: "Apertura",
+    tipo: "Empresarial",
+    sector: "Agroindustria Cafetalera",
+    prioritario: false,
+    costo: { monetario: "USD 850/producto", tiempo: "16 h", frecuencia: "Baja (cada 5 años)", cargaTotal: "USD 850/producto", plazoDias: 45 },
+    barrerasAfectadas: [],
+    diagnostico: "El registro trata cada variación de presentación como un producto distinto, obligando a las empresas a repetir el trámite y pagar la tarifa completa por cada cambio de empaque del mismo producto.",
+    pasos: pasosEstandarMuestra(
+      "Cada variación de presentación o tamaño de empaque del mismo producto requiere un registro sanitario completamente nuevo, con la tarifa íntegra.",
+      "Permitir que las variaciones de empaque de un mismo producto ya registrado se notifiquen, sin exigir un nuevo registro completo."
+    ),
+  },
+  // dato de muestra
+  {
+    id: "autorizacion-de-ampliacion-de-planta-cl",
+    nombre: "Autorización de Ampliación de Planta",
+    entidad: "Superintendencia del Medio Ambiente",
+    etapa: "Expansión",
+    tipo: "Empresarial",
+    sector: "Industria y Manufactura",
+    prioritario: true,
+    costo: { monetario: "USD 640/trámite", tiempo: "22 h", frecuencia: "Baja (1 vez por proyecto)", cargaTotal: "USD 640/trámite", plazoDias: 90 },
+    barrerasAfectadas: [],
+    diagnostico: "La evaluación ambiental no distingue el tamaño ni el riesgo real de la ampliación, sometiendo a proyectos menores al mismo proceso extenso que exigen las inversiones de gran escala.",
+    pasos: pasosEstandarMuestra(
+      "Toda ampliación de planta debe pasar por evaluación de impacto ambiental completa, sin distinción entre ampliaciones menores de bajo riesgo y proyectos de gran escala.",
+      "Crear una vía de evaluación ambiental expedita para ampliaciones menores que no incrementen significativamente las emisiones o el consumo de recursos."
+    ),
+  },
+  // dato de muestra — nombre incluye la entidad para no colisionar con el
+  // mismo trámite de Perú (mismo nombre base "Certificado de Origen para
+  // Exportación", distinta entidad).
+  {
+    id: "certificado-de-origen-para-exportacion-aduanas-chile-cl",
+    nombre: "Certificado de Origen para Exportación (Aduanas Chile)",
+    entidad: "Dirección Nacional de Aduanas",
+    etapa: "Operación",
+    tipo: "Empresarial",
+    sector: "Minería y Exportaciones",
+    prioritario: false,
+    costo: { monetario: "USD 300/operación", tiempo: "9 h", frecuencia: "Alta (28 ops/año)", cargaTotal: "USD 8,400/año", plazoDias: 3 },
+    barrerasAfectadas: [],
+    diagnostico: "La exigencia de firma física retrasa la emisión del certificado varios días en cada operación de exportación, un costo recurrente relevante dado el volumen alto de embarques anuales.",
+    pasos: pasosEstandarMuestra(
+      "El certificado exige la firma física del representante legal en la oficina de la Cámara de Comercio, sin opción de firma electrónica reconocida.",
+      "Habilitar la firma electrónica avanzada para la emisión del certificado de origen, eliminando la necesidad de presencia física."
+    ),
+  },
+  // dato de muestra
+  {
+    id: "patente-municipal-de-actividad-cl",
+    nombre: "Patente Municipal de Actividad",
+    entidad: "Municipalidad de Santiago",
+    etapa: "Apertura",
+    tipo: "Empresarial",
+    sector: "Comercio y Servicios",
+    prioritario: false,
+    costo: { monetario: "USD 190/trámite", tiempo: "7 h", frecuencia: "Baja (renovación anual)", cargaTotal: "USD 190/trámite", plazoDias: 15 },
+    barrerasAfectadas: [],
+    diagnostico: "La ausencia de un canal digital de pago obliga a los contribuyentes a trasladarse presencialmente cada año solo para renovar una patente cuyo monto ya está determinado por el municipio.",
+    pasos: pasosEstandarMuestra(
+      "El pago y la renovación de la patente solo pueden hacerse de forma presencial en la tesorería municipal, sin opción de pago o renovación en línea.",
+      "Habilitar el pago y la renovación de la patente municipal a través de la plataforma de pagos en línea del municipio."
+    ),
+  },
+  // dato de muestra — nombre incluye la sigla del ente recaudador para no
+  // colisionar con el mismo trámite de Ecuador (mismo nombre base
+  // "Declaración Mensual de IVA", distinta entidad).
+  {
+    id: "declaracion-mensual-de-iva-sii-cl",
+    nombre: "Declaración Mensual de IVA (SII)",
+    entidad: "Servicio de Impuestos Internos (SII)",
+    etapa: "Operación",
+    tipo: "Empresarial",
+    sector: "Multisectorial",
+    prioritario: false,
+    costo: { monetario: "USD 140/mes", tiempo: "4 h", frecuencia: "Mensual (12/año)", cargaTotal: "USD 1,680/año", plazoDias: 1 },
+    barrerasAfectadas: [],
+    diagnostico: "La declaración mensual duplica información que el SII ya recibe por la facturación electrónica, generando una carga administrativa recurrente evitable con un prellenado automático.",
+    pasos: pasosEstandarMuestra(
+      "El formulario exige reingresar el detalle de facturas de proveedores que el SII ya recibe a través de la facturación electrónica.",
+      "Prellenar automáticamente el formulario con el detalle de facturación electrónica ya disponible en los sistemas del SII."
+    ),
+  },
+  // dato de muestra
+  {
+    id: "certificado-fitosanitario-de-exportacion-ec",
+    nombre: "Certificado Fitosanitario de Exportación",
+    entidad: "Agrocalidad",
+    etapa: "Operación",
+    tipo: "Empresarial",
+    sector: "Agroindustria Bananera",
+    prioritario: true,
+    costo: { monetario: "USD 260/operación", tiempo: "12 h", frecuencia: "Alta (40 ops/año)", cargaTotal: "USD 10,400/año", plazoDias: 2 },
+    barrerasAfectadas: [],
+    diagnostico: "La falta de agenda en línea para la inspección fitosanitaria obliga a los exportadores a coordinar visitas presenciales que frecuentemente retrasan el embarque en los puertos de salida.",
+    pasos: pasosEstandarMuestra(
+      "La inspección fitosanitaria previa al embarque solo puede solicitarse de forma presencial en la oficina regional de Agrocalidad, sin agenda en línea.",
+      "Habilitar la solicitud y agenda de inspección fitosanitaria en línea, con confirmación automática de horario disponible."
+    ),
+  },
+  // dato de muestra
+  {
+    id: "permiso-de-funcionamiento-municipal-ec",
+    nombre: "Permiso de Funcionamiento Municipal",
+    entidad: "Municipio de Quito",
+    etapa: "Apertura",
+    tipo: "Empresarial",
+    sector: "Comercio y Servicios",
+    prioritario: false,
+    costo: { monetario: "USD 170/trámite", tiempo: "8 h", frecuencia: "Baja (renovación anual)", cargaTotal: "USD 170/trámite", plazoDias: 20 },
+    barrerasAfectadas: [],
+    diagnostico: "Las inspecciones de bomberos y municipales se tramitan de forma independiente pese a evaluar el mismo local, duplicando visitas y extendiendo el plazo total de habilitación.",
+    pasos: pasosEstandarMuestra(
+      "El permiso exige inspección del Cuerpo de Bomberos y del municipio por separado, cada una con su propia solicitud y plazos independientes.",
+      "Unificar la inspección de bomberos y municipal en una sola visita coordinada, con una única solicitud de permiso."
+    ),
+  },
+  // dato de muestra — nombre incluye la sigla del ente sanitario para no
+  // colisionar con el mismo trámite de Bolivia (mismo nombre base
+  // "Registro Sanitario de Alimentos", distinta entidad).
+  {
+    id: "registro-sanitario-de-alimentos-arcsa-ec",
+    nombre: "Registro Sanitario de Alimentos (ARCSA)",
+    entidad: "ARCSA",
+    etapa: "Apertura",
+    tipo: "Empresarial",
+    sector: "Manufactura",
+    prioritario: false,
+    costo: { monetario: "USD 600/producto", tiempo: "15 h", frecuencia: "Baja (cada 5 años)", cargaTotal: "USD 600/producto", plazoDias: 40 },
+    barrerasAfectadas: [],
+    diagnostico: "El registro no distingue entre un producto nuevo y una variación menor de empaque de un producto ya aprobado, multiplicando el costo y el tiempo para las empresas que amplían su línea de presentaciones.",
+    pasos: pasosEstandarMuestra(
+      "Cada variación de empaque o presentación del mismo producto requiere un registro sanitario nuevo con la tarifa completa.",
+      "Permitir la notificación de variaciones de empaque de un producto ya registrado, sin exigir un nuevo registro completo."
+    ),
+  },
+  // dato de muestra — nombre incluye la sigla del ente recaudador para no
+  // colisionar con el mismo trámite de Chile.
+  {
+    id: "declaracion-mensual-de-iva-sri-ec",
+    nombre: "Declaración Mensual de IVA (SRI)",
+    entidad: "Servicio de Rentas Internas (SRI)",
+    etapa: "Operación",
+    tipo: "Empresarial",
+    sector: "Multisectorial",
+    prioritario: false,
+    costo: { monetario: "USD 130/mes", tiempo: "4 h", frecuencia: "Mensual (12/año)", cargaTotal: "USD 1,560/año", plazoDias: 1 },
+    barrerasAfectadas: [],
+    diagnostico: "La declaración mensual duplica información que el SRI ya posee mediante la facturación electrónica, generando una carga recurrente evitable en un trámite de alta frecuencia.",
+    pasos: pasosEstandarMuestra(
+      "El formulario exige reingresar manualmente el detalle de comprobantes que el SRI ya recibe por facturación electrónica.",
+      "Prellenar automáticamente la declaración con el detalle de comprobantes ya recibidos por facturación electrónica."
+    ),
+  },
+  // dato de muestra
+  {
+    id: "permiso-de-operacion-mef-pe",
+    nombre: "Permiso de Operación MEF",
+    entidad: "Ministerio de Economía y Finanzas",
+    etapa: "Operación",
+    tipo: "Empresarial",
+    sector: "Servicios Financieros y de Seguros",
+    prioritario: true,
+    costo: { monetario: "USD 410/trámite", tiempo: "14 h", frecuencia: "Baja (1 vez, renovación cada 3 años)", cargaTotal: "USD 410/trámite", plazoDias: 60 },
+    barrerasAfectadas: [],
+    diagnostico: "La exigencia de autorización previa sin distinguir el historial de cumplimiento de la entidad solicitante retrasa el inicio de operaciones incluso en renovaciones de bajo riesgo.",
+    pasos: pasosEstandarMuestra(
+      "El permiso exige autorización previa del MEF antes de iniciar operaciones, incluso para entidades con historial de cumplimiento consecutivo en renovaciones anteriores.",
+      "Sustituir la autorización previa por una declaración jurada con verificación posterior para entidades con historial de cumplimiento comprobado."
+    ),
+  },
+  // dato de muestra — nombre incluye la sigla de la entidad para no
+  // colisionar con el mismo trámite de Chile.
+  {
+    id: "certificado-de-origen-para-exportacion-sunat-pe",
+    nombre: "Certificado de Origen para Exportación (SUNAT)",
+    entidad: "SUNAT",
+    etapa: "Operación",
+    tipo: "Empresarial",
+    sector: "Minería",
+    prioritario: false,
+    costo: { monetario: "USD 290/operación", tiempo: "8 h", frecuencia: "Alta (32 ops/año)", cargaTotal: "USD 9,280/año", plazoDias: 3 },
+    barrerasAfectadas: [],
+    diagnostico: "La falta de integración entre la cámara de comercio y el sistema aduanero obliga a un trámite presencial adicional por cada operación de exportación, pese a que la información ya está validada digitalmente en SUNAT.",
+    pasos: pasosEstandarMuestra(
+      "El certificado debe tramitarse en ventanilla física de la cámara de comercio correspondiente, sin integración directa con el sistema aduanero SUNAT.",
+      "Integrar la emisión del certificado de origen al sistema aduanero de SUNAT, eliminando el trámite presencial en ventanilla."
+    ),
+  },
+  // dato de muestra
+  {
+    id: "licencia-municipal-de-funcionamiento-pe",
+    nombre: "Licencia Municipal de Funcionamiento",
+    entidad: "Municipalidad de Lima",
+    etapa: "Apertura",
+    tipo: "Empresarial",
+    sector: "Comercio y Servicios",
+    prioritario: false,
+    costo: { monetario: "USD 160/trámite", tiempo: "7 h", frecuencia: "Baja (renovación anual)", cargaTotal: "USD 160/trámite", plazoDias: 15 },
+    barrerasAfectadas: [],
+    diagnostico: "Las inspecciones de Defensa Civil y municipales se gestionan de forma independiente sobre el mismo local, duplicando visitas y extendiendo el plazo total de habilitación del negocio.",
+    pasos: pasosEstandarMuestra(
+      "La licencia exige inspección de Defensa Civil y municipal por separado, cada una con su propia solicitud y cronograma.",
+      "Unificar la inspección de Defensa Civil y la municipal en una sola visita coordinada, bajo una única solicitud de licencia."
+    ),
+  },
+  // dato de muestra
+  {
+    id: "declaracion-mensual-de-igv-pe",
+    nombre: "Declaración Mensual de IGV",
+    entidad: "SUNAT",
+    etapa: "Operación",
+    tipo: "Empresarial",
+    sector: "Multisectorial",
+    prioritario: false,
+    costo: { monetario: "USD 120/mes", tiempo: "4 h", frecuencia: "Mensual (12/año)", cargaTotal: "USD 1,440/año", plazoDias: 1 },
+    barrerasAfectadas: [],
+    diagnostico: "La declaración mensual duplica información que SUNAT ya posee mediante la facturación electrónica, generando una carga administrativa recurrente evitable con un prellenado automático.",
+    pasos: pasosEstandarMuestra(
+      "El formulario exige reingresar el detalle de comprobantes que SUNAT ya recibe por facturación electrónica.",
+      "Prellenar automáticamente la declaración con el detalle de comprobantes ya recibidos por facturación electrónica."
+    ),
+  },
+];
+
+const ALL_TRAMITES = [...TRAMITES_CAFE, ...TRAMITES_TEXTIL, ...TRAMITES_MUESTRA];
+
+// Registros completos de muestra para las filas de TOP_BARRERAS_POR_PAIS_MUESTRA
+// que no tienen barrera real correspondiente en BARRERAS_CAFE/BARRERAS_TEXTIL
+// (Bolivia "Bloqueo por Renovación de Registros" SÍ la tiene — no se duplica
+// acá). Misma forma que una barrera real: id, titulo, severidad, sector,
+// instrumento, tramitesAfectados, clasificacion, jerarquia, idHallazgo, pais,
+// anio, entidad, enlaceOficial, tipoRestriccion, canalTransmision,
+// afectacionMipyme, validacion, accionSugerida, descripcion, diagnostico,
+// textNormativo, pasajeResaltado, reforma. Se concatenan a ALL_BARRERAS más
+// abajo para que BarreraDetail() las encuentre igual que a las reales, sin
+// ninguna rama especial de código.
+// dato de muestra — TODO: falta catálogo real de barreras individuales para
+// Argentina, Chile, Ecuador y Perú (y estas 2 adicionales de Bolivia).
+const BARRERAS_MUESTRA = [
+  // dato de muestra
+  {
+    id: "registro-obligatorio-de-autopartes-ar",
+    titulo: "Registro Obligatorio de Autopartes",
+    severidad: "Crítico",
+    sector: "Manufactura Automotriz",
+    instrumento: "Res. 445/2023",
+    tramitesAfectados: [],
+    clasificacion: "Entrada",
+    jerarquia: "Reglamentario",
+    idHallazgo: "ARG-BAR-0801",
+    pais: "Argentina" as Country,
+    anio: 2023,
+    entidad: "Ministerio de Desarrollo Productivo",
+    enlaceOficial: "boletinoficial.gob.ar/normas/resolucion-445-2023",
+    tipoRestriccion: "Registro previo obligatorio por lote de producción",
+    canalTransmision: "Costo administrativo",
+    afectacionMipyme: "Alta" as const,
+    validacion: {
+      severidadIA: "Crítico" as const,
+      severidadValidada: "Crítico" as const,
+      estadoHitl: "Publicado" as const,
+      comentarioBID: "Confirmado como barrera crítica: el registro por lote no agrega control real sobre la calidad ya certificada.",
+      comentarioConsultor: "Recomendamos migrar a un registro único por línea de producto homologada.",
+      comentarioGobierno: "El Ministerio de Desarrollo Productivo aprobó la simplificación a registro por línea.",
+    },
+    accionSugerida: {
+      accion: "Sustituir el registro por lote por un registro único por línea de producto homologada",
+      prioridad: "Alta" as const,
+      tipoCambioRequerido: "Reglamentario · sin pasar por el legislativo",
+      factibilidad: "Alta" as const,
+      objetivoLegitimo: "Sí, objetivo válido · carga desproporcionada",
+    },
+    descripcion: "Cada lote de producción de autopartes debe registrarse individualmente antes de su comercialización, aun contando con certificación de origen ya homologada para la línea de producto.",
+    diagnostico: "La exigencia de registro previo por cada lote de producción, en lugar de por línea de producto, multiplica los trámites que enfrentan los fabricantes de autopartes sin aportar control adicional sobre la calidad ya certificada por el laboratorio homologado.",
+    textNormativo: "Artículo 6. — Del registro de autopartes de origen nacional.\n\nToda persona física o jurídica que fabrique o ensamble autopartes destinadas al mercado automotor deberá inscribir cada lote de producción ante el Registro Nacional de Autopartes con carácter previo a su comercialización, acompañando certificado de origen nacional emitido por laboratorio homologado. La comercialización de lotes no registrados será pasible de las sanciones previstas en la normativa vigente, con independencia de que el producto cumpla con las especificaciones técnicas exigidas.",
+    pasajeResaltado: "deberá inscribir cada lote de producción ante el Registro Nacional de Autopartes con carácter previo a su comercialización",
+    reforma: {
+      dice: "Toda persona física o jurídica... deberá inscribir cada lote de producción ante el Registro Nacional de Autopartes con carácter previo a su comercialización.",
+      debeDedir: "El registro se realizará por línea de producto homologada; las variaciones de lote de una misma línea ya registrada se notificarán electrónicamente sin requerir una nueva inscripción previa.",
+      palanca: "Simplificación",
+    },
+  },
+  // dato de muestra
+  {
+    id: "demora-en-renovacion-de-permisos-agroindustriales-ar",
+    titulo: "Demora en Renovación de Permisos Agroindustriales",
+    severidad: "Crítico",
+    sector: "Agroindustria y Commodities",
+    instrumento: "Decreto 1187/2022",
+    tramitesAfectados: [],
+    clasificacion: "Operación",
+    jerarquia: "Reglamentario",
+    idHallazgo: "ARG-BAR-0802",
+    pais: "Argentina" as Country,
+    anio: 2022,
+    entidad: "Ministerio de Agricultura, Ganadería y Pesca",
+    enlaceOficial: "boletinoficial.gob.ar/normas/decreto-1187-2022",
+    tipoRestriccion: "Renovación sin plazo máximo de resolución",
+    canalTransmision: "Tiempo/incertidumbre",
+    afectacionMipyme: "Media" as const,
+    validacion: {
+      severidadIA: "Crítico" as const,
+      severidadValidada: "Alto" as const,
+      estadoHitl: "Por decidir" as const,
+      comentarioBID: "Impacto relevante en continuidad operativa; validar frecuencia real de demoras.",
+      comentarioConsultor: "Sugerimos silencio administrativo positivo pasado el plazo de 30 días.",
+      comentarioGobierno: "En revisión por la Secretaría de Agricultura, Ganadería y Pesca.",
+    },
+    accionSugerida: {
+      accion: "Establecer un plazo máximo de 30 días con silencio administrativo positivo para la renovación",
+      prioridad: "Alta" as const,
+      tipoCambioRequerido: "Reglamentario · sin pasar por el legislativo",
+      factibilidad: "Media" as const,
+      objetivoLegitimo: "Sí, objetivo válido · carga desproporcionada",
+    },
+    descripcion: "La renovación de permisos de acopio y procesamiento agroindustrial no tiene plazo máximo de resolución y prohíbe operar bajo silencio administrativo.",
+    diagnostico: "La ausencia de un plazo máximo de resolución, combinada con la prohibición de operar bajo silencio administrativo, expone a los establecimientos agroindustriales a paralizaciones de acopio por demoras administrativas ajenas a su control.",
+    textNormativo: "Artículo 14. — De la renovación de permisos de acopio y procesamiento.\n\nLa renovación del permiso de acopio y procesamiento agroindustrial deberá solicitarse con una antelación mínima de sesenta días a su vencimiento. La autoridad de aplicación resolverá la solicitud dentro del plazo que las necesidades del servicio permitan, sin que la falta de resolución habilite al solicitante a continuar operando bajo el permiso vencido. Vencido el permiso sin resolución expresa, el establecimiento deberá suspender sus operaciones de acopio hasta contar con la renovación formal.",
+    pasajeResaltado: "sin que la falta de resolución habilite al solicitante a continuar operando bajo el permiso vencido",
+    reforma: {
+      dice: "...sin que la falta de resolución habilite al solicitante a continuar operando bajo el permiso vencido.",
+      debeDedir: "Si la autoridad no resuelve la renovación dentro de 30 días hábiles de presentada la solicitud completa, el establecimiento podrá continuar operando bajo el permiso vigente hasta la resolución expresa (silencio positivo).",
+      palanca: "Certidumbre procedimental",
+    },
+  },
+  // dato de muestra
+  {
+    id: "capital-minimo-para-nuevas-entidades-financieras-ar",
+    titulo: "Capital Mínimo para Nuevas Entidades Financieras",
+    severidad: "Crítico",
+    sector: "Servicios Financieros",
+    instrumento: "Ley 27.349, Art. 9",
+    tramitesAfectados: [],
+    clasificacion: "Entrada",
+    jerarquia: "Legal",
+    idHallazgo: "ARG-BAR-0803",
+    pais: "Argentina" as Country,
+    anio: 2017,
+    entidad: "Banco Central de la República Argentina",
+    enlaceOficial: "boletinoficial.gob.ar/normas/ley-27349-art-9",
+    tipoRestriccion: "Capital mínimo desproporcionado",
+    canalTransmision: "Capital/liquidez",
+    afectacionMipyme: "Alta" as const,
+    validacion: {
+      severidadIA: "Crítico" as const,
+      severidadValidada: "Alto" as const,
+      estadoHitl: "Etapa 3" as const,
+      comentarioBID: "Barrera relevante al acceso de fondos de garantía de menor escala.",
+      comentarioConsultor: "Proponemos un esquema de capital escalonado con capitalización progresiva supervisada.",
+      comentarioGobierno: "Pendiente de asignación a analista para revisión técnica.",
+    },
+    accionSugerida: {
+      accion: "Escalonar el capital mínimo según el volumen de garantías proyectado",
+      prioridad: "Media" as const,
+      tipoCambioRequerido: "Legal · requiere modificación de ley",
+      factibilidad: "Media" as const,
+      objetivoLegitimo: "Sí, objetivo válido · medio desproporcionado",
+    },
+    descripcion: "Las sociedades de garantía recíproca deben acreditar un capital mínimo fijo sin importar la escala de operaciones proyectada.",
+    diagnostico: "El capital mínimo fijo, sin escalonamiento por tamaño de cartera proyectada, excluye a fondos de garantía de menor escala orientados específicamente a microempresas, contradiciendo el objetivo declarado de la ley de ampliar el acceso al financiamiento de las PyME.",
+    textNormativo: "Artículo 9. — Del capital mínimo para sociedades de garantía recíproca.\n\nLas sociedades de garantía recíproca que soliciten autorización para operar deberán acreditar un capital social integrado no inferior al equivalente a cien mil unidades de valor adquisitivo, con independencia de la escala de operaciones proyectada o del segmento de pequeñas y medianas empresas al que orienten su actividad. La autoridad de aplicación no admitirá esquemas de capitalización progresiva ni excepciones por tamaño de cartera.",
+    pasajeResaltado: "deberán acreditar un capital social integrado no inferior al equivalente a cien mil unidades de valor adquisitivo, con independencia de la escala de operaciones proyectada",
+    reforma: {
+      dice: "...deberán acreditar un capital social integrado no inferior al equivalente a cien mil unidades de valor adquisitivo, con independencia de la escala de operaciones proyectada.",
+      debeDedir: "El capital mínimo se escalonará según el volumen de garantías proyectado a otorgar, permitiendo un capital inicial reducido para fondos orientados a microempresas con plan de capitalización progresiva supervisado por el BCRA.",
+      palanca: "Proporcionalidad",
+    },
+  },
+  // dato de muestra
+  {
+    id: "restriccion-de-venta-local-en-zoli-bo",
+    titulo: "Restricción de Venta Local en ZOLI",
+    severidad: "Crítico",
+    sector: "Textil y Confección",
+    instrumento: "Ley ZOLI Art. 12",
+    tramitesAfectados: [],
+    clasificacion: "Entrada",
+    jerarquia: "Legal",
+    idHallazgo: "BOL-BAR-0845",
+    pais: "Bolivia" as Country,
+    anio: 2015,
+    entidad: "SENAVEX",
+    enlaceOficial: "gaceta.gob.bo/normas/ley-zoli-art-12",
+    tipoRestriccion: "Prohibición de venta en mercado interno",
+    canalTransmision: "Costo administrativo",
+    afectacionMipyme: "Media" as const,
+    validacion: {
+      severidadIA: "Crítico" as const,
+      severidadValidada: "Crítico" as const,
+      estadoHitl: "Publicado" as const,
+      comentarioBID: "Confirmado: la prohibición absoluta limita el aprovechamiento de capacidad instalada en baja demanda de exportación.",
+      comentarioConsultor: "Recomendamos un cupo de venta interna con pago de tributos de importación sobre el excedente.",
+      comentarioGobierno: "SENAVEX evalúa la propuesta de cupo; pendiente de aprobación.",
+    },
+    accionSugerida: {
+      accion: "Permitir un cupo de venta interna sobre el excedente de producción, con pago de tributos correspondiente",
+      prioridad: "Media" as const,
+      tipoCambioRequerido: "Legal · requiere modificación de ley",
+      factibilidad: "Media" as const,
+      objetivoLegitimo: "Sí, objetivo válido · medio desproporcionado",
+    },
+    descripcion: "Las mercancías producidas en la Zona Libre de Industria y Comercio no pueden venderse en el mercado interno bajo ninguna modalidad.",
+    diagnostico: "La prohibición absoluta de venta interna, sin un cupo o arancel compensatorio para el excedente de producción, impide a las empresas ZOLI aprovechar su capacidad instalada en periodos de baja demanda de exportación.",
+    textNormativo: "Artículo 12. — De la comercialización de mercancías producidas en Zona Libre de Industria y Comercio.\n\nLas mercancías producidas por empresas instaladas en la Zona Libre de Industria y Comercio (ZOLI) se destinarán exclusivamente a la exportación, quedando prohibida su venta o comercialización en el mercado interno bajo cualquier modalidad. La autoridad aduanera podrá disponer el decomiso de las mercancías que se introduzcan al mercado nacional en contravención de la presente disposición, sin perjuicio de las sanciones administrativas correspondientes.",
+    pasajeResaltado: "quedando prohibida su venta o comercialización en el mercado interno bajo cualquier modalidad",
+    reforma: {
+      dice: "...quedando prohibida su venta o comercialización en el mercado interno bajo cualquier modalidad.",
+      debeDedir: "Se permitirá la venta en el mercado interno de hasta un 15% de la producción anual, previo pago de los tributos de importación correspondientes a ese excedente.",
+      palanca: "Proporcionalizar",
+    },
+  },
+  // dato de muestra
+  {
+    id: "monopolio-de-distribucion-estatal-bo",
+    titulo: "Monopolio de Distribución Estatal",
+    severidad: "Crítico",
+    sector: "Fibras Sintéticas",
+    instrumento: "Decreto Ejecutivo 2891",
+    tramitesAfectados: [],
+    clasificacion: "Entrada",
+    jerarquia: "Legal",
+    idHallazgo: "BOL-BAR-0846",
+    pais: "Bolivia" as Country,
+    anio: 2016,
+    entidad: "Min. de Economía y Finanzas Públicas",
+    enlaceOficial: "gaceta.gob.bo/normas/decreto-ejecutivo-2891",
+    tipoRestriccion: "Reserva de distribución a favor de entidad estatal",
+    canalTransmision: "Incumbentes/competencia",
+    afectacionMipyme: "Alta" as const,
+    validacion: {
+      severidadIA: "Crítico" as const,
+      severidadValidada: "Crítico" as const,
+      estadoHitl: "Etapa 3" as const,
+      comentarioBID: "Barrera de competencia significativa; la exclusividad no tiene justificación de política pública clara.",
+      comentarioConsultor: "Recomendamos eliminar la exclusividad y habilitar venta directa entre privados.",
+      comentarioGobierno: "Pendiente de asignación a analista para revisión técnica.",
+    },
+    accionSugerida: {
+      accion: "Eliminar la exclusividad de distribución y permitir venta directa entre productores y transformadoras",
+      prioridad: "Alta" as const,
+      tipoCambioRequerido: "Legal · requiere modificación de ley",
+      factibilidad: "Baja" as const,
+      objetivoLegitimo: "No, sin justificación de política pública clara",
+    },
+    descripcion: "La distribución mayorista de fibras sintéticas nacionales se reserva exclusivamente a una empresa pública, sin permitir venta directa entre privados.",
+    diagnostico: "La reserva exclusiva de distribución mayorista a favor de una sola empresa estatal elimina la competencia en un eslabón central de la cadena, encareciendo el acceso de las empresas transformadoras a la materia prima nacional.",
+    textNormativo: "Artículo 4. — De la distribución mayorista de fibras sintéticas.\n\nLa distribución mayorista de fibras sintéticas de producción nacional se reserva de manera exclusiva a la empresa pública del sector, quedando prohibida la comercialización mayorista directa entre productores privados y empresas transformadoras sin la intermediación de la entidad estatal. Los productores privados que incumplan esta disposición serán pasibles de la suspensión de su registro de operador.",
+    pasajeResaltado: "se reserva de manera exclusiva a la empresa pública del sector, quedando prohibida la comercialización mayorista directa entre productores privados y empresas transformadoras",
+    reforma: {
+      dice: "...se reserva de manera exclusiva a la empresa pública del sector, quedando prohibida la comercialización mayorista directa entre productores privados y empresas transformadoras...",
+      debeDedir: "Los productores privados podrán comercializar directamente con empresas transformadoras, manteniendo la empresa pública como un canal adicional no exclusivo de distribución.",
+      palanca: "Desregulación",
+    },
+  },
+  // dato de muestra
+  {
+    id: "reporte-semestral-de-produccion-minera-cl",
+    titulo: "Reporte Semestral de Producción Minera",
+    severidad: "Crítico",
+    sector: "Minería y Exportaciones",
+    instrumento: "Decreto PCM-027-2022",
+    tramitesAfectados: [],
+    clasificacion: "Entrada",
+    jerarquia: "Reglamentario",
+    idHallazgo: "CHL-BAR-0801",
+    pais: "Chile" as Country,
+    anio: 2022,
+    entidad: "SERNAGEOMIN",
+    enlaceOficial: "diariooficial.interior.gob.cl/normas/decreto-pcm-027-2022",
+    tipoRestriccion: "Reporte físico obligatorio",
+    canalTransmision: "Costo administrativo",
+    afectacionMipyme: "Media" as const,
+    validacion: {
+      severidadIA: "Crítico" as const,
+      severidadValidada: "Alto" as const,
+      estadoHitl: "Etapa 3" as const,
+      comentarioBID: "Carga administrativa duplicada confirmada; evaluar digitalización.",
+      comentarioConsultor: "Proponemos transmisión electrónica vía plataforma SERNAGEOMIN Digital.",
+      comentarioGobierno: "Pendiente de asignación a analista para revisión técnica.",
+    },
+    accionSugerida: {
+      accion: "Digitalizar el reporte semestral vía plataforma SERNAGEOMIN Digital",
+      prioridad: "Media" as const,
+      tipoCambioRequerido: "Reglamentario · sin pasar por el legislativo",
+      factibilidad: "Alta" as const,
+      objetivoLegitimo: "Sí, objetivo válido · medio desproporcionado",
+    },
+    descripcion: "Las empresas mineras deben presentar un informe físico y certificado de producción cada semestre, en paralelo a lo que ya reportan digitalmente al SII.",
+    diagnostico: "La exigencia de reporte físico semestral duplica el esfuerzo de empresas que ya reportan su producción de forma digital al Servicio de Impuestos Internos, generando una carga administrativa recurrente sin beneficio adicional de control.",
+    textNormativo: "Artículo 8. — Del reporte semestral de producción.\n\nToda empresa minera con faena en operación deberá presentar ante el Servicio Nacional de Geología y Minería un informe físico y certificado de producción semestral, dentro de los primeros quince días hábiles de enero y julio de cada año. El informe deberá incluir el detalle de mineral extraído, procesado y comercializado, con la firma del ingeniero responsable de la faena. La falta de presentación en formato físico dará lugar a la aplicación de las multas previstas en el Código de Minería.",
+    pasajeResaltado: "deberá presentar ante el Servicio Nacional de Geología y Minería un informe físico y certificado de producción semestral",
+    reforma: {
+      dice: "...deberá presentar ante el Servicio Nacional de Geología y Minería un informe físico y certificado de producción semestral...",
+      debeDedir: "Las empresas mineras podrán transmitir electrónicamente su reporte semestral de producción a través de la plataforma SERNAGEOMIN Digital, con firma electrónica avanzada del ingeniero responsable.",
+      palanca: "Digitalización",
+    },
+  },
+  // dato de muestra
+  {
+    id: "garantia-de-inversion-renovable-excesiva-cl",
+    titulo: "Garantía de Inversión Renovable Excesiva",
+    severidad: "Crítico",
+    sector: "Energías Renovables",
+    instrumento: "Res. Exenta 118/2021",
+    tramitesAfectados: [],
+    clasificacion: "Operación",
+    jerarquia: "Administrativo",
+    idHallazgo: "CHL-BAR-0802",
+    pais: "Chile" as Country,
+    anio: 2021,
+    entidad: "Comisión Nacional de Energía",
+    enlaceOficial: "diariooficial.interior.gob.cl/normas/res-exenta-118-2021",
+    tipoRestriccion: "Garantía financiera desproporcionada",
+    canalTransmision: "Capital/liquidez",
+    afectacionMipyme: "Alta" as const,
+    validacion: {
+      severidadIA: "Crítico" as const,
+      severidadValidada: "Crítico" as const,
+      estadoHitl: "Por decidir" as const,
+      comentarioBID: "Barrera significativa al financiamiento de proyectos renovables de menor escala.",
+      comentarioConsultor: "Sugerimos escalonar la garantía según etapa de desarrollo del proyecto.",
+      comentarioGobierno: "En revisión por la Comisión Nacional de Energía.",
+    },
+    accionSugerida: {
+      accion: "Escalonar la garantía de seriedad según la etapa de desarrollo del proyecto",
+      prioridad: "Alta" as const,
+      tipoCambioRequerido: "Reglamentario · sin pasar por el legislativo",
+      factibilidad: "Media" as const,
+      objetivoLegitimo: "Sí, objetivo válido · carga desproporcionada",
+    },
+    descripcion: "Los proyectos de generación renovable deben constituir una garantía de seriedad equivalente al 100% de la inversión estimada, sin importar la etapa de desarrollo.",
+    diagnostico: "Exigir una garantía equivalente al 100% de la inversión total, sin escalonamiento por etapa de desarrollo del proyecto, encarece desproporcionadamente el acceso al financiamiento para desarrolladores de proyectos renovables de menor escala.",
+    textNormativo: "Artículo 5. — De la garantía de seriedad para proyectos de generación renovable.\n\nTodo proyecto de generación de energía renovable que solicite conexión al sistema eléctrico nacional deberá constituir una garantía de seriedad equivalente al 100% de la inversión estimada del proyecto, la que se mantendrá vigente hasta la puesta en servicio de la instalación. La garantía se hará efectiva íntegramente en caso de desistimiento del proyecto, independientemente de la etapa de desarrollo en que este se encuentre.",
+    pasajeResaltado: "deberá constituir una garantía de seriedad equivalente al 100% de la inversión estimada del proyecto",
+    reforma: {
+      dice: "...deberá constituir una garantía de seriedad equivalente al 100% de la inversión estimada del proyecto...",
+      debeDedir: "La garantía se escalonará según la etapa de desarrollo del proyecto, partiendo de un 10% en etapa de factibilidad hasta el 100% previo a la conexión definitiva al sistema eléctrico.",
+      palanca: "Proporcionalizar",
+    },
+  },
+  // dato de muestra
+  {
+    id: "requisito-tecnico-desproporcionado-en-financieras-cl",
+    titulo: "Requisito Técnico Desproporcionado en Financieras",
+    severidad: "Crítico",
+    sector: "Servicios Financieros",
+    instrumento: "Ley 21.000, Art. 33",
+    tramitesAfectados: [],
+    clasificacion: "Entrada",
+    jerarquia: "Legal",
+    idHallazgo: "CHL-BAR-0803",
+    pais: "Chile" as Country,
+    anio: 2017,
+    entidad: "Comisión para el Mercado Financiero (CMF)",
+    enlaceOficial: "diariooficial.interior.gob.cl/normas/ley-21000-art-33",
+    tipoRestriccion: "Requisito técnico desproporcionado",
+    canalTransmision: "Capacidad técnica",
+    afectacionMipyme: "Media" as const,
+    validacion: {
+      severidadIA: "Crítico" as const,
+      severidadValidada: "Alto" as const,
+      estadoHitl: "Publicado" as const,
+      comentarioBID: "Confirmado: la restricción limita el ingreso de profesionales calificados sin evidencia de mayor riesgo.",
+      comentarioConsultor: "Recomendamos admitir certificaciones internacionales reconocidas sujetas a examen de idoneidad.",
+      comentarioGobierno: "La CMF aprobó evaluar la admisión de certificaciones internacionales.",
+    },
+    accionSugerida: {
+      accion: "Admitir certificaciones profesionales internacionales reconocidas como alternativa al título universitario",
+      prioridad: "Media" as const,
+      tipoCambioRequerido: "Legal · requiere modificación de ley",
+      factibilidad: "Media" as const,
+      objetivoLegitimo: "Sí, objetivo válido · medio desproporcionado",
+    },
+    descripcion: "Los asesores de inversión deben acreditar título universitario específico, sin admitirse certificaciones profesionales internacionales de la industria financiera.",
+    diagnostico: "La exclusión de certificaciones profesionales internacionales reconocidas de la industria financiera como equivalentes al título universitario limita el ingreso de profesionales calificados que no siguieron la vía académica tradicional, sin evidencia de que ello reduzca el riesgo para los inversionistas.",
+    textNormativo: "Artículo 33. — De los requisitos técnicos para asesores de inversión.\n\nLas personas naturales que se registren como asesores de inversión ante la Comisión para el Mercado Financiero deberán acreditar título profesional universitario en el área de administración, economía o ingeniería comercial, no admitiéndose certificaciones profesionales internacionales de la industria financiera como equivalente al título universitario exigido.",
+    pasajeResaltado: "no admitiéndose certificaciones profesionales internacionales de la industria financiera como equivalente al título universitario exigido",
+    reforma: {
+      dice: "...no admitiéndose certificaciones profesionales internacionales de la industria financiera como equivalente al título universitario exigido.",
+      debeDedir: "Se admitirán certificaciones profesionales internacionales reconocidas de la industria financiera (CFA, CFP y equivalentes) como alternativa válida al título universitario, sujeto a examen de idoneidad de la CMF.",
+      palanca: "Simplificación",
+    },
+  },
+  // dato de muestra
+  {
+    id: "demora-en-autorizacion-de-operaciones-petroleras-ec",
+    titulo: "Demora en Autorización de Operaciones Petroleras",
+    severidad: "Crítico",
+    sector: "Petróleo y Gas",
+    instrumento: "Regl. LORHUHI Art. 22",
+    tramitesAfectados: [],
+    clasificacion: "Operación",
+    jerarquia: "Reglamentario",
+    idHallazgo: "ECU-BAR-0801",
+    pais: "Ecuador" as Country,
+    anio: 2020,
+    entidad: "Ministerio de Energía y Minas",
+    enlaceOficial: "registroficial.gob.ec/normas/regl-lorhuhi-art-22",
+    tipoRestriccion: "Autorización previa sin plazo máximo",
+    canalTransmision: "Tiempo/incertidumbre",
+    afectacionMipyme: "Baja" as const,
+    validacion: {
+      severidadIA: "Crítico" as const,
+      severidadValidada: "Alto" as const,
+      estadoHitl: "Por decidir" as const,
+      comentarioBID: "Impacto relevante en la planificación de proyectos de recuperación mejorada.",
+      comentarioConsultor: "Sugerimos un plazo máximo de 45 días con silencio administrativo positivo.",
+      comentarioGobierno: "En revisión por el Ministerio de Energía y Minas.",
+    },
+    accionSugerida: {
+      accion: "Establecer un plazo máximo de 45 días con silencio administrativo positivo",
+      prioridad: "Media" as const,
+      tipoCambioRequerido: "Reglamentario · sin pasar por el legislativo",
+      factibilidad: "Media" as const,
+      objetivoLegitimo: "Sí, objetivo válido · medio desproporcionado",
+    },
+    descripcion: "Las operadoras que requieren implementar recuperación mejorada deben esperar una autorización previa sin plazo máximo definido para su resolución.",
+    diagnostico: "La ausencia de un plazo máximo definido para resolver la autorización de recuperación mejorada, combinada con la prohibición de iniciar actividad sin resolución expresa, genera incertidumbre en la planificación de proyectos que ya cuentan con toda la documentación técnica exigida.",
+    textNormativo: "Artículo 22. — De la autorización de operaciones de recuperación mejorada.\n\nLas operadoras que requieran implementar técnicas de recuperación mejorada en campos en producción deberán solicitar autorización previa del Ministerio de Energía y Minas, la que será resuelta dentro del plazo que la complejidad técnica del proyecto amerite. La operadora no podrá iniciar actividad alguna de recuperación mejorada mientras no cuente con la resolución de autorización expresa, aun cuando cuente con la totalidad de la documentación técnica exigida.",
+    pasajeResaltado: "la que será resuelta dentro del plazo que la complejidad técnica del proyecto amerite",
+    reforma: {
+      dice: "...la que será resuelta dentro del plazo que la complejidad técnica del proyecto amerite.",
+      debeDedir: "La autorización se resolverá dentro de un plazo máximo de 45 días hábiles contados desde la presentación de la documentación técnica completa, transcurrido el cual sin resolución expresa se entenderá aprobada.",
+      palanca: "Certidumbre procedimental",
+    },
+  },
+  // dato de muestra
+  {
+    id: "certificacion-fitosanitaria-redundante-ec",
+    titulo: "Certificación Fitosanitaria Redundante",
+    severidad: "Crítico",
+    sector: "Flores y Exportaciones",
+    instrumento: "Res. MAG-006-2022",
+    tramitesAfectados: [],
+    clasificacion: "Entrada",
+    jerarquia: "Administrativo",
+    idHallazgo: "ECU-BAR-0802",
+    pais: "Ecuador" as Country,
+    anio: 2022,
+    entidad: "Agrocalidad",
+    enlaceOficial: "registroficial.gob.ec/normas/res-mag-006-2022",
+    tipoRestriccion: "Certificación duplicada por destino",
+    canalTransmision: "Costo administrativo",
+    afectacionMipyme: "Alta" as const,
+    validacion: {
+      severidadIA: "Crítico" as const,
+      severidadValidada: "Crítico" as const,
+      estadoHitl: "Publicado" as const,
+      comentarioBID: "Confirmado: la duplicidad de certificados no reduce el riesgo fitosanitario real.",
+      comentarioConsultor: "Recomendamos reconocer la certificación general salvo requisitos específicos del destino.",
+      comentarioGobierno: "Agrocalidad aprobó el reconocimiento de la certificación general.",
+    },
+    accionSugerida: {
+      accion: "Reconocer la certificación fitosanitaria general como válida para todos los destinos salvo requisitos específicos no cubiertos",
+      prioridad: "Alta" as const,
+      tipoCambioRequerido: "Reglamentario · sin pasar por el legislativo",
+      factibilidad: "Alta" as const,
+      objetivoLegitimo: "Sí, objetivo válido · carga desproporcionada",
+    },
+    descripcion: "Cada exportación de flores requiere un certificado fitosanitario específico por país de destino, aun contando con certificación general vigente para el mismo predio.",
+    diagnostico: "La exigencia de un certificado fitosanitario específico por cada país de destino, superpuesto a la certificación general ya vigente para el mismo predio y período de cosecha, multiplica los trámites de los exportadores de flores sin reducir el riesgo fitosanitario real.",
+    textNormativo: "Artículo 3. — De la certificación fitosanitaria de flores para exportación.\n\nToda partida de flores destinada a la exportación deberá contar con un certificado fitosanitario específico emitido por cada país de destino, aun cuando la partida ya cuente con certificación fitosanitaria general vigente emitida por Agrocalidad para el mismo cultivo y predio de origen dentro del mismo período de cosecha.",
+    pasajeResaltado: "deberá contar con un certificado fitosanitario específico emitido por cada país de destino, aun cuando la partida ya cuente con certificación fitosanitaria general vigente",
+    reforma: {
+      dice: "...deberá contar con un certificado fitosanitario específico emitido por cada país de destino, aun cuando la partida ya cuente con certificación fitosanitaria general vigente...",
+      debeDedir: "La certificación fitosanitaria general vigente para el predio y período de cosecha será válida para todos los destinos de exportación, salvo que el país de destino exija un requisito fitosanitario adicional específico no cubierto por la certificación general.",
+      palanca: "Simplificación",
+    },
+  },
+  // dato de muestra
+  {
+    id: "reserva-de-mercado-para-exportadores-establecidos-ec",
+    titulo: "Reserva de Mercado para Exportadores Establecidos",
+    severidad: "Crítico",
+    sector: "Agroindustria Bananera",
+    instrumento: "Decreto 1234-EC",
+    tramitesAfectados: [],
+    clasificacion: "Entrada",
+    jerarquia: "Reglamentario",
+    idHallazgo: "ECU-BAR-0803",
+    pais: "Ecuador" as Country,
+    anio: 2019,
+    entidad: "Ministerio de Producción, Comercio Exterior, Inversiones y Pesca",
+    enlaceOficial: "registroficial.gob.ec/normas/decreto-1234-ec",
+    tipoRestriccion: "Cupo de exportación reservado a operadores históricos",
+    canalTransmision: "Incumbentes/competencia",
+    afectacionMipyme: "Alta" as const,
+    validacion: {
+      severidadIA: "Crítico" as const,
+      severidadValidada: "Crítico" as const,
+      estadoHitl: "Etapa 3" as const,
+      comentarioBID: "Barrera de competencia significativa: el requisito de historial excluye por diseño a nuevos entrantes calificados.",
+      comentarioConsultor: "Recomendamos reservar un porcentaje del cupo para nuevos exportadores calificados.",
+      comentarioGobierno: "Pendiente de asignación a analista para revisión técnica.",
+    },
+    accionSugerida: {
+      accion: "Reservar un porcentaje mínimo del cupo de exportación para nuevos exportadores calificados",
+      prioridad: "Alta" as const,
+      tipoCambioRequerido: "Reglamentario · sin pasar por el legislativo",
+      factibilidad: "Media" as const,
+      objetivoLegitimo: "No, sin justificación de política pública clara",
+    },
+    descripcion: "Los cupos de exportación bananera a mercados preferenciales se asignan solo a exportadores con historial de tres años en ese mercado, excluyendo a nuevos entrantes calificados.",
+    diagnostico: "El requisito de historial de operaciones de tres años excluye por diseño a nuevos exportadores con capacidad de producción y calidad suficiente, consolidando la posición de los operadores ya establecidos y limitando la entrada de nuevos competidores al mercado de exportación preferencial.",
+    textNormativo: "Artículo 7. — De la asignación de cupos de exportación bananera.\n\nLos cupos anuales de exportación de banano a mercados con acuerdo comercial preferencial se asignarán exclusivamente a los exportadores que hayan operado en el mercado de destino durante los tres años previos a la apertura del período de asignación, quedando excluidos los nuevos exportadores sin historial de operaciones en dicho mercado, independientemente de su capacidad de producción y cumplimiento de estándares de calidad.",
+    pasajeResaltado: "quedando excluidos los nuevos exportadores sin historial de operaciones en dicho mercado, independientemente de su capacidad de producción",
+    reforma: {
+      dice: "...quedando excluidos los nuevos exportadores sin historial de operaciones en dicho mercado, independientemente de su capacidad de producción y cumplimiento de estándares de calidad.",
+      debeDedir: "Un porcentaje mínimo del 15% del cupo anual se reservará para nuevos exportadores que acrediten capacidad de producción y cumplimiento de estándares de calidad, sin exigir historial previo de operaciones en el mercado de destino.",
+      palanca: "Neutralidad competitiva",
+    },
+  },
+  // dato de muestra
+  {
+    id: "certidumbre-por-renovacion-de-registros-pe",
+    titulo: "Certidumbre por Renovación de Registros",
+    severidad: "Crítico",
+    sector: "Agroindustria",
+    instrumento: "Regl. Gral. Registros Sanitarios, Art. 47",
+    tramitesAfectados: [],
+    clasificacion: "Operación",
+    jerarquia: "Reglamentario",
+    idHallazgo: "PER-BAR-0801",
+    pais: "Perú" as Country,
+    anio: 2018,
+    entidad: "Ministerio de la Producción",
+    enlaceOficial: "elperuano.pe/normas/regl-gral-registros-sanitarios-art-47",
+    tipoRestriccion: "Certificación previa obligatoria",
+    canalTransmision: "Tiempo/incertidumbre",
+    afectacionMipyme: "Alta" as const,
+    validacion: {
+      severidadIA: "Crítico" as const,
+      severidadValidada: "Crítico" as const,
+      estadoHitl: "Por decidir" as const,
+      comentarioBID: "Confirmado como barrera crítica: bloqueo de despacho sin alternativa operativa para renovaciones en trámite.",
+      comentarioConsultor: "Recomendamos declaración jurada digital con verificación ex-post.",
+      comentarioGobierno: "En revisión por el Ministerio de la Producción.",
+    },
+    accionSugerida: {
+      accion: "Sustituir por declaración jurada con verificación posterior",
+      prioridad: "Alta" as const,
+      tipoCambioRequerido: "Reglamentario · sin pasar por el legislativo",
+      factibilidad: "Alta" as const,
+      objetivoLegitimo: "Sí, objetivo válido · carga desproporcionada",
+    },
+    descripcion: "El despacho de productos alimenticios para exportación se bloquea si el registro sanitario está en proceso de renovación, sin alternativa operativa.",
+    diagnostico: "La exigencia de registro sanitario vigente como condición para despacho bloquea exportaciones aun cuando la renovación se encuentre en trámite y el exportador tenga historial de cumplimiento, generando pérdidas por contenedores paralizados en puerto.",
+    textNormativo: "Artículo 47. — Del despacho de productos alimenticios para exportación.\n\nNingún lote de producto alimenticio destinado a la exportación podrá ser procesado, empacado o despachado sin que el titular cuente con registro sanitario vigente y en plena validez a la fecha de emisión de la guía de tránsito correspondiente. La autoridad sanitaria queda facultada para retener preventivamente cualquier envío en el que el registro sanitario del titular se encuentre en proceso de renovación, independientemente del historial de cumplimiento del exportador.",
+    pasajeResaltado: "Ningún lote de producto alimenticio destinado a la exportación podrá ser procesado, empacado o despachado sin que el titular cuente con registro sanitario vigente y en plena validez",
+    reforma: {
+      dice: "Ningún lote podrá ser despachado sin que el titular cuente con registro sanitario vigente a la fecha de emisión de la guía de tránsito.",
+      debeDedir: "Los exportadores con registro en proceso de renovación y con historial de cumplimiento de al menos dos ciclos consecutivos podrán operar bajo declaración jurada digital ante la autoridad sanitaria, quien dispondrá de 30 días para resolver la renovación sin suspensión de operaciones.",
+      palanca: "Simplificación / Control ex-post",
+    },
+  },
+  // dato de muestra
+  {
+    id: "restriccion-de-registro-minero-pe",
+    titulo: "Restricción de Registro Minero",
+    severidad: "Crítico",
+    sector: "Minería",
+    instrumento: "D.S. 4523-2023",
+    tramitesAfectados: [],
+    clasificacion: "Entrada",
+    jerarquia: "Reglamentario",
+    idHallazgo: "PER-BAR-0802",
+    pais: "Perú" as Country,
+    anio: 2023,
+    entidad: "Ministerio de Energía y Minas",
+    enlaceOficial: "elperuano.pe/normas/ds-4523-2023",
+    tipoRestriccion: "Restricción de registro por tamaño de operación",
+    canalTransmision: "Costo administrativo",
+    afectacionMipyme: "Alta" as const,
+    validacion: {
+      severidadIA: "Crítico" as const,
+      severidadValidada: "Crítico" as const,
+      estadoHitl: "Publicado" as const,
+      comentarioBID: "Confirmado: el umbral excluye por diseño a pequeños productores de la exportación directa.",
+      comentarioConsultor: "Recomendamos crear una categoría de registro simplificado para pequeña minería.",
+      comentarioGobierno: "El Ministerio de Energía y Minas aprobó evaluar la categoría simplificada.",
+    },
+    accionSugerida: {
+      accion: "Crear una categoría de registro simplificado para pequeños productores y mineros artesanales",
+      prioridad: "Alta" as const,
+      tipoCambioRequerido: "Reglamentario · sin pasar por el legislativo",
+      factibilidad: "Media" as const,
+      objetivoLegitimo: "No, sin justificación de política pública clara",
+    },
+    descripcion: "Solo las concesiones con producción certificada superior a las 500 toneladas métricas mensuales pueden inscribirse en el Registro Nacional de Productores Mineros.",
+    diagnostico: "El umbral mínimo de producción para el registro excluye por diseño a los pequeños productores y mineros artesanales de la exportación directa, obligándolos a comercializar a través de intermediarios registrados y reduciendo su margen sobre el valor exportado.",
+    textNormativo: "Artículo 5. — Del Registro Nacional de Productores Mineros.\n\nSolo podrán inscribirse en el Registro Nacional de Productores Mineros aquellas concesiones con producción certificada superior a las 500 toneladas métricas mensuales, quedando excluidos los pequeños productores y productores mineros artesanales de la posibilidad de exportar directamente sin la intermediación de un productor registrado.",
+    pasajeResaltado: "quedando excluidos los pequeños productores y productores mineros artesanales de la posibilidad de exportar directamente sin la intermediación de un productor registrado",
+    reforma: {
+      dice: "...quedando excluidos los pequeños productores y productores mineros artesanales de la posibilidad de exportar directamente sin la intermediación de un productor registrado.",
+      debeDedir: "Se creará una categoría de registro simplificado para pequeños productores y mineros artesanales que les permita exportar directamente, sujeto a los mismos controles de trazabilidad y origen que los productores de mayor escala.",
+      palanca: "Neutralidad competitiva",
+    },
+  },
+  // dato de muestra
+  {
+    id: "capital-minimo-desproporcionado-pe",
+    titulo: "Capital Mínimo Desproporcionado",
+    severidad: "Crítico",
+    sector: "Textil y Confección",
+    instrumento: "Ley 1178, Art. 6",
+    tramitesAfectados: [],
+    clasificacion: "Entrada",
+    jerarquia: "Legal",
+    idHallazgo: "PER-BAR-0803",
+    pais: "Perú" as Country,
+    anio: 2021,
+    entidad: "Superintendencia de Banca, Seguros y AFP (SBS)",
+    enlaceOficial: "elperuano.pe/normas/ley-1178-art-6",
+    tipoRestriccion: "Capital mínimo desproporcionado",
+    canalTransmision: "Capital/liquidez",
+    afectacionMipyme: "Alta" as const,
+    validacion: {
+      severidadIA: "Crítico" as const,
+      severidadValidada: "Alto" as const,
+      estadoHitl: "Etapa 3" as const,
+      comentarioBID: "Barrera relevante al acceso de liquidez para proveedores textiles de menor escala.",
+      comentarioConsultor: "Sugerimos escalonar el capital mínimo según volumen proyectado de operaciones.",
+      comentarioGobierno: "Pendiente de asignación a analista para revisión técnica.",
+    },
+    accionSugerida: {
+      accion: "Escalonar el capital mínimo según el volumen de facturas proyectado a descontar",
+      prioridad: "Media" as const,
+      tipoCambioRequerido: "Legal · requiere modificación de ley",
+      factibilidad: "Baja" as const,
+      objetivoLegitimo: "Sí, objetivo válido · medio desproporcionado",
+    },
+    descripcion: "Las empresas de factoring de facturas textiles deben acreditar un capital mínimo fijo, sin relación con el volumen de operaciones proyectado.",
+    diagnostico: "El capital mínimo fijo, sin relación con el volumen real de operaciones proyectado, excluye a empresas de factoring especializadas en proveedores textiles de menor escala, limitando el acceso a liquidez de la cadena de suministro del sector.",
+    textNormativo: "Artículo 6. — Del capital mínimo para empresas de factoring textil.\n\nLas empresas que operen como factores de facturas comerciales del sector textil y confecciones deberán acreditar un capital social mínimo equivalente a doscientas unidades impositivas tributarias, con independencia del volumen de facturas a descontar o del segmento de proveedores textiles al que orienten su operación.",
+    pasajeResaltado: "deberán acreditar un capital social mínimo equivalente a doscientas unidades impositivas tributarias, con independencia del volumen de facturas a descontar",
+    reforma: {
+      dice: "...deberán acreditar un capital social mínimo equivalente a doscientas unidades impositivas tributarias, con independencia del volumen de facturas a descontar...",
+      debeDedir: "El capital mínimo se determinará en proporción al volumen de facturas proyectado a descontar, con un piso reducido para empresas de factoring especializadas en proveedores textiles de pequeña escala, sujeto a supervisión de la SBS.",
+      palanca: "Proporcionalizar",
+    },
+  },
+];
+
+const ALL_BARRERAS = [...BARRERAS_CAFE, ...BARRERAS_TEXTIL, ...BARRERAS_MUESTRA];
 
 // ─── Distorsiones de carga ─────────────────────────────────────────────────────
 const IRR_LABELS: Record<number, string> = { 4: "Crítico", 3: "Alto", 2: "Mediano", 1: "Bajo" };
@@ -1066,41 +2030,68 @@ const TOP_BARRERAS_POR_PAIS_MUESTRA: Record<Exclude<Country, "Todos">, {
   ],
 };
 
+// Sufijo de país usado para armar ids de muestra (slug + sufijo) en las
+// tablas "Top N" de Barreras y Trámites.
+const PAIS_SUFIJO: Record<Exclude<Country, "Todos">, string> = {
+  Argentina: "ar", Bolivia: "bo", Chile: "cl", Ecuador: "ec", Perú: "pe",
+};
+
+// Slug de muestra a partir de un nombre/título — usado SOLO cuando no hay un
+// registro real con ese mismo nombre/título en ALL_BARRERAS o ALL_TRAMITES
+// (ver slugOrRealId más abajo, que hace esa verificación primero).
+function slugConSufijo(texto: string, sufijo: string): string {
+  const sinTildes = texto.normalize("NFD").replace(/[̀-ͯ]/g, "");
+  const slug = sinTildes
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+  return `${slug}-${sufijo}`;
+}
+
+// Antes de generar un id de muestra, busca si ya existe un registro real con
+// el mismo nombre/título exacto — si existe, reusa su id real (así el
+// onClick ya cableado en las tablas lleva directo a la ficha real en vez de
+// caer en el fallback simplificado de BarreraDetail()/TramiteDetail()).
+function slugOrRealId(reales: { id: string; nombre: string }[], nombre: string, pais: Exclude<Country, "Todos">): string {
+  const real = reales.find(r => r.nombre === nombre);
+  return real ? real.id : slugConSufijo(nombre, PAIS_SUFIJO[pais]);
+}
+
 // Agrega "id", "titulo", "canal" y "jerarquia" de muestra a cada fila de
 // TOP_BARRERAS_POR_PAIS_MUESTRA (se reutiliza tal cual, sin reescribir sus
 // campos) para armar la tabla "Top 3 barreras según IRR" del Panel País y la
-// tabla regional de Barreras. El id de Bolivia[0] es el real de ALL_BARRERAS
-// (esta fila SÍ tiene ficha completa); el resto son ids de muestra — no hay
-// catálogo real de barreras individuales para Argentina, Chile, Ecuador y
-// Perú todavía (mismo pendiente ya anotado), así que BarreraDetail() les
-// arma una ficha reducida solo con lo que trae la fila de la tabla.
-const TOP_BARRERAS_PAIS_TABLA_EXTRA: Record<Exclude<Country, "Todos">, { id: string; titulo: string; canal: string; jerarquia: string }[]> = {
+// tabla regional de Barreras. El id se resuelve con slugOrRealId: si el
+// título coincide exacto con una barrera de ALL_BARRERAS (hoy solo
+// Bolivia[0], "Bloqueo por Renovación de Registros"), usa ese id real —
+// el resto son ids de muestra, sin ficha real todavía. No hay catálogo real
+// de barreras individuales para Argentina, Chile, Ecuador y Perú (mismo
+// pendiente ya anotado), así que BarreraDetail() les arma una ficha
+// reducida solo con lo que trae la fila de la tabla.
+const TOP_BARRERAS_PAIS_TABLA_EXTRA: Record<Exclude<Country, "Todos">, { titulo: string; canal: string; jerarquia: string }[]> = {
   Argentina: [
-    { id: "registro-obligatorio-autopartes-ar",  titulo: "Registro Obligatorio de Autopartes",                 canal: "Costo administrativo",    jerarquia: "Reglamentario" },
-    { id: "demora-renovacion-permisos-ar",       titulo: "Demora en Renovación de Permisos Agroindustriales",  canal: "Tiempo/incertidumbre",     jerarquia: "Reglamentario" },
-    { id: "capital-minimo-entidades-financieras-ar", titulo: "Capital Mínimo para Nuevas Entidades Financieras", canal: "Capital/liquidez",       jerarquia: "Legal" },
+    { titulo: "Registro Obligatorio de Autopartes",                 canal: "Costo administrativo",    jerarquia: "Reglamentario" },
+    { titulo: "Demora en Renovación de Permisos Agroindustriales",  canal: "Tiempo/incertidumbre",     jerarquia: "Reglamentario" },
+    { titulo: "Capital Mínimo para Nuevas Entidades Financieras",   canal: "Capital/liquidez",         jerarquia: "Legal" },
   ],
-  // Bolivia[0] reusa el id real "bloqueo-renovacion" (existe en ALL_BARRERAS,
-  // misma barrera) — Bolivia[1] y [2] son de muestra, sin ficha real todavía.
   Bolivia: [
-    { id: "bloqueo-renovacion",           titulo: "Bloqueo por Renovación de Registros",  canal: "Tiempo/incertidumbre",    jerarquia: "Reglamentario" },
-    { id: "restriccion-venta-zoli-bo",    titulo: "Restricción de Venta Local en ZOLI",   canal: "Costo administrativo",    jerarquia: "Legal" },
-    { id: "monopolio-distribucion-bo",    titulo: "Monopolio de Distribución Estatal",    canal: "Incumbentes/competencia", jerarquia: "Legal" },
+    { titulo: "Bloqueo por Renovación de Registros",  canal: "Tiempo/incertidumbre",    jerarquia: "Reglamentario" },
+    { titulo: "Restricción de Venta Local en ZOLI",   canal: "Costo administrativo",    jerarquia: "Legal" },
+    { titulo: "Monopolio de Distribución Estatal",    canal: "Incumbentes/competencia", jerarquia: "Legal" },
   ],
   Chile: [
-    { id: "reporte-semestral-produccion-minera-cl", titulo: "Reporte Semestral de Producción Minera",            canal: "Costo administrativo", jerarquia: "Reglamentario" },
-    { id: "garantia-inversion-renovable-cl",        titulo: "Garantía de Inversión Renovable Excesiva",          canal: "Capital/liquidez",      jerarquia: "Administrativo" },
-    { id: "requisito-tecnico-financieras-cl",       titulo: "Requisito Técnico Desproporcionado en Financieras", canal: "Capacidad técnica",     jerarquia: "Legal" },
+    { titulo: "Reporte Semestral de Producción Minera",            canal: "Costo administrativo", jerarquia: "Reglamentario" },
+    { titulo: "Garantía de Inversión Renovable Excesiva",          canal: "Capital/liquidez",      jerarquia: "Administrativo" },
+    { titulo: "Requisito Técnico Desproporcionado en Financieras", canal: "Capacidad técnica",     jerarquia: "Legal" },
   ],
   Ecuador: [
-    { id: "demora-autorizacion-petroleras-ec",  titulo: "Demora en Autorización de Operaciones Petroleras",  canal: "Tiempo/incertidumbre",     jerarquia: "Reglamentario" },
-    { id: "certificacion-fitosanitaria-ec",     titulo: "Certificación Fitosanitaria Redundante",            canal: "Costo administrativo",     jerarquia: "Administrativo" },
-    { id: "reserva-mercado-exportadores-ec",    titulo: "Reserva de Mercado para Exportadores Establecidos", canal: "Incumbentes/competencia",  jerarquia: "Reglamentario" },
+    { titulo: "Demora en Autorización de Operaciones Petroleras",  canal: "Tiempo/incertidumbre",     jerarquia: "Reglamentario" },
+    { titulo: "Certificación Fitosanitaria Redundante",            canal: "Costo administrativo",     jerarquia: "Administrativo" },
+    { titulo: "Reserva de Mercado para Exportadores Establecidos", canal: "Incumbentes/competencia",  jerarquia: "Reglamentario" },
   ],
   Perú: [
-    { id: "certidumbre-renovacion-registros-pe", titulo: "Certidumbre por Renovación de Registros", canal: "Tiempo/incertidumbre", jerarquia: "Reglamentario" },
-    { id: "restriccion-registro-minero-pe",      titulo: "Restricción de Registro Minero",          canal: "Costo administrativo", jerarquia: "Reglamentario" },
-    { id: "capital-minimo-desproporcionado-pe",  titulo: "Capital Mínimo Desproporcionado",         canal: "Capital/liquidez",     jerarquia: "Legal" },
+    { titulo: "Certidumbre por Renovación de Registros", canal: "Tiempo/incertidumbre", jerarquia: "Reglamentario" },
+    { titulo: "Restricción de Registro Minero",          canal: "Costo administrativo", jerarquia: "Reglamentario" },
+    { titulo: "Capital Mínimo Desproporcionado",         canal: "Capital/liquidez",     jerarquia: "Legal" },
   ],
 };
 
@@ -1109,11 +2100,17 @@ type TopBarrerasPaisFila = {
   id: string; titulo: string; canal: string; jerarquia: string; pais: Exclude<Country, "Todos">;
 };
 
+const ALL_BARRERAS_POR_NOMBRE = ALL_BARRERAS.map(b => ({ id: b.id, nombre: b.titulo }));
+
 const TOP_BARRERAS_PAIS_TABLA: Record<Exclude<Country, "Todos">, TopBarrerasPaisFila[]> = (() => {
   const result = {} as Record<Exclude<Country, "Todos">, TopBarrerasPaisFila[]>;
   for (const pais of COUNTRIES) {
     const key = pais as Exclude<Country, "Todos">;
-    result[key] = TOP_BARRERAS_POR_PAIS_MUESTRA[key].map((b, i) => ({ ...b, ...TOP_BARRERAS_PAIS_TABLA_EXTRA[key][i], pais: key }));
+    result[key] = TOP_BARRERAS_POR_PAIS_MUESTRA[key].map((b, i) => {
+      const extra = TOP_BARRERAS_PAIS_TABLA_EXTRA[key][i];
+      const id = slugOrRealId(ALL_BARRERAS_POR_NOMBRE, extra.titulo, key);
+      return { ...b, ...extra, id, pais: key };
+    });
   }
   return result;
 })();
@@ -1294,41 +2291,127 @@ const TRAMITES_VALIDADO_HITL_MUESTRA: Record<Country, number> = {
 // real de trámites individuales priorizados para ningún país todavía (mismo
 // pendiente ya anotado en Barreras) — estas filas alimentan la tabla
 // "Trámites prioritarios" hasta que exista ese catálogo.
-const TRAMITES_PRIORITARIOS_MUESTRA: Record<Exclude<Country, "Todos">, {
+// `id` se resuelve con slugOrRealId (ver arriba, junto a TOP_BARRERAS_PAIS_
+// TABLA): si el nombre coincide exacto con un trámite de ALL_TRAMITES —hoy
+// Bolivia "Certificado de Exportación y de Origen", "Registro Sanitario de
+// Alimentos" y "Declaración Jurada Mensual de ISV"— reusa su id real (así
+// el onClick ya cableado en la tabla lleva directo al detalle real, con
+// pasos/fricciones/distorsiones reales, en vez de caer en el fallback
+// simplificado de TramiteDetail()); el resto son ids de muestra.
+const TRAMITES_PRIORITARIOS_BASE: Record<Exclude<Country, "Todos">, {
   tramite: string; entidad: string; eje: string; costo: string;
   severidad: "Crítica" | "Alta"; estadoHitl: EstadoHitl; accion: string;
+  tipoUsuario: "Empresarial" | "Ciudadano"; sector: string;
 }[]> = {
   Argentina: [
-    { tramite: "Certificado de Origen Mercosur",  entidad: "Dirección General de Aduanas",   eje: "Comercio exterior",        costo: "USD 380/operación", severidad: "Crítica", estadoHitl: "Por decidir", accion: "Emitir certificado electrónico integrado al sistema aduanero" },
-    { tramite: "Habilitación Municipal Comercial", entidad: "Municipalidad de Buenos Aires",  eje: "Apertura de negocio",      costo: "USD 210/trámite",   severidad: "Alta",    estadoHitl: "Publicado",   accion: "Unificar habilitación con inspección única por rubro" },
-    { tramite: "Registro de Marca y Producto",     entidad: "INPI",                           eje: "Cumplimiento normativo",   costo: "USD 320/registro",  severidad: "Alta",    estadoHitl: "Etapa 3",     accion: "Reducir plazos de examen de fondo con revisión digital" },
-    { tramite: "Declaración Jurada de IVA",        entidad: "AFIP",                           eje: "Cumplimiento tributario",  costo: "USD 150/mes",       severidad: "Alta",    estadoHitl: "Publicado",   accion: "Prellenar declaración con datos de facturación electrónica" },
+    { tramite: "Certificado de Origen Mercosur",  entidad: "Dirección General de Aduanas",   eje: "Comercio exterior",        costo: "USD 380/operación", severidad: "Crítica", estadoHitl: "Por decidir", accion: "Emitir certificado electrónico integrado al sistema aduanero", tipoUsuario: "Empresarial", sector: "Agroindustria y Commodities" },
+    { tramite: "Habilitación Municipal Comercial", entidad: "Municipalidad de Buenos Aires",  eje: "Apertura de negocio",      costo: "USD 210/trámite",   severidad: "Alta",    estadoHitl: "Publicado",   accion: "Unificar habilitación con inspección única por rubro", tipoUsuario: "Empresarial", sector: "Comercio y Servicios" },
+    { tramite: "Registro de Marca y Producto",     entidad: "INPI",                           eje: "Cumplimiento normativo",   costo: "USD 320/registro",  severidad: "Alta",    estadoHitl: "Etapa 3",     accion: "Reducir plazos de examen de fondo con revisión digital", tipoUsuario: "Empresarial", sector: "Manufactura y Consumo" },
+    { tramite: "Declaración Jurada de IVA",        entidad: "AFIP",                           eje: "Cumplimiento tributario",  costo: "USD 150/mes",       severidad: "Alta",    estadoHitl: "Publicado",   accion: "Prellenar declaración con datos de facturación electrónica", tipoUsuario: "Empresarial", sector: "Multisectorial" },
   ],
   Bolivia: [
-    { tramite: "Certificado de Exportación y de Origen", entidad: "Dirección General de Aduanas / IHCAFE", eje: "Comercio exterior",       costo: "USD 420/operación", severidad: "Crítica", estadoHitl: "Publicado",   accion: "Digitalizar certificado vía ventanilla única de comercio exterior" },
-    { tramite: "Habilitación Municipal de Negocio",      entidad: "Alcaldía Municipal de La Paz",           eje: "Apertura de negocio",     costo: "USD 180/trámite",   severidad: "Alta",    estadoHitl: "Por decidir", accion: "Habilitar registro en línea con validación automática de zonificación" },
-    { tramite: "Registro Sanitario de Alimentos",        entidad: "ARSA — Agencia de Regulación Sanitaria", eje: "Cumplimiento sanitario",  costo: "USD 850/producto",  severidad: "Alta",    estadoHitl: "Etapa 3",     accion: "Permitir variaciones de empaque bajo el mismo registro sanitario" },
-    { tramite: "Declaración Jurada Mensual de ISV",      entidad: "Servicio de Impuestos Nacionales (SIN)", eje: "Cumplimiento tributario", costo: "USD 180/mes",       severidad: "Alta",    estadoHitl: "Publicado",   accion: "Prellenar la declaración con datos de facturación electrónica" },
+    { tramite: "Certificado de Exportación y de Origen", entidad: "Dirección General de Aduanas / IHCAFE", eje: "Comercio exterior",       costo: "USD 420/operación", severidad: "Crítica", estadoHitl: "Publicado",   accion: "Digitalizar certificado vía ventanilla única de comercio exterior", tipoUsuario: "Empresarial", sector: "Agroindustria Cafetalera" },
+    { tramite: "Habilitación Municipal de Negocio",      entidad: "Alcaldía Municipal de La Paz",           eje: "Apertura de negocio",     costo: "USD 180/trámite",   severidad: "Alta",    estadoHitl: "Por decidir", accion: "Habilitar registro en línea con validación automática de zonificación", tipoUsuario: "Empresarial", sector: "Comercio y Servicios" },
+    { tramite: "Registro Sanitario de Alimentos (ARSA)", entidad: "ARSA — Agencia de Regulación Sanitaria", eje: "Cumplimiento sanitario",  costo: "USD 850/producto",  severidad: "Alta",    estadoHitl: "Etapa 3",     accion: "Permitir variaciones de empaque bajo el mismo registro sanitario", tipoUsuario: "Empresarial", sector: "Agroindustria Cafetalera" },
+    { tramite: "Declaración Jurada Mensual de ISV",      entidad: "Servicio de Impuestos Nacionales (SIN)", eje: "Cumplimiento tributario", costo: "USD 180/mes",       severidad: "Alta",    estadoHitl: "Publicado",   accion: "Prellenar la declaración con datos de facturación electrónica", tipoUsuario: "Empresarial", sector: "Textil y Confección" },
   ],
   Chile: [
-    { tramite: "Autorización de Ampliación de Planta",   entidad: "Superintendencia del Medio Ambiente", eje: "Ambiental",                costo: "USD 640/trámite",  severidad: "Crítica", estadoHitl: "Por decidir", accion: "Habilitar evaluación ambiental expedita para ampliaciones menores" },
-    { tramite: "Certificado de Origen para Exportación", entidad: "Dirección Nacional de Aduanas",       eje: "Comercio exterior",        costo: "USD 300/operación", severidad: "Alta",   estadoHitl: "Publicado",   accion: "Emitir certificado electrónico integrado al sistema aduanero" },
-    { tramite: "Patente Municipal de Actividad",         entidad: "Municipalidad de Santiago",           eje: "Apertura de negocio",      costo: "USD 190/trámite",   severidad: "Alta",   estadoHitl: "Etapa 3",     accion: "Digitalizar el pago y renovación de patente" },
-    { tramite: "Declaración Mensual de IVA",             entidad: "Servicio de Impuestos Internos (SII)", eje: "Cumplimiento tributario", costo: "USD 140/mes",       severidad: "Alta",   estadoHitl: "Publicado",   accion: "Prellenar declaración con datos de facturación electrónica" },
+    { tramite: "Autorización de Ampliación de Planta",   entidad: "Superintendencia del Medio Ambiente", eje: "Ambiental",                costo: "USD 640/trámite",  severidad: "Crítica", estadoHitl: "Por decidir", accion: "Habilitar evaluación ambiental expedita para ampliaciones menores", tipoUsuario: "Empresarial", sector: "Industria y Manufactura" },
+    { tramite: "Certificado de Origen para Exportación (Aduanas Chile)", entidad: "Dirección Nacional de Aduanas",       eje: "Comercio exterior",        costo: "USD 300/operación", severidad: "Alta",   estadoHitl: "Publicado",   accion: "Emitir certificado electrónico integrado al sistema aduanero", tipoUsuario: "Empresarial", sector: "Minería y Exportaciones" },
+    { tramite: "Patente Municipal de Actividad",         entidad: "Municipalidad de Santiago",           eje: "Apertura de negocio",      costo: "USD 190/trámite",   severidad: "Alta",   estadoHitl: "Etapa 3",     accion: "Digitalizar el pago y renovación de patente", tipoUsuario: "Empresarial", sector: "Comercio y Servicios" },
+    { tramite: "Declaración Mensual de IVA (SII)",       entidad: "Servicio de Impuestos Internos (SII)", eje: "Cumplimiento tributario", costo: "USD 140/mes",       severidad: "Alta",   estadoHitl: "Publicado",   accion: "Prellenar declaración con datos de facturación electrónica", tipoUsuario: "Empresarial", sector: "Multisectorial" },
   ],
   Ecuador: [
-    { tramite: "Certificado Fitosanitario de Exportación", entidad: "Agrocalidad",                        eje: "Comercio exterior",        costo: "USD 260/operación", severidad: "Crítica", estadoHitl: "Por decidir", accion: "Emitir certificado electrónico integrado a ventanilla única" },
-    { tramite: "Permiso de Funcionamiento Municipal",       entidad: "Municipio de Quito",                 eje: "Apertura de negocio",      costo: "USD 170/trámite",   severidad: "Alta",    estadoHitl: "Publicado",   accion: "Unificar permiso con inspección única por rubro" },
-    { tramite: "Registro Sanitario de Alimentos",           entidad: "ARCSA",                              eje: "Cumplimiento sanitario",   costo: "USD 600/producto",  severidad: "Alta",    estadoHitl: "Etapa 3",     accion: "Permitir variaciones de empaque bajo el mismo registro" },
-    { tramite: "Declaración Mensual de IVA",                entidad: "Servicio de Rentas Internas (SRI)",  eje: "Cumplimiento tributario",  costo: "USD 130/mes",       severidad: "Alta",    estadoHitl: "Publicado",   accion: "Prellenar declaración con datos de facturación electrónica" },
+    { tramite: "Certificado Fitosanitario de Exportación", entidad: "Agrocalidad",                        eje: "Comercio exterior",        costo: "USD 260/operación", severidad: "Crítica", estadoHitl: "Por decidir", accion: "Emitir certificado electrónico integrado a ventanilla única", tipoUsuario: "Empresarial", sector: "Agroindustria Bananera" },
+    { tramite: "Permiso de Funcionamiento Municipal",       entidad: "Municipio de Quito",                 eje: "Apertura de negocio",      costo: "USD 170/trámite",   severidad: "Alta",    estadoHitl: "Publicado",   accion: "Unificar permiso con inspección única por rubro", tipoUsuario: "Empresarial", sector: "Comercio y Servicios" },
+    { tramite: "Registro Sanitario de Alimentos (ARCSA)",   entidad: "ARCSA",                              eje: "Cumplimiento sanitario",   costo: "USD 600/producto",  severidad: "Alta",    estadoHitl: "Etapa 3",     accion: "Permitir variaciones de empaque bajo el mismo registro", tipoUsuario: "Empresarial", sector: "Manufactura" },
+    { tramite: "Declaración Mensual de IVA (SRI)",          entidad: "Servicio de Rentas Internas (SRI)",  eje: "Cumplimiento tributario",  costo: "USD 130/mes",       severidad: "Alta",    estadoHitl: "Publicado",   accion: "Prellenar declaración con datos de facturación electrónica", tipoUsuario: "Empresarial", sector: "Multisectorial" },
   ],
   Perú: [
-    { tramite: "Permiso de Operación MEF",                entidad: "Ministerio de Economía y Finanzas", eje: "Cumplimiento normativo",  costo: "USD 410/trámite",   severidad: "Crítica", estadoHitl: "Por decidir", accion: "Sustituir permiso previo por declaración jurada con fiscalización posterior" },
-    { tramite: "Certificado de Origen para Exportación",  entidad: "SUNAT",                              eje: "Comercio exterior",       costo: "USD 290/operación", severidad: "Alta",    estadoHitl: "Publicado",   accion: "Emitir certificado electrónico integrado a ventanilla única" },
-    { tramite: "Licencia Municipal de Funcionamiento",    entidad: "Municipalidad de Lima",              eje: "Apertura de negocio",     costo: "USD 160/trámite",   severidad: "Alta",    estadoHitl: "Etapa 3",     accion: "Unificar licencia con inspección única por rubro" },
-    { tramite: "Declaración Mensual de IGV",              entidad: "SUNAT",                              eje: "Cumplimiento tributario", costo: "USD 120/mes",       severidad: "Alta",    estadoHitl: "Publicado",   accion: "Prellenar declaración con datos de facturación electrónica" },
+    { tramite: "Permiso de Operación MEF",                entidad: "Ministerio de Economía y Finanzas", eje: "Cumplimiento normativo",  costo: "USD 410/trámite",   severidad: "Crítica", estadoHitl: "Por decidir", accion: "Sustituir permiso previo por declaración jurada con fiscalización posterior", tipoUsuario: "Empresarial", sector: "Servicios Financieros y de Seguros" },
+    { tramite: "Certificado de Origen para Exportación (SUNAT)", entidad: "SUNAT",                       eje: "Comercio exterior",       costo: "USD 290/operación", severidad: "Alta",    estadoHitl: "Publicado",   accion: "Emitir certificado electrónico integrado a ventanilla única", tipoUsuario: "Empresarial", sector: "Minería" },
+    { tramite: "Licencia Municipal de Funcionamiento",    entidad: "Municipalidad de Lima",              eje: "Apertura de negocio",     costo: "USD 160/trámite",   severidad: "Alta",    estadoHitl: "Etapa 3",     accion: "Unificar licencia con inspección única por rubro", tipoUsuario: "Empresarial", sector: "Comercio y Servicios" },
+    { tramite: "Declaración Mensual de IGV",              entidad: "SUNAT",                              eje: "Cumplimiento tributario", costo: "USD 120/mes",       severidad: "Alta",    estadoHitl: "Publicado",   accion: "Prellenar declaración con datos de facturación electrónica", tipoUsuario: "Empresarial", sector: "Multisectorial" },
   ],
 };
+
+const ALL_TRAMITES_POR_NOMBRE = ALL_TRAMITES.map(t => ({ id: t.id, nombre: t.nombre }));
+
+type TramitePrioritarioFila = {
+  id: string; tramite: string; entidad: string; eje: string; costo: string;
+  severidad: "Crítica" | "Alta"; estadoHitl: EstadoHitl; accion: string;
+  tipoUsuario: "Empresarial" | "Ciudadano"; sector: string;
+};
+
+const TRAMITES_PRIORITARIOS_MUESTRA: Record<Exclude<Country, "Todos">, TramitePrioritarioFila[]> = (() => {
+  const result = {} as Record<Exclude<Country, "Todos">, TramitePrioritarioFila[]>;
+  for (const pais of COUNTRIES) {
+    const key = pais as Exclude<Country, "Todos">;
+    result[key] = TRAMITES_PRIORITARIOS_BASE[key].map(fila => ({
+      ...fila,
+      id: slugOrRealId(ALL_TRAMITES_POR_NOMBRE, fila.tramite, key),
+    }));
+  }
+  return result;
+})();
+
+// Reparto por etapa del ciclo empresarial / acción de mejora / afectación,
+// con el mismo factor que ya usa COUNTRY_TRAMITES_DATA (país.tramites /
+// Bolivia.tramites) — distinto del factor de Barreras (scaleMuestraPorPais,
+// que usa el total de barreras). `baseCountry` indica qué país trae los
+// valores de referencia sin escalar (por defecto Bolivia, que es también el
+// denominador del factor, así que su propio factor ya da 1 exacto; para un
+// país base distinto — ej. Perú en ETAPA_CICLO_MUESTRA — hace falta el caso
+// especial para no reescalarlo).
+// dato de muestra — todos los TODO relevantes están junto a cada const.
+function scaleMuestraPorPaisTramites(baseValues: { nombre: string; valor: number }[], baseCountry: Exclude<Country, "Todos"> = "Bolivia"): Record<Exclude<Country, "Todos">, { nombre: string; valor: number }[]> {
+  const bolTramites = COUNTRY_DATA["Bolivia"].tramites;
+  const result = {} as Record<Exclude<Country, "Todos">, { nombre: string; valor: number }[]>;
+  for (const pais of COUNTRIES) {
+    const key = pais as Exclude<Country, "Todos">;
+    if (key === baseCountry) { result[key] = baseValues; continue; }
+    const factor = COUNTRY_DATA[key].tramites / bolTramites;
+    result[key] = baseValues.map(b => ({ nombre: b.nombre, valor: Math.round(b.valor * factor) }));
+  }
+  return result;
+}
+
+// Misma taxonomía de 4 valores que ya usa el filtro "Etapa del ciclo de
+// vida" de esta pantalla (Apertura/Operación/Expansión/Cierre) — no agregar
+// otras etapas. Perú es la base dada; no necesita cuadrar con el total de
+// trámites (son trámites que pueden repetirse entre etapas).
+// TODO: sin metodología real — falta definir cómo se calcula la etapa del
+// ciclo empresarial a partir de trámites individuales reales.
+const ETAPA_CICLO_MUESTRA = scaleMuestraPorPaisTramites([
+  { nombre: "Apertura", valor: 52 },
+  { nombre: "Operación", valor: 96 },
+  { nombre: "Expansión", valor: 71 },
+  { nombre: "Cierre", valor: 34 },
+], "Perú");
+
+// Distinta de ACCION_MEJORA_MUESTRA (Barreras) — no reusar esos números
+// aunque el patrón visual sea el mismo. Bolivia es la base dada.
+// TODO: sin metodología real — falta definir cómo se calcula la acción de
+// mejora sugerida a partir de trámites individuales reales.
+const TRAMITES_ACCION_MEJORA_MUESTRA = scaleMuestraPorPaisTramites([
+  { nombre: "Simplificar", valor: 180 },
+  { nombre: "Digitalizar", valor: 113 },
+  { nombre: "Interoperar", valor: 86 },
+  { nombre: "Clarificar", valor: 52 },
+  { nombre: "Proporcionalizar", valor: 47 },
+]);
+
+// Antes esta sección repetía los mismos números que "Acciones de mejora en
+// trámites" — son series independientes. Bolivia es la base dada.
+// TODO: sin metodología real — falta definir cómo se calculan las
+// afectaciones a partir de trámites individuales reales.
+const TRAMITES_AFECTACIONES_MUESTRA = scaleMuestraPorPaisTramites([
+  { nombre: "Costos administrativos", valor: 165 },
+  { nombre: "Demoras", valor: 98 },
+  { nombre: "Duplicidad", valor: 71 },
+  { nombre: "Discrecionalidad", valor: 44 },
+  { nombre: "Falta de interoperabilidad", valor: 33 },
+]);
 
 // Badge de severidad de trámites — "Crítica"/"Alta" (distinto del vocabulario
 // "Crítico"/"Alto"/"Mediano"/"Bajo" de SeverityBadge/SEVERITY_COLOR, que es
@@ -2646,93 +3729,66 @@ function FichaPanel({ title, rows }: { title: string; rows: [string, React.React
 }
 
 function BarreraDetail({ id, onNavigate }: { id: string; onNavigate: (v: View) => void }) {
-  const real = ALL_BARRERAS.find(b => b.id === id);
+  const barrera = ALL_BARRERAS.find(b => b.id === id);
+  if (!barrera) return null;
 
-  // dato de muestra: id que solo existe en TOP_BARRERAS_PAIS_TABLA (filas de
-  // las tablas "Top 3 barreras según IRR") -- no hay catálogo real de
-  // barreras individuales para Argentina, Chile, Ecuador y Perú todavía
-  // (mismo pendiente ya anotado en las tareas de Barreras). Se arma la misma
-  // pantalla con lo que sí trae la fila de la tabla (título, sector,
-  // instrumento, clasificación, subdimensión, canal, estado HITL); el resto
-  // de los campos que no existen a este nivel de detalle se muestra como "—".
-  let muestra: TopBarrerasPaisFila | undefined;
-  if (!real) {
-    for (const pais of COUNTRIES) {
-      muestra = TOP_BARRERAS_PAIS_TABLA[pais as Exclude<Country, "Todos">]?.find(f => f.id === id);
-      if (muestra) break;
-    }
-  }
+  const affectedTramites = ALL_TRAMITES.filter(t => barrera.tramitesAfectados.includes(t.id));
 
-  if (!real && !muestra) return null;
-
-  const titulo = real?.titulo ?? muestra!.titulo;
-  const severidad = real?.severidad ?? IRR_LABELS[muestra!.irr];
-  const sector = real?.sector ?? muestra!.sector;
-  const instrumento = real?.instrumento ?? muestra!.instrumento;
-  const clasificacion = real?.clasificacion ?? muestra!.clasificacion;
-  const jerarquiaVal = real?.jerarquia ?? muestra!.jerarquia;
-  const pais = real?.pais ?? muestra!.pais;
-  const anio = real?.anio ?? "—";
-  const subdimension = real ? (BARRERA_META[real.id]?.subdimension ?? "—") : muestra!.subdimension;
-  const etapaCicloVida = real ? (BARRERA_META[real.id]?.etapaCicloVida ?? "—") : "—";
-  const estadoHitl = real?.validacion.estadoHitl ?? muestra!.estadoHitl;
-  const canalTransmision = real?.canalTransmision ?? muestra!.canal;
-
-  const affectedTramites = real ? ALL_TRAMITES.filter(t => real.tramitesAfectados.includes(t.id)) : [];
+  const textParts = barrera.textNormativo.split(barrera.pasajeResaltado);
 
   const identificacionRows: [string, React.ReactNode][] = [
-    ["ID del hallazgo", real?.idHallazgo ?? "—"],
-    ["Instrumento", instrumento],
-    ["Enlace oficial", real?.enlaceOficial ? (
+    ["ID del hallazgo", barrera.idHallazgo],
+    ["Instrumento", barrera.instrumento],
+    ["Enlace oficial", (
       <a
-        href={`https://${real.enlaceOficial}`}
+        href={`https://${barrera.enlaceOficial}`}
         target="_blank"
         rel="noreferrer"
         className="inline-flex items-center gap-1"
         style={{ color: C.steel3, fontFamily: "Space Grotesk, sans-serif", fontSize: 12, fontWeight: 500, textDecoration: "none" }}
       >
-        {real.enlaceOficial} <ExternalLink size={11} />
+        {barrera.enlaceOficial} <ExternalLink size={11} />
       </a>
-    ) : "—"],
-    ["Entidad", real?.entidad ?? "—"],
-    ["Jerarquía", jerarquiaVal],
+    )],
+    ["Entidad", barrera.entidad],
+    ["Jerarquía", barrera.jerarquia],
   ];
 
   const clasificacionRows: [string, React.ReactNode][] = [
-    ["Clasificación", clasificacion],
-    ["Subdimensión", subdimension],
-    ["Tipo de restricción", real?.tipoRestriccion ?? "—"],
-    ["Etapa del ciclo de vida", etapaCicloVida],
-    ["Sector", sector],
-    ["Severidad", severidad],
-    ["Año", String(anio)],
-    ["Canal de transmisión", canalTransmision],
-    ["Afectación MIPYME", real?.afectacionMipyme ?? "—"],
+    ["Clasificación", barrera.clasificacion],
+    ["Subdimensión", BARRERA_META[barrera.id]?.subdimension ?? "—"],
+    ["Tipo de restricción", barrera.tipoRestriccion],
+    ["Etapa del ciclo de vida", BARRERA_META[barrera.id]?.etapaCicloVida ?? "—"],
+    ["Sector", barrera.sector],
+    ["Severidad", barrera.severidad],
+    ["Año", String(barrera.anio)],
+    ["Canal de transmisión", barrera.canalTransmision],
+    ["Afectación MIPYME", barrera.afectacionMipyme],
   ];
 
-  const estadoHitlMeta = ESTADO_HITL_META[estadoHitl];
+  const estadoHitlMeta = ESTADO_HITL_META[barrera.validacion.estadoHitl];
   const validacionRows: [string, React.ReactNode][] = [
-    ["Severidad IA", real?.validacion.severidadIA ?? severidad],
-    ["Severidad validada", real?.validacion.severidadValidada ?? "—"],
+    ["Severidad IA", barrera.validacion.severidadIA],
+    ["Severidad validada", barrera.validacion.severidadValidada],
     ["Estado HITL", (
       <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium"
         style={{ backgroundColor: estadoHitlMeta.bg, color: estadoHitlMeta.color, fontFamily: "IBM Plex Sans, sans-serif" }}>
-        {estadoHitl}
+        {barrera.validacion.estadoHitl}
       </span>
     )],
-    ["Comentario del BID", real?.validacion.comentarioBID ?? "—"],
-    ["Comentario del Consultor", real?.validacion.comentarioConsultor ?? "—"],
-    ["Comentario del gobierno", real?.validacion.comentarioGobierno ?? "—"],
+    ["Comentario del BID", barrera.validacion.comentarioBID],
+    ["Comentario del Consultor", barrera.validacion.comentarioConsultor],
+    ["Comentario del gobierno", barrera.validacion.comentarioGobierno],
   ];
 
   // Filas de la tarjeta "Acción sugerida" — bold cuando el valor es una
   // etiqueta Alta/Media/Baja (Prioridad, Factibilidad).
   const accionSugeridaRows: [string, string][] = [
-    ["Acción sugerida", real?.accionSugerida.accion ?? "—"],
-    ["Prioridad", real?.accionSugerida.prioridad ?? "—"],
-    ["Tipo de cambio requerido", real?.accionSugerida.tipoCambioRequerido ?? "—"],
-    ["Factibilidad", real?.accionSugerida.factibilidad ?? "—"],
-    ["Objetivo legítimo y proporcionalidad", real?.accionSugerida.objetivoLegitimo ?? "—"],
+    ["Acción sugerida", barrera.accionSugerida.accion],
+    ["Prioridad", barrera.accionSugerida.prioridad],
+    ["Tipo de cambio requerido", barrera.accionSugerida.tipoCambioRequerido],
+    ["Factibilidad", barrera.accionSugerida.factibilidad],
+    ["Objetivo legítimo y proporcionalidad", barrera.accionSugerida.objetivoLegitimo],
   ];
   const ESCALA_ALTA_MEDIA_BAJA = ["Alta", "Media", "Baja"];
 
@@ -2740,10 +3796,10 @@ function BarreraDetail({ id, onNavigate }: { id: string; onNavigate: (v: View) =
     <div className="p-4 md:p-8 overflow-y-auto h-full">
       <Header
         breadcrumb="Barreras Regulatorias › Detalle Barrera"
-        title={titulo}
+        title={barrera.titulo}
         actions={
           <>
-            <button style={HDR_BTN_PRIMARY} onClick={() => onNavigate({ screen: "reportes", prefill: { tipoHallazgo: "distorsion", pais, sectores: [sector] } })}>
+            <button style={HDR_BTN_PRIMARY} onClick={() => onNavigate({ screen: "reportes", prefill: { tipoHallazgo: "distorsion", pais: barrera.pais, sectores: [barrera.sector] } })}>
               <Download size={13} /><span className="hidden sm:inline">Generar reporte</span><span className="sm:hidden">Reporte</span>
             </button>
             {/* TODO: dropdown de opciones de descarga */}
@@ -2755,7 +3811,7 @@ function BarreraDetail({ id, onNavigate }: { id: string; onNavigate: (v: View) =
       />
 
       <button className="flex items-center gap-1 text-[12px] mb-4 min-h-[44px]" style={{ color: C.textMuted, fontFamily: "IBM Plex Sans, sans-serif", background: "none", border: "none" }}
-        onClick={() => onNavigate({ screen: "barreras", sector })}>
+        onClick={() => onNavigate({ screen: "barreras", sector: barrera.sector })}>
         ← Volver a Barreras
       </button>
 
@@ -2763,8 +3819,8 @@ function BarreraDetail({ id, onNavigate }: { id: string; onNavigate: (v: View) =
         {/* Main column */}
         <div className="md:col-span-2 flex flex-col gap-5">
           <div className="flex items-center gap-3">
-            <SeverityBadge level={severidad} />
-            <span className="text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{sector} · {pais}</span>
+            <SeverityBadge level={barrera.severidad} />
+            <span className="text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{barrera.sector} · {barrera.pais}</span>
           </div>
 
           {/* Legal text */}
@@ -2772,32 +3828,24 @@ function BarreraDetail({ id, onNavigate }: { id: string; onNavigate: (v: View) =
             <div className="px-5 py-3 border-b flex items-center justify-between" style={{ borderColor: C.border, backgroundColor: "#F0F4F8" }}>
               <div>
                 <p className="text-[11px] uppercase tracking-widest font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Texto normativo de origen</p>
-                <p className="text-[12px] font-semibold mt-0.5" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>{instrumento}</p>
+                <p className="text-[12px] font-semibold mt-0.5" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>{barrera.instrumento}</p>
               </div>
               <div className="text-right">
-                <p className="text-[11px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>Jerarquía: {jerarquiaVal}</p>
-                <p className="text-[11px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{pais} · {anio}</p>
+                <p className="text-[11px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>Jerarquía: {barrera.jerarquia}</p>
+                <p className="text-[11px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{barrera.pais} · {barrera.anio}</p>
               </div>
             </div>
             <div className="flex">
               <div className="w-1 flex-shrink-0" style={{ backgroundColor: C.steel2 }} />
               <div className="p-5">
-                {real ? (
-                  <>
-                    <p className="text-[12px] italic mb-1 text-right" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>texto de muestra</p>
-                    <p className="text-[13px] leading-relaxed whitespace-pre-line" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text }}>
-                      {real.textNormativo.split(real.pasajeResaltado)[0]}
-                      <mark style={{ backgroundColor: "#C7545025", borderBottom: `2px solid ${C.critico}`, padding: "1px 2px" }}>
-                        {real.pasajeResaltado}
-                      </mark>
-                      {real.textNormativo.split(real.pasajeResaltado)[1]}
-                    </p>
-                  </>
-                ) : (
-                  <p className="text-[13px] leading-relaxed italic" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>
-                    Dato de muestra — todavía no hay texto normativo capturado para esta barrera (no existe catálogo real de barreras individuales para {pais}).
-                  </p>
-                )}
+                <p className="text-[12px] italic mb-1 text-right" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>texto de muestra</p>
+                <p className="text-[13px] leading-relaxed whitespace-pre-line" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text }}>
+                  {textParts[0]}
+                  <mark style={{ backgroundColor: "#C7545025", borderBottom: `2px solid ${C.critico}`, padding: "1px 2px" }}>
+                    {barrera.pasajeResaltado}
+                  </mark>
+                  {textParts[1]}
+                </p>
               </div>
             </div>
           </div>
@@ -2805,9 +3853,7 @@ function BarreraDetail({ id, onNavigate }: { id: string; onNavigate: (v: View) =
           {/* Diagnostic */}
           <div className="rounded-lg p-5" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
             <p className="text-[11px] uppercase tracking-widest font-medium mb-2" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Diagnóstico económico</p>
-            <p className="text-[13px] leading-relaxed" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: real ? C.text : C.textMuted }}>
-              {real ? real.diagnostico : "Dato de muestra — todavía no hay diagnóstico económico capturado para esta barrera."}
-            </p>
+            <p className="text-[13px] leading-relaxed" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text }}>{barrera.diagnostico}</p>
           </div>
 
           {/* Acción sugerida — reemplaza el bloque "Propuesta de reforma" (Dice/Debe
@@ -3150,7 +4196,12 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
               </thead>
               <tbody>
                 {prioritariosPageItems.map((t, i) => (
-                  <tr key={i} style={{ borderBottom: `1px solid ${C.border}` }}>
+                  <tr
+                    key={i}
+                    className="cursor-pointer hover:bg-[#F4F7FB] transition-colors"
+                    style={{ borderBottom: `1px solid ${C.border}` }}
+                    onClick={() => onNavigate({ screen: "tramite-detail", id: t.id })}
+                  >
                     <td className="px-4 py-3 text-[13px] font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text, maxWidth: 200 }}>{t.tramite}</td>
                     <td className="px-4 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{t.pais}</td>
                     <td className="px-4 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted, maxWidth: 180 }}>{t.entidad}</td>
@@ -3313,7 +4364,7 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
           sin importar el país; ahora usan td.cargaPorTipo / td.topEntidades */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <PanelTipoSubdimension
-          label="CARGA POR TIPO"
+          label="CARGA POR EJE"
           tipos={["Accesibilidad", "Certidumbre", "Cumplimiento", "Proporcionalidad"]}
           datos={td.cargaPorTipo}
         />
@@ -3336,6 +4387,53 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
         </div>
       </div>
 
+      {/* Etapa del ciclo empresarial + Afectación MIPYME (apiladas en la
+          columna izquierda) · Tipo de usuario (columna derecha, altura
+          distinta) — dato de muestra, ver TODO junto a cada const. */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6" style={{ alignItems: "stretch" }}>
+        <div className="flex flex-col gap-4">
+          <ComposicionSimplePanel
+            label="Etapa del ciclo empresarial"
+            filas={ETAPA_CICLO_MUESTRA[country as Exclude<Country, "Todos">] ?? ETAPA_CICLO_MUESTRA["Bolivia"]}
+            actionLabel="Ver tabla completa"
+            onAction={() => console.log("Ver tabla completa — Etapa del ciclo empresarial")}
+          />
+          <ComposicionSimplePanel
+            label="Afectación MIPYME"
+            filas={MIPYME_MUESTRA[country as Exclude<Country, "Todos">] ?? MIPYME_MUESTRA["Bolivia"]}
+            actionLabel="Ver tabla completa"
+            onAction={() => console.log("Ver tabla completa — Afectación MIPYME")}
+          />
+        </div>
+        <ComposicionSimplePanel
+          label="Tipo de usuario"
+          filas={[
+            { nombre: "Empresarial", valor: td.tipoUsuario.empresarial },
+            { nombre: "Ciudadano", valor: td.tipoUsuario.ciudadano },
+            { nombre: "Mixto", valor: td.tipoUsuario.mixto },
+          ]}
+          actionLabel="Ver tabla completa"
+          onAction={() => console.log("Ver tabla completa — Tipo de usuario")}
+        />
+      </div>
+
+      {/* Acciones de mejora en trámites · Afectaciones — series independientes
+          (antes esta segunda sección repetía los números de la primera) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6" style={{ alignItems: "stretch" }}>
+        <ComposicionSimplePanel
+          label="Acciones de mejora en trámites"
+          filas={TRAMITES_ACCION_MEJORA_MUESTRA[country as Exclude<Country, "Todos">] ?? TRAMITES_ACCION_MEJORA_MUESTRA["Bolivia"]}
+          actionLabel="Ver más"
+          onAction={() => console.log("Ver más — Acciones de mejora en trámites")}
+        />
+        <ComposicionSimplePanel
+          label="Afectaciones"
+          filas={TRAMITES_AFECTACIONES_MUESTRA[country as Exclude<Country, "Todos">] ?? TRAMITES_AFECTACIONES_MUESTRA["Bolivia"]}
+          actionLabel="Ver más"
+          onAction={() => console.log("Ver más — Afectaciones")}
+        />
+      </div>
+
       {/* Trámites prioritarios — dato de muestra (TRAMITES_PRIORITARIOS_MUESTRA),
           filtrado por país; antes esta tabla mostraba TRAMITES_EXT (catálogo
           de Bolivia) sin importar el país seleccionado en el filtro de arriba. */}
@@ -3350,10 +4448,10 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
               <span className="text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.steel3 }}>({filasPais.length})</span>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px]">
+              <table className="w-full min-w-[1000px]">
                 <thead>
                   <tr style={{ borderBottom: `1px solid ${C.border}` }}>
-                    {["Trámite", "País", "Entidad", "Eje", "Costo", "Severidad", "Estado HITL", "Acción sugerida"].map(h => (
+                    {["Trámite", "Tipo de usuario", "Entidad", "Sector", "Eje", "Costo", "Severidad", "Estado HITL", "Acción sugerida"].map(h => (
                       <th key={h} className="px-4 py-3 text-left text-[11px] uppercase tracking-widest whitespace-nowrap"
                         style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>{h}</th>
                     ))}
@@ -3361,10 +4459,16 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
                 </thead>
                 <tbody>
                   {prioritariosPageItems.map((t, i) => (
-                    <tr key={i} style={{ borderBottom: `1px solid ${C.border}` }}>
+                    <tr
+                      key={i}
+                      className="cursor-pointer hover:bg-[#F4F7FB] transition-colors"
+                      style={{ borderBottom: `1px solid ${C.border}` }}
+                      onClick={() => onNavigate({ screen: "tramite-detail", id: t.id })}
+                    >
                       <td className="px-4 py-3 text-[13px] font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text, maxWidth: 200 }}>{t.tramite}</td>
-                      <td className="px-4 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{country}</td>
+                      <td className="px-4 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{t.tipoUsuario}</td>
                       <td className="px-4 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted, maxWidth: 180 }}>{t.entidad}</td>
+                      <td className="px-4 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted, maxWidth: 160 }}>{t.sector}</td>
                       <td className="px-4 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{t.eje}</td>
                       <td className="px-4 py-3 text-[12px] whitespace-nowrap" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{t.costo}</td>
                       <td className="px-4 py-3"><TramiteSeveridadBadge level={t.severidad} /></td>
