@@ -39,6 +39,11 @@ export type BarrasComposicionProps = {
   // Control opcional (ej. un <select> visual) mostrado a la derecha del label
   // en el header. No afecta el layout cuando se omite.
   headerRight?: React.ReactNode;
+  // Si se pasa, cada fila se vuelve clickable (cursor pointer) y dispara esto
+  // con la categoría de esa fila. Cuando se omite, las filas se comportan
+  // exactamente igual que antes (no clickables) — no afecta a los usos
+  // existentes que no la pasan.
+  onRowClick?: (categoria: BarrasComposicionCategoria) => void;
 };
 
 // ─── Build a stable color map: first-encounter order across all bars ───────────
@@ -65,18 +70,24 @@ function ComposicionRow({
   componentes,
   maxTotal,
   colorMap,
+  onClick,
 }: {
   nombre: string;
   total: number;
   componentes: BarrasComposicionComponente[];
   maxTotal: number;
   colorMap: Map<string, string>;
+  onClick?: () => void;
 }) {
   const pct = maxTotal > 0 ? (total / maxTotal) * 100 : 0;
   const active = componentes.filter((c) => c.valor > 0);
 
   return (
-    <div className="flex items-center gap-3">
+    <div
+      className="flex items-center gap-3"
+      onClick={onClick}
+      style={onClick ? { cursor: "pointer" } : undefined}
+    >
       <span
         className="flex-shrink-0 leading-tight overflow-hidden"
         style={{
@@ -133,6 +144,7 @@ export function BarrasComposicion({
   categorias,
   className,
   headerRight,
+  onRowClick,
 }: BarrasComposicionProps) {
   const colorMap = buildColorMap(categorias);
   const maxTotal =
@@ -202,6 +214,7 @@ export function BarrasComposicion({
             componentes={cat.componentes}
             maxTotal={maxTotal}
             colorMap={colorMap}
+            onClick={onRowClick ? () => onRowClick(cat) : undefined}
           />
         ))}
       </div>

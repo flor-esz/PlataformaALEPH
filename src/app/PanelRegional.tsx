@@ -14,6 +14,7 @@ import { BarrasComposicion } from "./components/ui/BarrasComposicion";
 import type { BarrasComposicionCategoria } from "./components/ui/BarrasComposicion";
 import { IrrGeneralCard } from "./components/ui/IrrGeneralCard";
 import { EstadoProcesamientoPanel } from "./components/ui/EstadoProcesamientoPanel";
+import { JERARQUIA_N2N6_TOTALES } from "./data/instrumentosMuestra";
 
 // ─── Panel Regional ─────────────────────────────────────────────────────────
 // Vista agregada de los COUNTRIES.length países activos — punto de entrada de
@@ -30,13 +31,15 @@ function PanelRegional({ onNavigate }: { onNavigate: (v: View) => void }) {
   // ── Instrumentos por jerarquía normativa — datos de MUESTRA, pendiente de
   // confirmar valores reales con Franco/Juanjo (solo cuadran en el total 1,842) ──
   // TODO: reemplazar por valores reales por nivel N2–N6 cuando estén disponibles.
-  const jerarquiaCategorias: BarrasComposicionCategoria[] = [
-    { nombre: "N2 Legislativo",            total: 210, componentes: [{ nombre: "N2 Legislativo",            valor: 210 }] },
-    { nombre: "N3 Reglamentario",          total: 486, componentes: [{ nombre: "N3 Reglamentario",          valor: 486 }] },
-    { nombre: "N4 Resolutivo / Agencias",  total: 512, componentes: [{ nombre: "N4 Resolutivo / Agencias",  valor: 512 }] },
-    { nombre: "N5 Técnico-operativo",      total: 398, componentes: [{ nombre: "N5 Técnico-operativo",      valor: 398 }] },
-    { nombre: "N6 Procedimental/Trámites", total: 236, componentes: [{ nombre: "N6 Procedimental/Trámites", valor: 236 }] },
-  ];
+  // Los totales vienen de JERARQUIA_N2N6_TOTALES (data/instrumentosMuestra.ts) —
+  // esa es la única copia de estos 5 números, no una separada: el mismo array
+  // arma INSTRUMENTOS_MUESTRA (el catálogo detrás de "Ver hallazgos filtrados"
+  // al clickear una fila) así que ambos siempre cuadran entre sí.
+  const jerarquiaCategorias: BarrasComposicionCategoria[] = JERARQUIA_N2N6_TOTALES.map(({ nivel, total }) => ({
+    nombre: nivel,
+    total,
+    componentes: [{ nombre: nivel, valor: total }],
+  }));
 
   return (
     <div className="p-4 md:p-8 overflow-y-auto h-full">
@@ -116,6 +119,7 @@ function PanelRegional({ onNavigate }: { onNavigate: (v: View) => void }) {
         total={1842}
         categorias={jerarquiaCategorias}
         className="mb-8"
+        onRowClick={(cat) => onNavigate({ screen: "hallazgos-filtrados", filtros: { jerarquia: cat.nombre } })}
       />
 
       {/* Países */}

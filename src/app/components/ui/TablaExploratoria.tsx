@@ -25,17 +25,19 @@ export type TablaExploratoriaProps = {
   onVerTablaCompleta?: () => void;
 };
 
-const VIGENCIA_META: Record<Vigencia, { bg: string; color: string }> = {
+// Exportados para que HallazgosFiltrados.tsx (misma tabla, distinta pantalla)
+// reuse exactamente los mismos badges en vez de redefinir los colores.
+export const VIGENCIA_META: Record<Vigencia, { bg: string; color: string }> = {
   "Vigente":       { bg: "#E7F1DC", color: "#3B6D11" },
   "Por confirmar": { bg: "#F6EBD6", color: "#8A5A12" },
 };
 
-const ESTADO_META: Record<EstadoInstrumento, { bg: string; color: string }> = {
+export const ESTADO_META: Record<EstadoInstrumento, { bg: string; color: string }> = {
   Analizado: { bg: "#E6F4EA", color: "#2D7A3A" },
   Procesado: { bg: "#E8F0FA", color: "#26456B" },
 };
 
-function Badge({ label, bg, color }: { label: string; bg: string; color: string }) {
+export function Badge({ label, bg, color }: { label: string; bg: string; color: string }) {
   return (
     <span
       className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium"

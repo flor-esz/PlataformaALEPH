@@ -53,6 +53,13 @@ import ImpactoEconomico from "./ImpactoEconomico";
 // usa lo que importa de vuelta desde este archivo dentro del cuerpo de
 // IndiceIDR(), nunca en el top-level de su módulo. Import estático seguro.
 import IndiceIDR from "./IndiceIDR";
+// Mismo criterio -- HallazgosFiltrados.tsx solo usa Header dentro del cuerpo
+// de HallazgosFiltrados(), nunca en el top-level de su módulo. Import
+// estático seguro. instrumentosMuestra.ts no importa nada de este archivo
+// (self-contained, mismo criterio que components/ui/*.tsx) así que ese
+// import no forma parte de ningún ciclo.
+import { HallazgosFiltrados } from "./components/ui/HallazgosFiltrados";
+import { INSTRUMENTOS_MUESTRA } from "./data/instrumentosMuestra";
 import {
   PieChart,
   Pie,
@@ -139,7 +146,8 @@ export type View =
   | { screen: "revision-log-errores" }
   | { screen: "revision-log-errores-detalle"; id: string }
   | { screen: "revision-notificaciones" }
-  | { screen: "indice" };
+  | { screen: "indice" }
+  | { screen: "hallazgos-filtrados"; filtros: Record<string, string> };
 type AuthView = "login" | "recover" | "recover-sent" | "recover-new" | "recover-confirmed" | "recover-expired";
 
 type ReportesPrefill = {
@@ -2877,13 +2885,17 @@ function NotificationBell() {
   );
 }
 
-export function Header({ breadcrumb, title, subtitle, actions }: { breadcrumb: string; title: string; subtitle?: string; actions?: React.ReactNode }) {
+// breadcrumb es opcional: HallazgosFiltrados.tsx pide explícitamente
+// "sin breadcrumb arriba", así que cuando se omite no se renderiza esa
+// línea (no solo texto vacío) — todos los demás usos ya pasan un
+// breadcrumb no vacío, así que su comportamiento no cambia.
+export function Header({ breadcrumb, title, subtitle, actions }: { breadcrumb?: string; title: string; subtitle?: string; actions?: React.ReactNode }) {
   const isMobile = useIsMobile();
   return (
     <div className="mb-5 md:mb-6">
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <p className="text-[10px] md:text-[11px] uppercase tracking-widest mb-0.5" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{breadcrumb}</p>
+          {breadcrumb && <p className="text-[10px] md:text-[11px] uppercase tracking-widest mb-0.5" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{breadcrumb}</p>}
           <h1 className="text-[22px] md:text-[28px] font-semibold leading-tight" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>{title}</h1>
           {subtitle && <p className="text-[12px] md:text-[13px] mt-0.5" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{subtitle}</p>}
         </div>
@@ -7394,6 +7406,32 @@ export default function App() {
       case "tramite-detail": return <TramiteDetail id={view.id} onNavigate={navigate} />;
       case "distorsion-detail": return <DistorsionDetail id={view.id} onNavigate={navigate} />;
       case "indice": return <IndiceIDR country={activeCountry} onCountryChange={c => setActiveCountry(c)} onNavigate={navigate} />;
+      case "hallazgos-filtrados": {
+        // Label legible por cada key de filtro soportada -- hoy solo
+        // "jerarquia" (ver PanelRegional.tsx, única fila clickable todavía).
+        const FILTRO_LABELS: Record<string, string> = { jerarquia: "Jerarquía" };
+        const filtrosObj = view.filtros;
+        const filtrosArr = Object.entries(filtrosObj).map(([key, value]) => ({ key, value, label: FILTRO_LABELS[key] ?? key }));
+        const resultados = INSTRUMENTOS_MUESTRA.filter(instr => {
+          const rec = instr as unknown as Record<string, string | number>;
+          return Object.entries(filtrosObj).every(([key, value]) => String(rec[key]) === value);
+        });
+        const quitarFiltro = (key: string) => {
+          const next = { ...filtrosObj };
+          delete next[key];
+          if (Object.keys(next).length === 0) navigate({ screen: "panel-regional" });
+          else navigate({ screen: "hallazgos-filtrados", filtros: next });
+        };
+        return (
+          <HallazgosFiltrados
+            filtros={filtrosArr}
+            resultados={resultados}
+            onQuitarFiltro={quitarFiltro}
+            onLimpiarTodos={() => navigate({ screen: "panel-regional" })}
+            onNavigate={navigate}
+          />
+        );
+      }
       case "administracion": {
         const adminTab = (view as { screen: "administracion"; tab?: string }).tab ?? "usuarios";
         if (adminTab === "catalogos") return <AdminCatalogosScreen />;
