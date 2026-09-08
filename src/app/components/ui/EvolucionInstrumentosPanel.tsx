@@ -22,6 +22,10 @@ export type EvolucionInstrumentosPanelProps = {
   anios: EvolucionAnio[];
   onVerTodo?: () => void;
   className?: string;
+  // Título del header — por defecto "Evolución de instrumentos en el tiempo"
+  // (usado en Panel País); otras pantallas pueden reusar el componente con
+  // un título distinto para la misma métrica.
+  label?: string;
 };
 
 // ─── Build a stable legend: first-encounter order across all years ────────────
@@ -63,7 +67,7 @@ function AnioRow({ anio, total, segmentos }: EvolucionAnio) {
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
-export function EvolucionInstrumentosPanel({ anios, onVerTodo, className }: EvolucionInstrumentosPanelProps) {
+export function EvolucionInstrumentosPanel({ anios, onVerTodo, className, label }: EvolucionInstrumentosPanelProps) {
   const legend = buildLegend(anios);
 
   return (
@@ -73,7 +77,7 @@ export function EvolucionInstrumentosPanel({ anios, onVerTodo, className }: Evol
           className="uppercase tracking-widest"
           style={{ fontFamily: "Space Grotesk, sans-serif", fontSize: 11, color: "#6B7A8D" }}
         >
-          Evolución de instrumentos en el tiempo
+          {label ?? "Evolución de instrumentos en el tiempo"}
         </p>
         <button
           onClick={onVerTodo}

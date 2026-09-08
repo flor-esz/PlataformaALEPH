@@ -940,6 +940,15 @@ const VALIDADO_HITL_MUESTRA: Record<Country, number> = {
   Perú: 70,
 };
 
+// Badge de estado HITL — reutilizado por la tabla regional y la tabla por
+// país de Barreras (antes duplicado en la primera, ahora en un solo lugar).
+type EstadoHitl = "Publicado" | "Por decidir" | "Etapa 3";
+const ESTADO_HITL_META: Record<EstadoHitl, { bg: string; color: string }> = {
+  "Publicado":   { bg: C.verde2, color: C.verde1 },
+  "Por decidir": { bg: C.ambar2, color: C.ambarTexto },
+  "Etapa 3":     { bg: "#E8F0FA", color: C.alto },
+};
+
 // Top 3 barreras por país según IRR — dato de muestra: no hay catálogo real
 // de barreras individuales para Argentina, Chile, Ecuador y Perú todavía
 // (solo Bolivia tiene BARRERAS_NIVEL4_LIST; sus 3 filas de abajo reusan
@@ -980,6 +989,110 @@ const TOP_BARRERAS_POR_PAIS_MUESTRA: Record<Exclude<Country, "Todos">, {
     { irr: 4, clasificacion: "Entrada",   subdimension: "Comercio",                  sector: "Minería",             instrumento: "D.S. 4523-2023",                            estadoHitl: "Publicado" },
     { irr: 4, clasificacion: "Entrada",   subdimension: "Inversión",                 sector: "Textil y Confección", instrumento: "Ley 1178, Art. 6",                          estadoHitl: "Etapa 3" },
   ],
+};
+
+// Agrega "titulo", "canal" y "jerarquia" de muestra a cada fila de
+// TOP_BARRERAS_POR_PAIS_MUESTRA (se reutiliza tal cual, sin reescribir sus
+// campos) para armar la tabla "Top 3 barreras según IRR" del Panel País.
+// TODO: no hay catálogo real de barreras individuales para Argentina, Chile,
+// Ecuador y Perú todavía (mismo pendiente que Barreras Regional) — canal,
+// título y jerarquía de estas filas son de muestra.
+const TOP_BARRERAS_PAIS_TABLA_EXTRA: Record<Exclude<Country, "Todos">, { titulo: string; canal: string; jerarquia: string }[]> = {
+  Argentina: [
+    { titulo: "Registro Obligatorio de Autopartes",                 canal: "Costo administrativo",    jerarquia: "Reglamentario" },
+    { titulo: "Demora en Renovación de Permisos Agroindustriales",  canal: "Tiempo/incertidumbre",     jerarquia: "Reglamentario" },
+    { titulo: "Capital Mínimo para Nuevas Entidades Financieras",   canal: "Capital/liquidez",         jerarquia: "Legal" },
+  ],
+  Bolivia: [
+    { titulo: "Bloqueo por Renovación de Registros",  canal: "Tiempo/incertidumbre",    jerarquia: "Reglamentario" },
+    { titulo: "Restricción de Venta Local en ZOLI",   canal: "Costo administrativo",    jerarquia: "Legal" },
+    { titulo: "Monopolio de Distribución Estatal",    canal: "Incumbentes/competencia", jerarquia: "Legal" },
+  ],
+  Chile: [
+    { titulo: "Reporte Semestral de Producción Minera",            canal: "Costo administrativo", jerarquia: "Reglamentario" },
+    { titulo: "Garantía de Inversión Renovable Excesiva",          canal: "Capital/liquidez",      jerarquia: "Administrativo" },
+    { titulo: "Requisito Técnico Desproporcionado en Financieras", canal: "Capacidad técnica",     jerarquia: "Legal" },
+  ],
+  Ecuador: [
+    { titulo: "Demora en Autorización de Operaciones Petroleras",  canal: "Tiempo/incertidumbre",     jerarquia: "Reglamentario" },
+    { titulo: "Certificación Fitosanitaria Redundante",            canal: "Costo administrativo",     jerarquia: "Administrativo" },
+    { titulo: "Reserva de Mercado para Exportadores Establecidos", canal: "Incumbentes/competencia",  jerarquia: "Reglamentario" },
+  ],
+  Perú: [
+    { titulo: "Certidumbre por Renovación de Registros", canal: "Tiempo/incertidumbre", jerarquia: "Reglamentario" },
+    { titulo: "Restricción de Registro Minero",          canal: "Costo administrativo", jerarquia: "Reglamentario" },
+    { titulo: "Capital Mínimo Desproporcionado",         canal: "Capital/liquidez",     jerarquia: "Legal" },
+  ],
+};
+
+type TopBarrerasPaisFila = {
+  irr: 4 | 3 | 2 | 1; clasificacion: "Entrada" | "Operación"; subdimension: string; sector: string; instrumento: string; estadoHitl: "Publicado" | "Por decidir" | "Etapa 3";
+  titulo: string; canal: string; jerarquia: string;
+};
+
+const TOP_BARRERAS_PAIS_TABLA: Record<Exclude<Country, "Todos">, TopBarrerasPaisFila[]> = (() => {
+  const result = {} as Record<Exclude<Country, "Todos">, TopBarrerasPaisFila[]>;
+  for (const pais of COUNTRIES) {
+    const key = pais as Exclude<Country, "Todos">;
+    result[key] = TOP_BARRERAS_POR_PAIS_MUESTRA[key].map((b, i) => ({ ...b, ...TOP_BARRERAS_PAIS_TABLA_EXTRA[key][i] }));
+  }
+  return result;
+})();
+
+// Reparto por canal / acción de mejora / segmento MIPYME, junto a las barreras
+// del país — Perú es la base dada; el resto se escala con el mismo factor que
+// ya usa scaleTipoDato (total del país / total de Bolivia).
+// dato de muestra — nuevo, conecta con "Impacto económico".
+function scaleMuestraPorPais(baseParaPeru: { nombre: string; valor: number }[]): Record<Exclude<Country, "Todos">, { nombre: string; valor: number }[]> {
+  const bolTotal = COUNTRY_BARRERAS_DATA["Bolivia"].total;
+  const result = {} as Record<Exclude<Country, "Todos">, { nombre: string; valor: number }[]>;
+  for (const pais of COUNTRIES) {
+    const key = pais as Exclude<Country, "Todos">;
+    const factor = COUNTRY_BARRERAS_DATA[key].total / bolTotal;
+    result[key] = key === "Perú" ? baseParaPeru : baseParaPeru.map(b => ({ nombre: b.nombre, valor: Math.round(b.valor * factor) }));
+  }
+  return result;
+}
+
+const CANALES_TRANSMISION_MUESTRA = scaleMuestraPorPais([
+  { nombre: "Costo administrativo",    valor: 92 },
+  { nombre: "Capital/liquidez",        valor: 78 },
+  { nombre: "Tiempo/incertidumbre",    valor: 71 },
+  { nombre: "Capacidad técnica",       valor: 64 },
+  { nombre: "Modelo de negocio",       valor: 56 },
+  { nombre: "Incumbentes/competencia", valor: 36 },
+]);
+
+const ACCION_MEJORA_MUESTRA = scaleMuestraPorPais([
+  { nombre: "Eliminar",         valor: 180 },
+  { nombre: "Simplificar",      valor: 113 },
+  { nombre: "Sustituir",        valor: 86 },
+  { nombre: "Clarificar",       valor: 52 },
+  { nombre: "Proporcionalizar", valor: 47 },
+]);
+
+const MIPYME_MUESTRA = scaleMuestraPorPais([
+  { nombre: "Microempresa",    valor: 92 },
+  { nombre: "Pequeña empresa", valor: 78 },
+  { nombre: "Mediana empresa", valor: 71 },
+]);
+
+// % no estructurado por nivel N2–N6 usado en el Panel País de Barreras —
+// distinto del que usa Panorama Regulatorio (DOC_ESTRUCTURA_PCT_MUESTRA),
+// dato de muestra por ahora.
+const DOC_ESTRUCTURA_PCT_BARRERAS_MUESTRA = [8, 15, 22, 29, 40];
+
+// Canal de transmisión económica de muestra por subdimensión — usado para
+// enriquecer las filas reales de BARRERAS_NIVEL4_LIST (Bolivia) en la tabla
+// "Top 3 barreras según IRR" del Panel País.
+const CANAL_POR_SUBDIMENSION_MUESTRA: Record<string, string> = {
+  "Certidumbre procedimental":             "Tiempo/incertidumbre",
+  "Discrecionalidad administrativa":       "Tiempo/incertidumbre",
+  "Comercio":                              "Costo administrativo",
+  "Trámites y requisitos de cumplimiento": "Costo administrativo",
+  "Duplicidad e interoperabilidad":        "Costo administrativo",
+  "Inversión":                             "Capital/liquidez",
+  "Competencia":                           "Incumbentes/competencia",
 };
 
 // ─── Barreras nivel-4 list (Bolivia) ──────────────────────────────────────────
@@ -1841,6 +1954,51 @@ function BarrerasPorJerarquiaCard({ cd, jerarquiaActiva, footer }: {
   );
 }
 
+// ─── Panel de composición genérico (barra + número) ────────────────────────────
+// Reutilizado por "Canales de transmisión económica", "Barreras por acción de
+// mejora sugerida" y "Barreras con afectación MIPYME" en el Panel País de
+// Barreras — mismo lenguaje visual que BarrasComposicion, pero SIN leyenda de
+// severidad (esto es composición, no severidad): degradado C.steel4→steel1 y
+// dos tonos más claros de la misma rampa categórica para filas adicionales.
+function ComposicionSimplePanel({ label, filas, actionLabel, onAction }: {
+  label: string;
+  filas: { nombre: string; valor: number }[];
+  actionLabel?: string;
+  onAction?: () => void;
+}) {
+  const maxValor = Math.max(...filas.map(f => f.valor), 1);
+  const gradient = [C.steel4, C.steel3, C.steel2, C.steel1, "#A0C1E0", "#BDD0DD"];
+  return (
+    <div className="rounded-xl flex flex-col h-full" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
+      <div className="px-5 pt-4 pb-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${C.border}` }}>
+        <p className="text-[11px] uppercase tracking-widest font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>{label}</p>
+        {actionLabel && (
+          <button
+            onClick={onAction}
+            style={{ backgroundColor: C.text, color: "white", border: "none", borderRadius: 999, padding: "6px 14px", fontFamily: "Space Grotesk, sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+          >
+            {actionLabel}
+          </button>
+        )}
+      </div>
+      <div className="px-5 pt-4 pb-5 flex flex-col gap-3 flex-1 justify-center">
+        {filas.map((f, i) => {
+          const pct = (f.valor / maxValor) * 100;
+          return (
+            <div key={f.nombre} className="flex items-center gap-3">
+              <span className="flex-shrink-0" style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 11, color: C.textMuted, width: 150, lineHeight: 1.3 }}>{f.nombre}</span>
+              <div className="flex-1 rounded-full overflow-hidden" style={{ height: 12, backgroundColor: "#E6ECF3" }}>
+                <div style={{ width: `${pct}%`, height: "100%", backgroundColor: gradient[i % gradient.length] }} />
+              </div>
+              <span className="flex-shrink-0 text-right" style={{ fontFamily: "Space Grotesk, sans-serif", fontSize: 12, fontWeight: 600, color: C.textMuted, width: 32 }}>{f.valor}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ─── Screen 3 — Barreras ──────────────────────────────────────────────────────
 function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, onNavigate }: { initialSector?: string; country?: Country; onCountryChange?: (c: Country) => void; onNavigate: (v: View) => void }) {
   const [sector, setSector] = useState(initialSector || "");
@@ -1893,12 +2051,6 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
     const topBarrerasFilas = COUNTRIES.flatMap(pais =>
       (TOP_BARRERAS_POR_PAIS_MUESTRA[pais as Exclude<Country, "Todos">] ?? []).map(b => ({ pais, ...b }))
     );
-
-    const ESTADO_HITL_META: Record<"Publicado" | "Por decidir" | "Etapa 3", { bg: string; color: string }> = {
-      "Publicado":   { bg: C.verde2, color: C.verde1 },
-      "Por decidir": { bg: C.ambar2, color: C.ambarTexto },
-      "Etapa 3":     { bg: "#E8F0FA", color: C.alto },
-    };
 
     const SEV_LEGEND = [
       { label: "4 · Crítico", color: "#C75450" },
@@ -2102,99 +2254,183 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
               entidades={entidades}
             />
 
+            {/* TODO: confirmar con Franco si este panel pertenece a Barreras o
+                es exclusivo de Panorama Regulatorio -- hoy se muestra la misma
+                métrica (evolución de instrumentos por país) en dos pantallas. */}
+            <EvolucionInstrumentosPanel
+              anios={buildEvolucion(JERARQUIA_NORMATIVA_DATA.find(c => c.nombre === country)!.total)}
+              label="Barreras en instrumentos por jerarquía normativa"
+              className="mb-6"
+            />
+
             {/* KPIs */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
               <KpiCard label="Total barreras" value={cd.total.toLocaleString("es-BO")} sub={countryLabel} />
               <KpiCard label="Barreras críticas" value={String(cd.criticas)} sub="nivel 4 · atención prioritaria" valueColor={C.critico} />
-              <KpiCard label="IRR promedio" value={cd.irrPromedio} valueSuffix="/4" sub="Escala 1 a 4" />
+              <KpiCard label="IRR promedio" value={severidadLabel(Number(cd.irrPromedio))} sub={`IRR ${cd.irrPromedio}/4 · Escala 1 a 4`} />
               <KpiCard label="Sectores afectados" value={String(cd.sectores)} sub="con barreras registradas" />
+              {/* TODO: primer cruce Barreras↔Validación HITL, no existe ese cálculo real todavía */}
+              <KpiCard label="% Validado HITL" value={String(VALIDADO_HITL_MUESTRA[country])} valueSuffix="%" />
             </div>
           </>
         );
       })()}
 
-      {/* Charts row — IRR por clasificación · Barreras por jerarquía */}
+      {/* IRR por clasificación · Matriz regional */}
       {(() => {
         const cd = COUNTRY_BARRERAS_DATA[country] ?? COUNTRY_BARRERAS_DATA["Bolivia"];
         return (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6" style={{ alignItems: "stretch" }}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4" style={{ alignItems: "stretch" }}>
             <PanelTipoSubdimension
               label="IRR por clasificación"
               tipos={["Entrada", "Operación"]}
               datos={cd.clasificacion}
               className="h-full"
             />
-            <BarrerasPorJerarquiaCard cd={cd} jerarquiaActiva={jerarquia} />
+            <MatrizRegional clasificacion={cd.clasificacion} />
           </div>
         );
       })()}
 
-      {/* Barreras prioritarias table */}
-      <div className="rounded-lg" style={{ backgroundColor: C.card }}>
-        <div className="p-5 border-b flex items-center justify-between" style={{ borderColor: C.border }}>
-          <h3 className="text-[13px] uppercase tracking-widest font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>
-            Barreras prioritarias{" "}
-            <span style={{ color: C.critico }}>({filtered.length < BARRERAS_NIVEL4_LIST.length ? filtered.length : 91})</span>
-          </h3>
-          <span style={{ fontSize: 12, color: C.textMuted, fontFamily: "IBM Plex Sans, sans-serif" }}>
-            {filtered.length} registros filtrados
-          </span>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px]">
-            <thead>
-              <tr style={{ borderBottom: `1px solid ${C.border}` }}>
-                {["Barrera", "IRR", "Clasificación", "Subdimensión", "Jerarquía", "Sector", "Instrumento"].map(h => (
-                  <th key={h} className="px-4 py-3 text-left text-[11px] uppercase tracking-widest whitespace-nowrap"
-                    style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {pageItems.map((b, i) => (
-                <tr
-                  key={i}
-                  className="hover:bg-[#F4F7FB] transition-colors"
-                  style={{ borderBottom: `1px solid ${C.border}`, cursor: b.id ? "pointer" : "default" }}
-                  onClick={() => { if (b.id) onNavigate({ screen: "barrera-detail", id: b.id }); }}
-                >
-                  <td className="px-4 py-3 text-[13px] font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text, maxWidth: 200 }}>{b.titulo}</td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    <span style={{ fontFamily: "Space Grotesk, sans-serif", fontSize: 12, fontWeight: 600, color: C.critico }}>
-                      {b.irr} · Crítico
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{b.clasificacion}</td>
-                  <td className="px-4 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted, maxWidth: 180 }}>{b.subdimension}</td>
-                  <td className="px-4 py-3 text-[12px] whitespace-nowrap" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{b.jerarquia}</td>
-                  <td className="px-4 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{b.sector}</td>
-                  <td className="px-4 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted, maxWidth: 180 }}>{b.instrumento}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {pageCount > 1 && (
-          <div className="flex items-center justify-between px-5 py-3 border-t" style={{ borderColor: C.border }}>
-            <span style={{ fontSize: 12, color: C.textMuted, fontFamily: "IBM Plex Sans, sans-serif" }}>
-              {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filtered.length)} de {filtered.length}
-            </span>
-            <div className="flex gap-2">
-              {[...Array(pageCount)].map((_, i) => (
-                <button key={i} onClick={() => setPage(i)}
-                  style={{
-                    width: 28, height: 28, borderRadius: 6, border: "none",
-                    backgroundColor: i === page ? C.steel4 : C.border,
-                    color: i === page ? "white" : C.textMuted,
-                    fontFamily: "Space Grotesk, sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer",
-                  }}>
-                  {i + 1}
-                </button>
-              ))}
-            </div>
+      {/* Barreras por jerarquía normativa · Canales de transmisión económica */}
+      {(() => {
+        const cd = COUNTRY_BARRERAS_DATA[country] ?? COUNTRY_BARRERAS_DATA["Bolivia"];
+        const coberturaPais = COBERTURA_MUESTRA[country as Exclude<Country, "Todos">] ?? COBERTURA_MUESTRA["Bolivia"];
+        return (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4" style={{ alignItems: "stretch" }}>
+            <BarrerasPorJerarquiaCard
+              cd={cd}
+              jerarquiaActiva={jerarquia}
+              footer={
+                <p style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 11, color: C.textMuted }}>
+                  Cobertura {coberturaPais}% · {VALIDADO_HITL_MUESTRA[country]}% validado HITL
+                </p>
+              }
+            />
+            {/* TODO: canal de transmisión económica es un concepto nuevo sin
+                metodología real todavía -- falta definir cómo se calcula a
+                partir de barreras individuales cuando exista ese detalle. */}
+            <ComposicionSimplePanel
+              label="Canales de transmisión económica"
+              filas={CANALES_TRANSMISION_MUESTRA[country as Exclude<Country, "Todos">] ?? CANALES_TRANSMISION_MUESTRA["Bolivia"]}
+            />
           </div>
-        )}
+        );
+      })()}
+
+      {/* Barreras por acción de mejora sugerida · Barreras con afectación MIPYME */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6" style={{ alignItems: "stretch" }}>
+        {/* TODO: acción de mejora sugerida a nivel agregado es un concepto
+            nuevo sin metodología real -- falta definir cómo se calcula a
+            partir de barreras individuales cuando exista ese detalle. */}
+        <ComposicionSimplePanel
+          label="Barreras por acción de mejora sugerida"
+          filas={ACCION_MEJORA_MUESTRA[country as Exclude<Country, "Todos">] ?? ACCION_MEJORA_MUESTRA["Bolivia"]}
+        />
+        {/* TODO: afectación MIPYME es un concepto nuevo sin metodología real
+            -- falta definir cómo se calcula a partir de barreras individuales
+            cuando exista ese detalle. */}
+        <ComposicionSimplePanel
+          label="Barreras con afectación MIPYME"
+          filas={MIPYME_MUESTRA[country as Exclude<Country, "Todos">] ?? MIPYME_MUESTRA["Bolivia"]}
+          actionLabel="Ver tabla completa"
+          onAction={() => console.log("Ver tabla completa — Barreras con afectación MIPYME")}
+        />
       </div>
+
+      <DocumentosEstructuraPanel
+        filas={JERARQUIA_N2N6_LABELS.map((nombre, i) => ({ nombre, pctNoEstructurado: DOC_ESTRUCTURA_PCT_BARRERAS_MUESTRA[i] }))}
+        className="mb-6"
+        onVerTabla={() => onNavigate({ screen: "indice" })}
+      />
+
+      {/* Top 3 barreras según IRR */}
+      {(() => {
+        const esBolivia = country === "Bolivia";
+        const tablaFilas = esBolivia
+          ? pageItems.map((b, i) => ({
+              ...b,
+              canal: CANAL_POR_SUBDIMENSION_MUESTRA[b.subdimension] ?? "Modelo de negocio",
+              estadoHitl: (["Publicado", "Por decidir", "Etapa 3"] as const)[i % 3] as EstadoHitl,
+            }))
+          : TOP_BARRERAS_PAIS_TABLA[country as Exclude<Country, "Todos">] ?? TOP_BARRERAS_PAIS_TABLA["Bolivia"];
+
+        return (
+          <div className="rounded-lg" style={{ backgroundColor: C.card }}>
+            <div className="p-5 border-b flex items-center justify-between" style={{ borderColor: C.border }}>
+              <h3 className="text-[13px] uppercase tracking-widest font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>
+                Top 3 barreras según IRR{" "}
+                <span style={{ color: C.critico }}>({esBolivia ? (filtered.length < BARRERAS_NIVEL4_LIST.length ? filtered.length : 91) : tablaFilas.length})</span>
+              </h3>
+              <span style={{ fontSize: 12, color: C.textMuted, fontFamily: "IBM Plex Sans, sans-serif" }}>
+                {esBolivia ? `${filtered.length} registros filtrados` : `${tablaFilas.length} registros de muestra`}
+              </span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[1100px]">
+                <thead>
+                  <tr style={{ borderBottom: `1px solid ${C.border}` }}>
+                    {["Barrera", "IRR", "Severidad", "Clasificación", "Subdimensión", "Jerarquía", "Sector", "Instrumento", "Canal", "Estado HITL"].map(h => (
+                      <th key={h} className="px-4 py-3 text-left text-[11px] uppercase tracking-widest whitespace-nowrap"
+                        style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {tablaFilas.map((b, i) => (
+                    <tr
+                      key={i}
+                      className="hover:bg-[#F4F7FB] transition-colors"
+                      style={{ borderBottom: `1px solid ${C.border}`, cursor: b.id ? "pointer" : "default" }}
+                      onClick={() => { if (b.id) onNavigate({ screen: "barrera-detail", id: b.id }); }}
+                    >
+                      <td className="px-4 py-3 text-[13px] font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text, maxWidth: 200 }}>{b.titulo}</td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span style={{ fontFamily: "Space Grotesk, sans-serif", fontSize: 12, fontWeight: 600, color: C.critico }}>
+                          {b.irr} · Crítico
+                        </span>
+                      </td>
+                      <td className="px-4 py-3"><SeverityBadge level={IRR_LABELS[b.irr]} /></td>
+                      <td className="px-4 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{b.clasificacion}</td>
+                      <td className="px-4 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted, maxWidth: 180 }}>{b.subdimension}</td>
+                      <td className="px-4 py-3 text-[12px] whitespace-nowrap" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{b.jerarquia}</td>
+                      <td className="px-4 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{b.sector}</td>
+                      <td className="px-4 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted, maxWidth: 180 }}>{b.instrumento}</td>
+                      <td className="px-4 py-3 text-[12px] whitespace-nowrap" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{b.canal}</td>
+                      <td className="px-4 py-3">
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium"
+                          style={{ backgroundColor: ESTADO_HITL_META[b.estadoHitl].bg, color: ESTADO_HITL_META[b.estadoHitl].color, fontFamily: "IBM Plex Sans, sans-serif" }}>
+                          {b.estadoHitl}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {esBolivia && pageCount > 1 && (
+              <div className="flex items-center justify-between px-5 py-3 border-t" style={{ borderColor: C.border }}>
+                <span style={{ fontSize: 12, color: C.textMuted, fontFamily: "IBM Plex Sans, sans-serif" }}>
+                  {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filtered.length)} de {filtered.length}
+                </span>
+                <div className="flex gap-2">
+                  {[...Array(pageCount)].map((_, i) => (
+                    <button key={i} onClick={() => setPage(i)}
+                      style={{
+                        width: 28, height: 28, borderRadius: 6, border: "none",
+                        backgroundColor: i === page ? C.steel4 : C.border,
+                        color: i === page ? "white" : C.textMuted,
+                        fontFamily: "Space Grotesk, sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                      }}>
+                      {i + 1}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }
