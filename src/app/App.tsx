@@ -1242,6 +1242,113 @@ const TOP_ENTIDADES_BOLIVIA = [
   { name: "ANH",                                            value: 14 },
 ];
 
+// ─── Trámites — datos por país (junto a COUNTRY_BARRERAS_DATA) ────────────────
+// Construido igual que COUNTRY_BARRERAS_DATA: factor = trámites del país /
+// trámites de Bolivia (428). "Todos" no existe en COUNTRY_DATA, así que su
+// factor se arma sumando los 5 países (1,436 / 428).
+// costoEstimadoUSD y criticos: dato derivado (escalado proporcional desde el
+// valor real de Bolivia), no medido directamente por país todavía.
+// topEntidades: TODO: solo Bolivia tiene catálogo real de entidades emisoras;
+// para el resto es la misma composición de TOP_ENTIDADES_BOLIVIA reescalada,
+// no un catálogo propio todavía.
+const COUNTRY_TRAMITES_DATA: Record<Country, {
+  total: number; costoEstimadoUSD: number; criticos: number;
+  cargaPorTipo: Record<string, TipoDato>;
+  topEntidades: { name: string; value: number }[];
+  tipoUsuario: { empresarial: number; ciudadano: number; mixto: number };
+}> = (() => {
+  const bolTramites = COUNTRY_DATA["Bolivia"].tramites; // 428
+  const totalTodos = COUNTRIES.reduce((s, p) => s + COUNTRY_DATA[p].tramites, 0); // 1,436
+  const result = {} as Record<Country, { total: number; costoEstimadoUSD: number; criticos: number; cargaPorTipo: Record<string, TipoDato>; topEntidades: { name: string; value: number }[]; tipoUsuario: { empresarial: number; ciudadano: number; mixto: number } }>;
+  for (const c of ["Todos", ...COUNTRIES] as Country[]) {
+    const total = c === "Todos" ? totalTodos : COUNTRY_DATA[c].tramites;
+    const factor = total / bolTramites;
+    const empresarial = Math.round(total * 0.51);
+    const ciudadano = Math.round(total * 0.33);
+    const mixto = total - empresarial - ciudadano; // asegura que sume exacto al total real del país
+    result[c] = {
+      total,
+      costoEstimadoUSD: Math.round(12_400_000 * factor),
+      criticos: Math.round(123 * factor),
+      cargaPorTipo: scaleTipoDato(PANEL_CARGA_TIPO_DATA, factor),
+      topEntidades: TOP_ENTIDADES_BOLIVIA.map(e => ({ name: e.name, value: Math.round(e.value * factor) })),
+      tipoUsuario: { empresarial, ciudadano, mixto },
+    };
+  }
+  return result;
+})();
+
+// % validado HITL por país (trámites) — dato de muestra, mismo criterio que
+// Barreras. TODO: primer cruce entre Trámites y el módulo de Validación
+// HITL, no existe ese cálculo real todavía.
+const TRAMITES_VALIDADO_HITL_MUESTRA: Record<Country, number> = {
+  Todos: 60,
+  Argentina: 58,
+  Bolivia: 60,
+  Chile: 66,
+  Ecuador: 55,
+  Perú: 63,
+};
+
+// Trámites prioritarios por país — dato de muestra. TODO: no hay catálogo
+// real de trámites individuales priorizados para ningún país todavía (mismo
+// pendiente ya anotado en Barreras) — estas filas alimentan la tabla
+// "Trámites prioritarios" hasta que exista ese catálogo.
+const TRAMITES_PRIORITARIOS_MUESTRA: Record<Exclude<Country, "Todos">, {
+  tramite: string; entidad: string; eje: string; costo: string;
+  severidad: "Crítica" | "Alta"; estadoHitl: EstadoHitl; accion: string;
+}[]> = {
+  Argentina: [
+    { tramite: "Certificado de Origen Mercosur",  entidad: "Dirección General de Aduanas",   eje: "Comercio exterior",        costo: "USD 380/operación", severidad: "Crítica", estadoHitl: "Por decidir", accion: "Emitir certificado electrónico integrado al sistema aduanero" },
+    { tramite: "Habilitación Municipal Comercial", entidad: "Municipalidad de Buenos Aires",  eje: "Apertura de negocio",      costo: "USD 210/trámite",   severidad: "Alta",    estadoHitl: "Publicado",   accion: "Unificar habilitación con inspección única por rubro" },
+    { tramite: "Registro de Marca y Producto",     entidad: "INPI",                           eje: "Cumplimiento normativo",   costo: "USD 320/registro",  severidad: "Alta",    estadoHitl: "Etapa 3",     accion: "Reducir plazos de examen de fondo con revisión digital" },
+    { tramite: "Declaración Jurada de IVA",        entidad: "AFIP",                           eje: "Cumplimiento tributario",  costo: "USD 150/mes",       severidad: "Alta",    estadoHitl: "Publicado",   accion: "Prellenar declaración con datos de facturación electrónica" },
+  ],
+  Bolivia: [
+    { tramite: "Certificado de Exportación y de Origen", entidad: "Dirección General de Aduanas / IHCAFE", eje: "Comercio exterior",       costo: "USD 420/operación", severidad: "Crítica", estadoHitl: "Publicado",   accion: "Digitalizar certificado vía ventanilla única de comercio exterior" },
+    { tramite: "Habilitación Municipal de Negocio",      entidad: "Alcaldía Municipal de La Paz",           eje: "Apertura de negocio",     costo: "USD 180/trámite",   severidad: "Alta",    estadoHitl: "Por decidir", accion: "Habilitar registro en línea con validación automática de zonificación" },
+    { tramite: "Registro Sanitario de Alimentos",        entidad: "ARSA — Agencia de Regulación Sanitaria", eje: "Cumplimiento sanitario",  costo: "USD 850/producto",  severidad: "Alta",    estadoHitl: "Etapa 3",     accion: "Permitir variaciones de empaque bajo el mismo registro sanitario" },
+    { tramite: "Declaración Jurada Mensual de ISV",      entidad: "Servicio de Impuestos Nacionales (SIN)", eje: "Cumplimiento tributario", costo: "USD 180/mes",       severidad: "Alta",    estadoHitl: "Publicado",   accion: "Prellenar la declaración con datos de facturación electrónica" },
+  ],
+  Chile: [
+    { tramite: "Autorización de Ampliación de Planta",   entidad: "Superintendencia del Medio Ambiente", eje: "Ambiental",                costo: "USD 640/trámite",  severidad: "Crítica", estadoHitl: "Por decidir", accion: "Habilitar evaluación ambiental expedita para ampliaciones menores" },
+    { tramite: "Certificado de Origen para Exportación", entidad: "Dirección Nacional de Aduanas",       eje: "Comercio exterior",        costo: "USD 300/operación", severidad: "Alta",   estadoHitl: "Publicado",   accion: "Emitir certificado electrónico integrado al sistema aduanero" },
+    { tramite: "Patente Municipal de Actividad",         entidad: "Municipalidad de Santiago",           eje: "Apertura de negocio",      costo: "USD 190/trámite",   severidad: "Alta",   estadoHitl: "Etapa 3",     accion: "Digitalizar el pago y renovación de patente" },
+    { tramite: "Declaración Mensual de IVA",             entidad: "Servicio de Impuestos Internos (SII)", eje: "Cumplimiento tributario", costo: "USD 140/mes",       severidad: "Alta",   estadoHitl: "Publicado",   accion: "Prellenar declaración con datos de facturación electrónica" },
+  ],
+  Ecuador: [
+    { tramite: "Certificado Fitosanitario de Exportación", entidad: "Agrocalidad",                        eje: "Comercio exterior",        costo: "USD 260/operación", severidad: "Crítica", estadoHitl: "Por decidir", accion: "Emitir certificado electrónico integrado a ventanilla única" },
+    { tramite: "Permiso de Funcionamiento Municipal",       entidad: "Municipio de Quito",                 eje: "Apertura de negocio",      costo: "USD 170/trámite",   severidad: "Alta",    estadoHitl: "Publicado",   accion: "Unificar permiso con inspección única por rubro" },
+    { tramite: "Registro Sanitario de Alimentos",           entidad: "ARCSA",                              eje: "Cumplimiento sanitario",   costo: "USD 600/producto",  severidad: "Alta",    estadoHitl: "Etapa 3",     accion: "Permitir variaciones de empaque bajo el mismo registro" },
+    { tramite: "Declaración Mensual de IVA",                entidad: "Servicio de Rentas Internas (SRI)",  eje: "Cumplimiento tributario",  costo: "USD 130/mes",       severidad: "Alta",    estadoHitl: "Publicado",   accion: "Prellenar declaración con datos de facturación electrónica" },
+  ],
+  Perú: [
+    { tramite: "Permiso de Operación MEF",                entidad: "Ministerio de Economía y Finanzas", eje: "Cumplimiento normativo",  costo: "USD 410/trámite",   severidad: "Crítica", estadoHitl: "Por decidir", accion: "Sustituir permiso previo por declaración jurada con fiscalización posterior" },
+    { tramite: "Certificado de Origen para Exportación",  entidad: "SUNAT",                              eje: "Comercio exterior",       costo: "USD 290/operación", severidad: "Alta",    estadoHitl: "Publicado",   accion: "Emitir certificado electrónico integrado a ventanilla única" },
+    { tramite: "Licencia Municipal de Funcionamiento",    entidad: "Municipalidad de Lima",              eje: "Apertura de negocio",     costo: "USD 160/trámite",   severidad: "Alta",    estadoHitl: "Etapa 3",     accion: "Unificar licencia con inspección única por rubro" },
+    { tramite: "Declaración Mensual de IGV",              entidad: "SUNAT",                              eje: "Cumplimiento tributario", costo: "USD 120/mes",       severidad: "Alta",    estadoHitl: "Publicado",   accion: "Prellenar declaración con datos de facturación electrónica" },
+  ],
+};
+
+// Badge de severidad de trámites — "Crítica"/"Alta" (distinto del vocabulario
+// "Crítico"/"Alto"/"Mediano"/"Bajo" de SeverityBadge/SEVERITY_COLOR, que es
+// el de la escala IRR de Barreras). Mismo patrón visual que SeverityBadge.
+const TRAMITE_SEVERIDAD_COLOR: Record<"Crítica" | "Alta", string> = {
+  "Crítica": C.critico,
+  "Alta": C.alto,
+};
+function TramiteSeveridadBadge({ level }: { level: "Crítica" | "Alta" }) {
+  const color = TRAMITE_SEVERIDAD_COLOR[level];
+  return (
+    <span
+      className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium tracking-wide uppercase"
+      style={{ backgroundColor: color + "22", color, border: `1px solid ${color}44` }}
+    >
+      {level}
+    </span>
+  );
+}
+
 // ─── Utilities ────────────────────────────────────────────────────────────────
 function SeverityBadge({ level }: { level: string }) {
   const color = SEVERITY_COLOR[level] || C.bajo;
@@ -2873,6 +2980,220 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
 
   const resetPage = (fn: React.Dispatch<React.SetStateAction<string>>) => (v: string) => { fn(v); setPage(0); };
 
+  // Alimenta las 5 KpiCard en ambos modos (por país y "Todos") — antes
+  // estaban hardcodeadas sin importar el país seleccionado.
+  const td = COUNTRY_TRAMITES_DATA[country] ?? COUNTRY_TRAMITES_DATA["Bolivia"];
+
+  // ── Panel regional (país === "Todos") ───────────────────────────────────────
+  if (country === "Todos") {
+    const paisesRow1 = COUNTRIES.slice(0, 3);
+    const paisesRow2 = COUNTRIES.slice(3);
+
+    const paisCard = (pais: Country) => {
+      const tdPais = COUNTRY_TRAMITES_DATA[pais];
+      const subdims = tdPais.cargaPorTipo["Accesibilidad"]?.subdimensiones ?? [];
+      const entrada = subdims.map(s => ({
+        nombre: s.nombre,
+        total: s.niveles.n4 + s.niveles.n3 + s.niveles.n2 + s.niveles.n1,
+      }));
+      return (
+        <BarrerasPorPaisCard
+          key={pais}
+          pais={pais}
+          total={tdPais.total}
+          entrada={entrada}
+          coberturaPct={COBERTURA_MUESTRA[pais as Exclude<Country, "Todos">]}
+          validadoHitlPct={TRAMITES_VALIDADO_HITL_MUESTRA[pais]}
+          onVerBarreras={() => onCountryChange?.(pais)}
+          buttonLabel="Ver trámites por país →"
+          showEntradaSelect={false}
+        />
+      );
+    };
+
+    // dato de muestra — no hay catálogo real de trámites individuales
+    // priorizados para ningún país todavía (mismo pendiente ya anotado en
+    // Barreras).
+    const tramitesPrioritariosFilas = COUNTRIES.flatMap(pais =>
+      (TRAMITES_PRIORITARIOS_MUESTRA[pais as Exclude<Country, "Todos">] ?? []).map(t => ({ pais, ...t }))
+    );
+    const prioritariosPageCount = Math.ceil(tramitesPrioritariosFilas.length / PAGE_SIZE);
+    const prioritariosPageItems = tramitesPrioritariosFilas.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
+    const maxEntidad = Math.max(...td.topEntidades.map(e => e.value), 1);
+
+    const SEV_LEGEND_TRAMITES = [
+      { label: "Crítica", color: C.critico },
+      { label: "Alta", color: C.alto },
+    ];
+
+    return (
+      <div className="p-4 md:p-8 overflow-y-auto h-full">
+        <Header
+          breadcrumb="Trámites con potencial de mejora"
+          title="Trámites con potencial de mejora"
+          actions={
+            <>
+              {/* TODO: destino de "Ver metodología" (¿documentación / metodología del SCM?) */}
+              <button style={HDR_BTN_PILL}>Ver metodología</button>
+              <button style={HDR_BTN_PRIMARY} onClick={() => onNavigate({ screen: "reportes", prefill: { tipoHallazgo: "carga", pais: "Todos" } })}>
+                <ExternalLink size={13} /><span className="hidden sm:inline">Generar reporte</span><span className="sm:hidden">Reporte</span>
+              </button>
+              {/* TODO: dropdown de opciones de descarga */}
+              <button style={HDR_BTN_SECONDARY}>
+                Descargar <ChevronDown size={13} />
+              </button>
+            </>
+          }
+        />
+
+        {/* KPIs */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+          <KpiCard label="Total de trámites identificados" value={td.total.toLocaleString("es-BO")} />
+          <KpiCard label="Trámites con potencial de mejora" value={td.total.toLocaleString("es-BO")} />
+          <KpiCard label="Costo estimado SCM" value={`USD ${(td.costoEstimadoUSD / 1_000_000).toFixed(1)} M`} valueColor={C.steel4} tooltip={scmTooltip} />
+          <KpiCard label="Trámites críticos" value={String(td.criticos)} valueColor={C.critico} />
+          {/* TODO: primer cruce Trámites↔Validación HITL, no existe ese cálculo real todavía */}
+          <KpiCard label="% Validado HITL" value={String(TRAMITES_VALIDADO_HITL_MUESTRA["Todos"])} valueSuffix="%" />
+        </div>
+
+        {/* Trámites por país */}
+        <p className="uppercase mb-3" style={{ fontFamily: "Space Grotesk, sans-serif", fontSize: 11, color: C.textMuted }}>Trámites por país</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 mb-3.5">
+          {paisesRow1.map(paisCard)}
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 mb-6">
+          {paisesRow2.map(paisCard)}
+        </div>
+
+        {/* Leyenda de severidad */}
+        <div className="flex flex-wrap items-center gap-5 mb-6">
+          {SEV_LEGEND_TRAMITES.map(s => (
+            <div key={s.label} className="flex items-center gap-1.5">
+              <span className="rounded-full flex-shrink-0" style={{ width: 8, height: 8, backgroundColor: s.color, display: "inline-block" }} />
+              <span style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 12, color: C.textMuted }}>{s.label}</span>
+            </div>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6" style={{ alignItems: "stretch" }}>
+          {/* Tipo de usuario */}
+          <div className="rounded-lg p-5" style={{ backgroundColor: C.card }}>
+            <p className="text-[11px] uppercase tracking-widest font-medium mb-3" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Tipo de usuario</p>
+            <div className="flex flex-col gap-2.5">
+              {[
+                { nombre: "Empresarial", valor: td.tipoUsuario.empresarial, color: C.steel4 },
+                { nombre: "Ciudadano", valor: td.tipoUsuario.ciudadano, color: C.steel3 },
+                { nombre: "Mixto", valor: td.tipoUsuario.mixto, color: C.steel2 },
+              ].map(f => (
+                <div key={f.nombre} className="flex items-center gap-2.5">
+                  <span className="flex-shrink-0" style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 11, color: C.textMuted, width: 72 }}>{f.nombre}</span>
+                  <div className="flex-1 rounded-full overflow-hidden" style={{ height: 10, backgroundColor: C.border }}>
+                    <div style={{ width: `${td.total > 0 ? (f.valor / td.total) * 100 : 0}%`, height: "100%", backgroundColor: f.color }} />
+                  </div>
+                  <span className="flex-shrink-0 text-right" style={{ fontFamily: "Space Grotesk, sans-serif", fontSize: 12, fontWeight: 600, color: C.textMuted, width: 32 }}>{f.valor}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Trámites por: Entidad */}
+          <div className="rounded-xl flex flex-col h-full" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
+            <div className="px-5 pt-4 pb-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${C.border}` }}>
+              <p className="text-[11px] uppercase tracking-widest font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Trámites por: Entidad</p>
+              <select
+                defaultValue="entidad"
+                // TODO: sin lógica de cambio de dimensión todavía
+                style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 11, color: C.textMuted, backgroundColor: "transparent", border: `1px solid ${C.border}`, borderRadius: 6, padding: "3px 8px", cursor: "pointer" }}
+              >
+                <option value="entidad">Entidad</option>
+              </select>
+            </div>
+            <div className="px-5 pt-4 flex flex-col gap-2.5 flex-1">
+              {td.topEntidades.map(e => (
+                <div key={e.name} className="flex items-center gap-3">
+                  <span className="flex-shrink-0 leading-tight" style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 11, color: C.textMuted, width: 150 }}>{e.name}</span>
+                  <div className="flex-1 rounded-full overflow-hidden" style={{ height: 10, backgroundColor: "#E6ECF3" }}>
+                    <div style={{ width: `${(e.value / maxEntidad) * 100}%`, height: "100%", backgroundColor: C.steel2 }} />
+                  </div>
+                  <span className="flex-shrink-0 text-right" style={{ fontFamily: "Space Grotesk, sans-serif", fontSize: 12, fontWeight: 600, color: C.textMuted, width: 32 }}>{e.value}</span>
+                </div>
+              ))}
+            </div>
+            <div className="px-5 py-4 mt-2 flex items-center justify-between" style={{ borderTop: `1px solid ${C.border}` }}>
+              <span className="uppercase" style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 10.5, color: C.textMuted }}>Cobertura 91%</span>
+              <button
+                onClick={() => console.log("Ver tabla completa — Trámites por entidad")}
+                style={{ backgroundColor: C.text, color: "white", border: "none", borderRadius: 999, padding: "6px 14px", fontFamily: "Space Grotesk, sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+              >
+                Ver tabla completa
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Trámites prioritarios */}
+        <div className="rounded-lg" style={{ backgroundColor: C.card }}>
+          <div className="p-5 border-b flex items-center gap-3" style={{ borderColor: C.border }}>
+            <h3 className="text-[13px] uppercase tracking-widest font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Trámites prioritarios</h3>
+            <span className="text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.steel3 }}>({tramitesPrioritariosFilas.length})</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1000px]">
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${C.border}` }}>
+                  {["Trámite", "País", "Entidad", "Eje", "Costo", "Severidad", "Estado HITL", "Acción sugerida"].map(h => (
+                    <th key={h} className="px-4 py-3 text-left text-[11px] uppercase tracking-widest whitespace-nowrap"
+                      style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {prioritariosPageItems.map((t, i) => (
+                  <tr key={i} style={{ borderBottom: `1px solid ${C.border}` }}>
+                    <td className="px-4 py-3 text-[13px] font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text, maxWidth: 200 }}>{t.tramite}</td>
+                    <td className="px-4 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{t.pais}</td>
+                    <td className="px-4 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted, maxWidth: 180 }}>{t.entidad}</td>
+                    <td className="px-4 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{t.eje}</td>
+                    <td className="px-4 py-3 text-[12px] whitespace-nowrap" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{t.costo}</td>
+                    <td className="px-4 py-3"><TramiteSeveridadBadge level={t.severidad} /></td>
+                    <td className="px-4 py-3">
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium"
+                        style={{ backgroundColor: ESTADO_HITL_META[t.estadoHitl].bg, color: ESTADO_HITL_META[t.estadoHitl].color, fontFamily: "IBM Plex Sans, sans-serif" }}>
+                        {t.estadoHitl}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-[12px] font-semibold" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.steel3, maxWidth: 220 }}>{t.accion}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {prioritariosPageCount > 1 && (
+            <div className="flex items-center justify-between px-5 py-3 border-t" style={{ borderColor: C.border }}>
+              <span style={{ fontSize: 12, color: C.textMuted, fontFamily: "IBM Plex Sans, sans-serif" }}>
+                {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, tramitesPrioritariosFilas.length)} de {tramitesPrioritariosFilas.length}
+              </span>
+              <div className="flex gap-2">
+                {[...Array(prioritariosPageCount)].map((_, i) => (
+                  <button key={i} onClick={() => setPage(i)}
+                    style={{
+                      width: 28, height: 28, borderRadius: 6, border: "none",
+                      backgroundColor: i === page ? C.steel4 : C.border,
+                      color: i === page ? "white" : C.textMuted,
+                      fontFamily: "Space Grotesk, sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                    }}>
+                    {i + 1}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-4 md:p-8 overflow-y-auto h-full">
       {(() => {
@@ -2916,7 +3237,7 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
 
       {/* Filter bar — wraps to multiple rows; order: País · Sector · Entidad · Tipo usuario · Tipo carga · Subdim · Etapa · Tamaño · Año */}
       <div className="flex flex-wrap gap-2 mb-5">
-        <select className="grow" style={selStyle} value={country} onChange={e => { onCountryChange?.(e.target.value as Country); }}>
+        <select className="grow" style={selStyle} value={country} onChange={e => { onCountryChange?.(e.target.value as Country); setPage(0); }}>
           <option value="Todos">Todos los países</option>
           <option value="Argentina">Argentina</option>
           <option value="Bolivia">Bolivia</option>
@@ -2971,98 +3292,117 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
         </select>
       </div>
 
-      {/* KPIs */}
+      {/* KPIs — antes hardcodeados sin importar el país, ahora alimentados
+          desde COUNTRY_TRAMITES_DATA[country] */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
-        <KpiCard label="Total trámites" value="428" sub="Bolivia" />
+        <KpiCard label="Total trámites" value={td.total.toLocaleString("es-BO")} sub={countryLabel} />
         <KpiCard
           label="Costo estimado de trámites"
-          value="USD 12.4 M"
+          value={`USD ${(td.costoEstimadoUSD / 1_000_000).toFixed(1)} M`}
           sub="simulado · anual"
           valueColor={C.steel4}
           tooltip={scmTooltip}
         />
-        <KpiCard label="Empresariales" value="218" sub="51% del total" />
-        <KpiCard label="Ciudadanos" value="142" sub="33% del total" />
-        <KpiCard label="Cargas críticas" value="123" sub="nivel 4" valueColor={C.critico} />
+        <KpiCard label="Empresariales" value={String(td.tipoUsuario.empresarial)} sub={`${td.total > 0 ? Math.round((td.tipoUsuario.empresarial / td.total) * 100) : 0}% del total`} />
+        <KpiCard label="Ciudadanos" value={String(td.tipoUsuario.ciudadano)} sub={`${td.total > 0 ? Math.round((td.tipoUsuario.ciudadano / td.total) * 100) : 0}% del total`} />
+        <KpiCard label="Cargas críticas" value={String(td.criticos)} sub="nivel 4" valueColor={C.critico} />
       </div>
 
-      {/* Row: Carga por tipo | Top 10 entidades */}
+      {/* Row: Carga por tipo | Top 10 entidades — antes usaban las constantes
+          sueltas de Bolivia (PANEL_CARGA_TIPO_DATA / TOP_ENTIDADES_BOLIVIA)
+          sin importar el país; ahora usan td.cargaPorTipo / td.topEntidades */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <PanelTipoSubdimension
           label="CARGA POR TIPO"
           tipos={["Accesibilidad", "Certidumbre", "Cumplimiento", "Proporcionalidad"]}
-          datos={PANEL_CARGA_TIPO_DATA}
+          datos={td.cargaPorTipo}
         />
         <div className="rounded-lg p-6" style={{ backgroundColor: C.card }}>
           <p className="text-[11px] uppercase tracking-widest mb-4 font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Top 10 entidades por número de trámites</p>
           <div className="flex flex-col gap-2.5">
-            {TOP_ENTIDADES_BOLIVIA.map(item => (
-              <div key={item.name} className="flex items-center gap-3">
-                <span className="text-[11px] flex-shrink-0 leading-tight" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text, width: 188 }}>{item.name}</span>
-                <div className="flex-1 rounded-full overflow-hidden h-[8px]" style={{ backgroundColor: "#E6ECF3" }}>
-                  <div className="h-full rounded-full" style={{ width: `${(item.value / 68) * 100}%`, backgroundColor: C.steel2 }} />
+            {(() => {
+              const maxEntidad = Math.max(...td.topEntidades.map(e => e.value), 1);
+              return td.topEntidades.map(item => (
+                <div key={item.name} className="flex items-center gap-3">
+                  <span className="text-[11px] flex-shrink-0 leading-tight" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text, width: 188 }}>{item.name}</span>
+                  <div className="flex-1 rounded-full overflow-hidden h-[8px]" style={{ backgroundColor: "#E6ECF3" }}>
+                    <div className="h-full rounded-full" style={{ width: `${(item.value / maxEntidad) * 100}%`, backgroundColor: C.steel2 }} />
+                  </div>
+                  <span className="text-[12px] font-semibold flex-shrink-0" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted, width: 24, textAlign: "right" }}>{item.value}</span>
                 </div>
-                <span className="text-[12px] font-semibold flex-shrink-0" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted, width: 24, textAlign: "right" }}>{item.value}</span>
-              </div>
-            ))}
+              ));
+            })()}
           </div>
         </div>
       </div>
 
-      {/* Trámites table — columns: Trámite · Tipo de usuario · Entidad · Sector · Pasos · Requisitos · Costo estimado */}
-      <div className="rounded-lg" style={{ backgroundColor: C.card }}>
-        <div className="p-5 border-b flex items-center gap-3" style={{ borderColor: C.border }}>
-          <h3 className="text-[13px] uppercase tracking-widest font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Trámites prioritarios</h3>
-          <span className="text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.steel3 }}>({filtered.length})</span>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[820px]">
-            <thead>
-              <tr style={{ borderBottom: `1px solid ${C.border}` }}>
-                {["Trámite", "Tipo de usuario", "Entidad", "Sector", "Pasos", "Requisitos", "Costo estimado", ""].map(h => (
-                  <th key={h} className={`px-4 py-3 text-[11px] uppercase tracking-widest ${h === "Pasos" || h === "Requisitos" || h === "Costo estimado" ? "text-right" : "text-left"}`}
-                    style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted, whiteSpace: "nowrap" }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {pageItems.map(t => (
-                <tr key={t.id} className="cursor-pointer hover:bg-[#F4F7FB] transition-colors" style={{ borderBottom: `1px solid ${C.border}` }}
-                  onClick={() => { if (ALL_TRAMITES.find(x => x.id === t.id)) onNavigate({ screen: "tramite-detail", id: t.id }); }}>
-                  <td className="px-4 py-3 text-[13px] font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text, maxWidth: 200 }}>{t.nombre}</td>
-                  <td className="px-4 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{t.tipo}</td>
-                  <td className="px-4 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted, maxWidth: 150 }}>{t.entidad.split("—")[0].split("/")[0].trim()}</td>
-                  <td className="px-4 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted, maxWidth: 140 }}>{t.sector}</td>
-                  <td className="px-4 py-3 text-[12px] text-right font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>{t.pasos.length || "—"}</td>
-                  <td className="px-4 py-3 text-[12px] text-right font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>{t.requisitos}</td>
-                  <td className="px-4 py-3 text-[12px] text-right font-semibold" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.steel4, whiteSpace: "nowrap" }}>{t.costo.monetario}</td>
-                  <td className="px-4 py-3"><ChevronRight size={14} color={C.textMuted} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {pageCount > 1 && (
-          <div className="flex items-center justify-between px-5 py-3 border-t" style={{ borderColor: C.border }}>
-            <span style={{ fontSize: 12, color: C.textMuted, fontFamily: "IBM Plex Sans, sans-serif" }}>
-              {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filtered.length)} de {filtered.length}
-            </span>
-            <div className="flex gap-2">
-              {[...Array(pageCount)].map((_, i) => (
-                <button key={i} onClick={() => setPage(i)}
-                  style={{
-                    width: 28, height: 28, borderRadius: 6, border: "none",
-                    backgroundColor: i === page ? C.steel4 : C.border,
-                    color: i === page ? "white" : C.textMuted,
-                    fontFamily: "Space Grotesk, sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer",
-                  }}>
-                  {i + 1}
-                </button>
-              ))}
+      {/* Trámites prioritarios — dato de muestra (TRAMITES_PRIORITARIOS_MUESTRA),
+          filtrado por país; antes esta tabla mostraba TRAMITES_EXT (catálogo
+          de Bolivia) sin importar el país seleccionado en el filtro de arriba. */}
+      {(() => {
+        const filasPais = TRAMITES_PRIORITARIOS_MUESTRA[country as Exclude<Country, "Todos">] ?? TRAMITES_PRIORITARIOS_MUESTRA["Bolivia"];
+        const prioritariosPageCount = Math.ceil(filasPais.length / PAGE_SIZE);
+        const prioritariosPageItems = filasPais.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+        return (
+          <div className="rounded-lg" style={{ backgroundColor: C.card }}>
+            <div className="p-5 border-b flex items-center gap-3" style={{ borderColor: C.border }}>
+              <h3 className="text-[13px] uppercase tracking-widest font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Trámites prioritarios</h3>
+              <span className="text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.steel3 }}>({filasPais.length})</span>
             </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[900px]">
+                <thead>
+                  <tr style={{ borderBottom: `1px solid ${C.border}` }}>
+                    {["Trámite", "País", "Entidad", "Eje", "Costo", "Severidad", "Estado HITL", "Acción sugerida"].map(h => (
+                      <th key={h} className="px-4 py-3 text-left text-[11px] uppercase tracking-widest whitespace-nowrap"
+                        style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {prioritariosPageItems.map((t, i) => (
+                    <tr key={i} style={{ borderBottom: `1px solid ${C.border}` }}>
+                      <td className="px-4 py-3 text-[13px] font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text, maxWidth: 200 }}>{t.tramite}</td>
+                      <td className="px-4 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{country}</td>
+                      <td className="px-4 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted, maxWidth: 180 }}>{t.entidad}</td>
+                      <td className="px-4 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{t.eje}</td>
+                      <td className="px-4 py-3 text-[12px] whitespace-nowrap" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{t.costo}</td>
+                      <td className="px-4 py-3"><TramiteSeveridadBadge level={t.severidad} /></td>
+                      <td className="px-4 py-3">
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium"
+                          style={{ backgroundColor: ESTADO_HITL_META[t.estadoHitl].bg, color: ESTADO_HITL_META[t.estadoHitl].color, fontFamily: "IBM Plex Sans, sans-serif" }}>
+                          {t.estadoHitl}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-[12px] font-semibold" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.steel3, maxWidth: 220 }}>{t.accion}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {prioritariosPageCount > 1 && (
+              <div className="flex items-center justify-between px-5 py-3 border-t" style={{ borderColor: C.border }}>
+                <span style={{ fontSize: 12, color: C.textMuted, fontFamily: "IBM Plex Sans, sans-serif" }}>
+                  {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filasPais.length)} de {filasPais.length}
+                </span>
+                <div className="flex gap-2">
+                  {[...Array(prioritariosPageCount)].map((_, i) => (
+                    <button key={i} onClick={() => setPage(i)}
+                      style={{
+                        width: 28, height: 28, borderRadius: 6, border: "none",
+                        backgroundColor: i === page ? C.steel4 : C.border,
+                        color: i === page ? "white" : C.textMuted,
+                        fontFamily: "Space Grotesk, sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                      }}>
+                      {i + 1}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        );
+      })()}
     </div>
   );
 }
