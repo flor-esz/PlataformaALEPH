@@ -1,12 +1,9 @@
 import { Download, ChevronDown } from "lucide-react";
+import { C, HDR_BTN_PRIMARY, HDR_BTN_SECONDARY, HDR_BTN_PILL } from "./theme";
 import {
-  C,
   Header,
   KpiCard,
   BandaCobertura,
-  HDR_BTN_PRIMARY,
-  HDR_BTN_SECONDARY,
-  HDR_BTN_PILL,
   COUNTRIES,
   COUNTRY_DATA,
   COBERTURA_MUESTRA,

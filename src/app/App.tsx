@@ -29,13 +29,26 @@ import { FuentesTrazabilidadTable } from "./components/ui/FuentesTrazabilidadTab
 import { TablaExploratoria } from "./components/ui/TablaExploratoria";
 import { BarrerasPorPaisCard } from "./components/ui/BarrerasPorPaisCard";
 import { MatrizRegional } from "./components/ui/MatrizRegional";
-// PanelRegional importa { C, Header, KpiCard, ... } de vuelta desde este archivo
-// (mismo ciclo App.tsx <-> otros módulos documentado arriba), pero a diferencia
-// de revision/*.tsx nunca los usa en el top-level de su módulo -- solo dentro
-// del cuerpo de la función PanelRegional(), que React recién ejecuta en render,
-// momento en el que este módulo ya terminó de inicializar C, COUNTRY_DATA, etc.
-// Por eso el import puede ser estático (no hace falta lazy()).
+// C y los HDR_BTN_* viven en ./theme, que no importa nada de este archivo, y
+// no en App.tsx -- ver comentario junto a `export { C }` más abajo para el
+// porqué (el resumen: PanelRegional.tsx e ImpactoEconomico.tsx se importan
+// de forma estática más abajo, y a su vez importaban C desde "./App", lo que
+// armaba un ciclo App.tsx <-> esos archivos. ImpactoEconomico.tsx usaba C en
+// el top-level de su módulo (fuera del cuerpo del componente) y eso reventaba
+// en runtime con "Cannot access 'C' before initialization" -- justo el bug
+// que theme.ts evita de raíz).
+import { C, HDR_BTN_PRIMARY, HDR_BTN_SECONDARY, HDR_BTN_PILL } from "./theme";
+// PanelRegional importa { Header, KpiCard, ... } de vuelta desde este archivo
+// (mismo ciclo App.tsx <-> otros módulos documentado arriba), pero nunca los
+// usa en el top-level de su módulo -- solo dentro del cuerpo de la función
+// PanelRegional(), que React recién ejecuta en render, momento en el que
+// este módulo ya terminó de inicializar COUNTRY_DATA, JERARQUIA_NORMATIVA_
+// DATA, etc. Por eso el import puede ser estático (no hace falta lazy()).
 import PanelRegional from "./PanelRegional";
+// Mismo criterio que PanelRegional para { Header, KpiCard, COUNTRY_TRAMITES_
+// DATA, ... } -- ImpactoEconomico.tsx solo los usa dentro del cuerpo de su
+// componente, nunca en el top-level de su módulo. Import estático seguro.
+import ImpactoEconomico from "./ImpactoEconomico";
 import {
   PieChart,
   Pie,
@@ -99,6 +112,7 @@ const ROLE_LABEL: Record<UserRole, string> = {
 };
 export type View =
   | { screen: "panel-regional" }
+  | { screen: "impacto-economico" }
   | { screen: "country-dashboard"; country: string }
   | { screen: "barreras"; sector?: string }
   | { screen: "barrera-detail"; id: string }
@@ -138,28 +152,10 @@ type ReportesPrefill = {
 };
 
 // ─── Colours ──────────────────────────────────────────────────────────────────
-export const C = {
-  canvas: "#EDF1F5",
-  card: "#FAFBFC",
-  sidebar: "#14161A",
-  critico: "#C75450",
-  alto: "#26456B",
-  mediano: "#3E6E9E",
-  bajo: "#7FA8D4",
-  steel1: "#7FA8D4",
-  steel2: "#5E8FC2",
-  steel3: "#3E6E9E",
-  steel4: "#26456B",
-  border: "#DCE3EB",
-  text: "#14161A",
-  textMuted: "#6B7A8D",
-  ambar1: "#D9A441",
-  ambar2: "#F6EBD6",
-  ambarTexto: "#8A5A12",
-  verde1: "#3B6D11",
-  verde2: "#E7F1DC",
-  rojoClaro: "#F7E4E3",
-};
+// C se importa de ./theme (ver comentario junto a los imports, arriba).
+// `export { C }` (no solo `import`) para no romper a los archivos lazy de
+// revision/* que hoy hacen `import { C } from "../App"`.
+export { C };
 
 const SEVERITY_COLOR: Record<string, string> = {
   Crítico: C.critico,
@@ -995,7 +991,7 @@ const TRAMITES_MUESTRA = [
   },
 ];
 
-const ALL_TRAMITES = [...TRAMITES_CAFE, ...TRAMITES_TEXTIL, ...TRAMITES_MUESTRA];
+export const ALL_TRAMITES = [...TRAMITES_CAFE, ...TRAMITES_TEXTIL, ...TRAMITES_MUESTRA];
 
 // Registros completos de muestra para las filas de TOP_BARRERAS_POR_PAIS_MUESTRA
 // que no tienen barrera real correspondiente en BARRERAS_CAFE/BARRERAS_TEXTIL
@@ -1982,7 +1978,7 @@ const VALIDADO_HITL_MUESTRA: Record<Country, number> = {
 // Badge de estado HITL — reutilizado por la tabla regional y la tabla por
 // país de Barreras (antes duplicado en la primera, ahora en un solo lugar).
 type EstadoHitl = "Publicado" | "Por decidir" | "Etapa 3";
-const ESTADO_HITL_META: Record<EstadoHitl, { bg: string; color: string }> = {
+export const ESTADO_HITL_META: Record<EstadoHitl, { bg: string; color: string }> = {
   "Publicado":   { bg: C.verde2, color: C.verde1 },
   "Por decidir": { bg: C.ambar2, color: C.ambarTexto },
   "Etapa 3":     { bg: "#E8F0FA", color: C.alto },
@@ -2130,14 +2126,26 @@ function scaleMuestraPorPais(baseParaPeru: { nombre: string; valor: number }[]):
   return result;
 }
 
-const CANALES_TRANSMISION_MUESTRA = scaleMuestraPorPais([
+// Agrega la entrada "Todos" a un Record de 5 países sumando elemento a
+// elemento (mismos nombres/orden en las 5 series) — usado por paneles que
+// necesitan el agregado regional (ej. Impacto Económico).
+function conTotalTodos(porPais: Record<Exclude<Country, "Todos">, { nombre: string; valor: number }[]>): Record<Country, { nombre: string; valor: number }[]> {
+  const nombres = porPais["Bolivia"].map(f => f.nombre);
+  const todos = nombres.map((nombre, i) => ({
+    nombre,
+    valor: COUNTRIES.reduce((s, pais) => s + porPais[pais as Exclude<Country, "Todos">][i].valor, 0),
+  }));
+  return { ...porPais, Todos: todos };
+}
+
+export const CANALES_TRANSMISION_MUESTRA = conTotalTodos(scaleMuestraPorPais([
   { nombre: "Costo administrativo",    valor: 92 },
   { nombre: "Capital/liquidez",        valor: 78 },
   { nombre: "Tiempo/incertidumbre",    valor: 71 },
   { nombre: "Capacidad técnica",       valor: 64 },
   { nombre: "Modelo de negocio",       valor: 56 },
   { nombre: "Incumbentes/competencia", valor: 36 },
-]);
+]));
 
 const ACCION_MEJORA_MUESTRA = scaleMuestraPorPais([
   { nombre: "Eliminar",         valor: 180 },
@@ -2147,11 +2155,11 @@ const ACCION_MEJORA_MUESTRA = scaleMuestraPorPais([
   { nombre: "Proporcionalizar", valor: 47 },
 ]);
 
-const MIPYME_MUESTRA = scaleMuestraPorPais([
+export const MIPYME_MUESTRA = conTotalTodos(scaleMuestraPorPais([
   { nombre: "Microempresa",    valor: 92 },
   { nombre: "Pequeña empresa", valor: 78 },
   { nombre: "Mediana empresa", valor: 71 },
-]);
+]));
 
 // % no estructurado por nivel N2–N6 usado en el Panel País de Barreras —
 // distinto del que usa Panorama Regulatorio (DOC_ESTRUCTURA_PCT_MUESTRA),
@@ -2248,7 +2256,7 @@ const TOP_ENTIDADES_BOLIVIA = [
 // topEntidades: TODO: solo Bolivia tiene catálogo real de entidades emisoras;
 // para el resto es la misma composición de TOP_ENTIDADES_BOLIVIA reescalada,
 // no un catálogo propio todavía.
-const COUNTRY_TRAMITES_DATA: Record<Country, {
+export const COUNTRY_TRAMITES_DATA: Record<Country, {
   total: number; costoEstimadoUSD: number; criticos: number;
   cargaPorTipo: Record<string, TipoDato>;
   topEntidades: { name: string; value: number }[];
@@ -2343,7 +2351,7 @@ type TramitePrioritarioFila = {
   tipoUsuario: "Empresarial" | "Ciudadano"; sector: string;
 };
 
-const TRAMITES_PRIORITARIOS_MUESTRA: Record<Exclude<Country, "Todos">, TramitePrioritarioFila[]> = (() => {
+export const TRAMITES_PRIORITARIOS_MUESTRA: Record<Exclude<Country, "Todos">, TramitePrioritarioFila[]> = (() => {
   const result = {} as Record<Exclude<Country, "Todos">, TramitePrioritarioFila[]>;
   for (const pais of COUNTRIES) {
     const key = pais as Exclude<Country, "Todos">;
@@ -2413,6 +2421,20 @@ const TRAMITES_AFECTACIONES_MUESTRA = scaleMuestraPorPaisTramites([
   { nombre: "Falta de interoperabilidad", valor: 33 },
 ]);
 
+// Mismos 6 canales que CANALES_TRANSMISION_MUESTRA (Barreras), pero serie
+// INDEPENDIENTE — no son los mismos números (Trámites totaliza 1,436 vs.
+// 2,914 de Barreras). Alimenta el panel "Trámites afectados por canal de
+// transmisión económica" de Impacto Económico.
+// dato de muestra — sin metodología real, igual que la de Barreras.
+export const CANALES_TRANSMISION_TRAMITES_MUESTRA = conTotalTodos(scaleMuestraPorPaisTramites([
+  { nombre: "Costo administrativo",    valor: 140 },
+  { nombre: "Capital/liquidez",        valor: 48 },
+  { nombre: "Tiempo/incertidumbre",    valor: 105 },
+  { nombre: "Capacidad técnica",       valor: 40 },
+  { nombre: "Modelo de negocio",       valor: 30 },
+  { nombre: "Incumbentes/competencia", valor: 57 },
+]));
+
 // Badge de severidad de trámites — "Crítica"/"Alta" (distinto del vocabulario
 // "Crítico"/"Alto"/"Mediano"/"Bajo" de SeverityBadge/SEVERITY_COLOR, que es
 // el de la escala IRR de Barreras). Mismo patrón visual que SeverityBadge.
@@ -2420,7 +2442,7 @@ const TRAMITE_SEVERIDAD_COLOR: Record<"Crítica" | "Alta", string> = {
   "Crítica": C.critico,
   "Alta": C.alto,
 };
-function TramiteSeveridadBadge({ level }: { level: "Crítica" | "Alta" }) {
+export function TramiteSeveridadBadge({ level }: { level: "Crítica" | "Alta" }) {
   const color = TRAMITE_SEVERIDAD_COLOR[level];
   return (
     <span
@@ -2599,7 +2621,7 @@ function Sidebar({
         }))}
         {navItem("Barreras Regulatorias", "barreras", <AlertTriangle size={18} />, () => nav(() => onNavigate({ screen: "barreras" })))}
         {navItem("Trámites con potencial de mejora", "tramites", <FileText size={18} />, () => nav(() => onNavigate({ screen: "tramites" })))}
-        {navItem("Impacto económico", "impacto-economico", <Globe size={18} />, () => nav(() => onNavigate({ screen: "placeholder", label: "Impacto económico" })))}
+        {navItem("Impacto económico", "impacto-economico", <Globe size={18} />, () => nav(() => onNavigate({ screen: "impacto-economico" })))}
         {navItem("Reportes", "reportes", <ClipboardList size={18} />, () => nav(() => onNavigate({ screen: "reportes" })))}
         {navItem("Documentación", "documentacion", <BookOpen size={18} />, () => nav(() => onNavigate({ screen: "documentacion" })))}
         {navItem("Índice / IDR", "indice", <ChartBar size={18} />, () => nav(() => { onNavigate({ screen: "indice" });}))}
@@ -2698,25 +2720,10 @@ function Sidebar({
 }
 
 // ─── Header ───────────────────────────────────────────────────────────────────
-// Shared button style helpers for header actions — used by each screen's actions prop
-export const HDR_BTN_PRIMARY: React.CSSProperties = {
-  display: "flex", alignItems: "center", gap: 6,
-  backgroundColor: C.text, color: "#FAFBFC",
-  fontFamily: "Space Grotesk, sans-serif", fontSize: 12, fontWeight: 600,
-  border: "none", borderRadius: 8, padding: "7px 14px", cursor: "pointer", whiteSpace: "nowrap",
-};
-export const HDR_BTN_SECONDARY: React.CSSProperties = {
-  display: "flex", alignItems: "center", gap: 6,
-  backgroundColor: "transparent", color: C.text,
-  fontFamily: "Space Grotesk, sans-serif", fontSize: 12, fontWeight: 500,
-  border: `1px solid ${C.border}`, borderRadius: 8, padding: "7px 14px", cursor: "pointer", whiteSpace: "nowrap",
-};
-// Variante píldora de HDR_BTN_SECONDARY — acciones secundarias de header
-// ("Ver trámites" / "Ver barreras").
-export const HDR_BTN_PILL: React.CSSProperties = {
-  ...HDR_BTN_SECONDARY,
-  borderRadius: 999,
-};
+// HDR_BTN_PRIMARY/SECONDARY/PILL se importan de ./theme (ver comentario junto
+// a los imports, arriba) — re-exportados para no romper a nadie que ya los
+// importe desde "./App".
+export { HDR_BTN_PRIMARY, HDR_BTN_SECONDARY, HDR_BTN_PILL };
 
 // ─── Campana de notificaciones (Lote 7) ────────────────────────────────────
 // Vive aquí, no en src/app/revision/, a propósito: Header se usa en decenas de
@@ -3229,26 +3236,35 @@ function BarrerasPorJerarquiaCard({ cd, jerarquiaActiva, footer }: {
 // Barreras — mismo lenguaje visual que BarrasComposicion, pero SIN leyenda de
 // severidad (esto es composición, no severidad): degradado C.steel4→steel1 y
 // dos tonos más claros de la misma rampa categórica para filas adicionales.
-function ComposicionSimplePanel({ label, filas, actionLabel, onAction }: {
+export function ComposicionSimplePanel({ label, filas, actionLabel, onAction, formatValor, headerExtra }: {
   label: string;
   filas: { nombre: string; valor: number }[];
   actionLabel?: string;
   onAction?: () => void;
+  // Formatea el texto mostrado a la derecha de cada fila (ej. moneda) sin
+  // afectar el ancho de la barra, que sigue calculándose del `valor` crudo.
+  formatValor?: (v: number) => string;
+  // Contenido extra en el header, antes del botón de acción (ej. un select
+  // visual de "medida").
+  headerExtra?: React.ReactNode;
 }) {
   const maxValor = Math.max(...filas.map(f => f.valor), 1);
   const gradient = [C.steel4, C.steel3, C.steel2, C.steel1, "#A0C1E0", "#BDD0DD"];
   return (
     <div className="rounded-xl flex flex-col h-full" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
-      <div className="px-5 pt-4 pb-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${C.border}` }}>
+      <div className="px-5 pt-4 pb-4 flex items-center justify-between gap-3" style={{ borderBottom: `1px solid ${C.border}` }}>
         <p className="text-[11px] uppercase tracking-widest font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>{label}</p>
-        {actionLabel && (
-          <button
-            onClick={onAction}
-            style={{ backgroundColor: C.text, color: "white", border: "none", borderRadius: 999, padding: "6px 14px", fontFamily: "Space Grotesk, sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
-          >
-            {actionLabel}
-          </button>
-        )}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {headerExtra}
+          {actionLabel && (
+            <button
+              onClick={onAction}
+              style={{ backgroundColor: C.text, color: "white", border: "none", borderRadius: 999, padding: "6px 14px", fontFamily: "Space Grotesk, sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}
+            >
+              {actionLabel}
+            </button>
+          )}
+        </div>
       </div>
       <div className="px-5 pt-4 pb-5 flex flex-col gap-3 flex-1 justify-center">
         {filas.map((f, i) => {
@@ -3259,7 +3275,7 @@ function ComposicionSimplePanel({ label, filas, actionLabel, onAction }: {
               <div className="flex-1 rounded-full overflow-hidden" style={{ height: 12, backgroundColor: "#E6ECF3" }}>
                 <div style={{ width: `${pct}%`, height: "100%", backgroundColor: gradient[i % gradient.length] }} />
               </div>
-              <span className="flex-shrink-0 text-right" style={{ fontFamily: "Space Grotesk, sans-serif", fontSize: 12, fontWeight: 600, color: C.textMuted, width: 32 }}>{f.valor}</span>
+              <span className="flex-shrink-0 text-right" style={{ fontFamily: "Space Grotesk, sans-serif", fontSize: 12, fontWeight: 600, color: C.textMuted, width: formatValor ? 76 : 32 }}>{formatValor ? formatValor(f.valor) : f.valor}</span>
             </div>
           );
         })}
@@ -7287,6 +7303,7 @@ export default function App() {
     setView(v);
     setDrawerOpen(false);
     if (v.screen === "panel-regional") setActiveSection("dashboard");
+    if (v.screen === "impacto-economico") setActiveSection("impacto-economico");
     if (v.screen === "country-dashboard") { setActiveSection("dashboard"); setActiveCountry(v.country as Country); }
     if (v.screen === "barreras" || v.screen === "barrera-detail") setActiveSection("barreras");
     if (v.screen === "tramites" || v.screen === "tramite-detail") setActiveSection("tramites");
@@ -7342,6 +7359,7 @@ export default function App() {
   const renderView = () => {
     switch (view.screen) {
       case "panel-regional": return <PanelRegional onNavigate={navigate} />;
+      case "impacto-economico": return <ImpactoEconomico country={activeCountry} onCountryChange={c => setActiveCountry(c)} onNavigate={navigate} />;
       case "country-dashboard": return <CountryDashboard country={view.country} onCountryChange={c => { setActiveCountry(c); navigate({ screen: "country-dashboard", country: c === "Todos" ? "Bolivia" : c }); }} onNavigate={navigate} />;
       case "barreras": return <BarrerasScreen initialSector={view.sector} country={activeCountry} onCountryChange={c => setActiveCountry(c)} onNavigate={navigate} />;
       case "barrera-detail": return <BarreraDetail id={view.id} onNavigate={navigate} />;
