@@ -440,6 +440,12 @@ const IRR_BY_CLASIFICACION = {
 };
 
 // Barreras data for Agroindustria Cafetalera
+// Campos nuevos (idHallazgo, pais, anio, entidad, enlaceOficial, tipoRestriccion,
+// canalTransmision, afectacionMipyme, validacion, accionSugerida) en cada
+// barrera de BARRERAS_CAFE/BARRERAS_TEXTIL: dato de muestra, sin fuente real
+// todavía. TODO: definir de dónde saldrán realmente (scraping, panel de
+// validación HITL real, etc.) y conectar validacion.* con el store real del
+// módulo de Revisión/HITL en vez de datos sueltos por barrera.
 const BARRERAS_CAFE = [
   {
     id: "bloqueo-renovacion",
@@ -450,6 +456,29 @@ const BARRERAS_CAFE = [
     tramitesAfectados: ["cert-exportacion", "registro-sanitario"],
     clasificacion: "Operación",
     jerarquia: "Reglamentario",
+    idHallazgo: "BOL-BAR-0842",
+    pais: "Bolivia" as Country,
+    anio: 2022,
+    entidad: "ARSA — Agencia de Regulación Sanitaria",
+    enlaceOficial: "gaceta.gob.bo/normas/reglamento-4521",
+    tipoRestriccion: "Certificación previa obligatoria",
+    canalTransmision: "Tiempo/incertidumbre",
+    afectacionMipyme: "Alta" as const,
+    validacion: {
+      severidadIA: "Crítico" as const,
+      severidadValidada: "Crítico" as const,
+      estadoHitl: "Publicado" as const,
+      comentarioBID: "Confirmado como barrera crítica: bloqueo total de despacho sin alternativa operativa.",
+      comentarioConsultor: "Recomendamos declaración jurada digital con verificación ex-post para no interrumpir cadenas de exportación.",
+      comentarioGobierno: "ARSA evalúa la propuesta; pendiente de aprobación por Directorio.",
+    },
+    accionSugerida: {
+      accion: "Sustituir por declaración jurada con verificación posterior",
+      prioridad: "Alta" as const,
+      tipoCambioRequerido: "Reglamentario · sin pasar por el legislativo",
+      factibilidad: "Alta" as const,
+      objetivoLegitimo: "Sí, objetivo válido · carga desproporcionada",
+    },
     descripcion: "Se prohíbe procesar o despachar lotes de café para exportación ante demoras puramente administrativas en la renovación del registro sanitario, paralizando contenedores en puerto a pesar del historial de cumplimiento.",
     diagnostico: "La exigencia de registro sanitario vigente como condición para despacho bloquea exportaciones aun cuando la renovación se encuentre en trámite y el exportador tenga historial de cumplimiento. Esto genera pérdidas estimadas por contenedores paralizados en puerto, afectando competitividad y generando costos financieros adicionales por almacenaje prolongado.",
     textNormativo: `Artículo 47. — Del despacho de productos alimenticios para exportación.\n\nNingún lote de producto alimenticio destinado a la exportación podrá ser procesado, empacado o despachado sin que el titular cuente con registro sanitario vigente y en plena validez a la fecha de emisión de la guía de tránsito correspondiente. La autoridad sanitaria queda facultada para retener preventivamente cualquier envío en el que el registro sanitario del titular se encuentre en proceso de renovación, independientemente del historial de cumplimiento del exportador.\n\nEl incumplimiento de esta disposición acarreará la suspensión inmediata de operaciones de exportación hasta la regularización del registro, sin perjuicio de las sanciones administrativas correspondientes.`,
@@ -469,6 +498,29 @@ const BARRERAS_CAFE = [
     tramitesAfectados: ["registro-exportador"],
     clasificacion: "Entrada",
     jerarquia: "Legal",
+    idHallazgo: "BOL-BAR-0843",
+    pais: "Bolivia" as Country,
+    anio: 2019,
+    entidad: "SENAVEX",
+    enlaceOficial: "gaceta.gob.bo/normas/ley-pcm-2019-045",
+    tipoRestriccion: "Requisito de infraestructura propia",
+    canalTransmision: "Modelo de negocio",
+    afectacionMipyme: "Alta" as const,
+    validacion: {
+      severidadIA: "Crítico" as const,
+      severidadValidada: "Alto" as const,
+      estadoHitl: "Por decidir" as const,
+      comentarioBID: "Impacto significativo en modelos de maquila; validar alcance real de casos afectados.",
+      comentarioConsultor: "Sugerimos permitir maquila certificada como alternativa formal a la planta propia.",
+      comentarioGobierno: "En revisión por el Ministerio de Desarrollo Productivo.",
+    },
+    accionSugerida: {
+      accion: "Reconocer convenios de maquila certificada como alternativa a la planta propia",
+      prioridad: "Alta" as const,
+      tipoCambioRequerido: "Legal · requiere modificación de ley",
+      factibilidad: "Media" as const,
+      objetivoLegitimo: "Sí, objetivo válido · medio desproporcionado",
+    },
     descripcion: "Se restringe la inscripción como tostador-exportador a empresas que no poseen instalaciones propias y operan mediante arrendamiento de capacidad instalada (modelo de maquila).",
     diagnostico: "El marco normativo desconoce los modelos de negocio modernos de tostadores que operan por maquila en plantas de terceros certificadas. Esta restricción impide el acceso al mercado internacional de exportadores artesanales y medianos que no pueden costear instalaciones propias.",
     textNormativo: `Artículo 12. — Requisitos para inscripción como exportador de café tostado.\n\nPara obtener la inscripción en el Registro de Exportadores de Café Tostado, el solicitante deberá acreditar la propiedad o arrendamiento a largo plazo (mínimo 5 años) de las instalaciones de tostado, incluyendo equipos industriales propios. No se admitirá la inscripción de personas naturales o jurídicas que operen mediante convenios de capacidad compartida, maquila o arrendamiento de capacidad instalada de terceros.\n\nEsta disposición busca garantizar la trazabilidad y calidad del café de exportación, vinculando la responsabilidad del exportador a instalaciones físicas verificables.`,
@@ -491,6 +543,29 @@ const BARRERAS_TEXTIL = [
     tramitesAfectados: ["declaracion-mensual-isv"],
     clasificacion: "Entrada",
     jerarquia: "Reglamentario",
+    idHallazgo: "BOL-BAR-0844",
+    pais: "Bolivia" as Country,
+    anio: 2022,
+    entidad: "Secretaría de Finanzas",
+    enlaceOficial: "gaceta.gob.bo/normas/decreto-pcm-027-2022",
+    tipoRestriccion: "Reporte físico obligatorio",
+    canalTransmision: "Costo administrativo",
+    afectacionMipyme: "Media" as const,
+    validacion: {
+      severidadIA: "Crítico" as const,
+      severidadValidada: "Alto" as const,
+      estadoHitl: "Etapa 3" as const,
+      comentarioBID: "Carga administrativa duplicada confirmada; evaluar digitalización.",
+      comentarioConsultor: "Proponemos transmisión electrónica vía portal SEFIN-Digital.",
+      comentarioGobierno: "Pendiente de asignación a analista para revisión técnica.",
+    },
+    accionSugerida: {
+      accion: "Digitalizar el reporte semestral vía portal SEFIN-Digital",
+      prioridad: "Media" as const,
+      tipoCambioRequerido: "Reglamentario · sin pasar por el legislativo",
+      factibilidad: "Alta" as const,
+      objetivoLegitimo: "Sí, objetivo válido · medio desproporcionado",
+    },
     descripcion: "Exige entregar informes de operaciones en formato físico bajo riesgo de sanciones, duplicando la contabilidad.",
     diagnostico: "La obligación de reporte físico semestral duplica el esfuerzo administrativo en empresas que ya llevan contabilidad digital. Las sanciones por incumplimiento se aplican por igual a empresas ZOLI que operan con sistemas electrónicos avanzados.",
     textNormativo: `Artículo 9. — Obligación de reporte semestral de operaciones.\n\nLas empresas acogidas al régimen de Zona Libre de Industria y Comercio (ZOLI) deberán presentar ante la Secretaría de Finanzas, dentro de los primeros quince días hábiles de enero y julio de cada año, un informe físico y certificado por contador público colegiado de todas las operaciones realizadas en el semestre anterior.\n\nDicho informe deberá incluir inventario de materias primas, producción terminada, exportaciones realizadas y personal empleado. La falta de presentación oportuna del informe en formato físico y con la firma del contador certificado acarreará multas de hasta el 2% del valor de las exportaciones del período.`,
@@ -991,50 +1066,54 @@ const TOP_BARRERAS_POR_PAIS_MUESTRA: Record<Exclude<Country, "Todos">, {
   ],
 };
 
-// Agrega "titulo", "canal" y "jerarquia" de muestra a cada fila de
+// Agrega "id", "titulo", "canal" y "jerarquia" de muestra a cada fila de
 // TOP_BARRERAS_POR_PAIS_MUESTRA (se reutiliza tal cual, sin reescribir sus
-// campos) para armar la tabla "Top 3 barreras según IRR" del Panel País.
-// TODO: no hay catálogo real de barreras individuales para Argentina, Chile,
-// Ecuador y Perú todavía (mismo pendiente que Barreras Regional) — canal,
-// título y jerarquía de estas filas son de muestra.
-const TOP_BARRERAS_PAIS_TABLA_EXTRA: Record<Exclude<Country, "Todos">, { titulo: string; canal: string; jerarquia: string }[]> = {
+// campos) para armar la tabla "Top 3 barreras según IRR" del Panel País y la
+// tabla regional de Barreras. El id de Bolivia[0] es el real de ALL_BARRERAS
+// (esta fila SÍ tiene ficha completa); el resto son ids de muestra — no hay
+// catálogo real de barreras individuales para Argentina, Chile, Ecuador y
+// Perú todavía (mismo pendiente ya anotado), así que BarreraDetail() les
+// arma una ficha reducida solo con lo que trae la fila de la tabla.
+const TOP_BARRERAS_PAIS_TABLA_EXTRA: Record<Exclude<Country, "Todos">, { id: string; titulo: string; canal: string; jerarquia: string }[]> = {
   Argentina: [
-    { titulo: "Registro Obligatorio de Autopartes",                 canal: "Costo administrativo",    jerarquia: "Reglamentario" },
-    { titulo: "Demora en Renovación de Permisos Agroindustriales",  canal: "Tiempo/incertidumbre",     jerarquia: "Reglamentario" },
-    { titulo: "Capital Mínimo para Nuevas Entidades Financieras",   canal: "Capital/liquidez",         jerarquia: "Legal" },
+    { id: "registro-obligatorio-autopartes-ar",  titulo: "Registro Obligatorio de Autopartes",                 canal: "Costo administrativo",    jerarquia: "Reglamentario" },
+    { id: "demora-renovacion-permisos-ar",       titulo: "Demora en Renovación de Permisos Agroindustriales",  canal: "Tiempo/incertidumbre",     jerarquia: "Reglamentario" },
+    { id: "capital-minimo-entidades-financieras-ar", titulo: "Capital Mínimo para Nuevas Entidades Financieras", canal: "Capital/liquidez",       jerarquia: "Legal" },
   ],
+  // Bolivia[0] reusa el id real "bloqueo-renovacion" (existe en ALL_BARRERAS,
+  // misma barrera) — Bolivia[1] y [2] son de muestra, sin ficha real todavía.
   Bolivia: [
-    { titulo: "Bloqueo por Renovación de Registros",  canal: "Tiempo/incertidumbre",    jerarquia: "Reglamentario" },
-    { titulo: "Restricción de Venta Local en ZOLI",   canal: "Costo administrativo",    jerarquia: "Legal" },
-    { titulo: "Monopolio de Distribución Estatal",    canal: "Incumbentes/competencia", jerarquia: "Legal" },
+    { id: "bloqueo-renovacion",           titulo: "Bloqueo por Renovación de Registros",  canal: "Tiempo/incertidumbre",    jerarquia: "Reglamentario" },
+    { id: "restriccion-venta-zoli-bo",    titulo: "Restricción de Venta Local en ZOLI",   canal: "Costo administrativo",    jerarquia: "Legal" },
+    { id: "monopolio-distribucion-bo",    titulo: "Monopolio de Distribución Estatal",    canal: "Incumbentes/competencia", jerarquia: "Legal" },
   ],
   Chile: [
-    { titulo: "Reporte Semestral de Producción Minera",            canal: "Costo administrativo", jerarquia: "Reglamentario" },
-    { titulo: "Garantía de Inversión Renovable Excesiva",          canal: "Capital/liquidez",      jerarquia: "Administrativo" },
-    { titulo: "Requisito Técnico Desproporcionado en Financieras", canal: "Capacidad técnica",     jerarquia: "Legal" },
+    { id: "reporte-semestral-produccion-minera-cl", titulo: "Reporte Semestral de Producción Minera",            canal: "Costo administrativo", jerarquia: "Reglamentario" },
+    { id: "garantia-inversion-renovable-cl",        titulo: "Garantía de Inversión Renovable Excesiva",          canal: "Capital/liquidez",      jerarquia: "Administrativo" },
+    { id: "requisito-tecnico-financieras-cl",       titulo: "Requisito Técnico Desproporcionado en Financieras", canal: "Capacidad técnica",     jerarquia: "Legal" },
   ],
   Ecuador: [
-    { titulo: "Demora en Autorización de Operaciones Petroleras",  canal: "Tiempo/incertidumbre",     jerarquia: "Reglamentario" },
-    { titulo: "Certificación Fitosanitaria Redundante",            canal: "Costo administrativo",     jerarquia: "Administrativo" },
-    { titulo: "Reserva de Mercado para Exportadores Establecidos", canal: "Incumbentes/competencia",  jerarquia: "Reglamentario" },
+    { id: "demora-autorizacion-petroleras-ec",  titulo: "Demora en Autorización de Operaciones Petroleras",  canal: "Tiempo/incertidumbre",     jerarquia: "Reglamentario" },
+    { id: "certificacion-fitosanitaria-ec",     titulo: "Certificación Fitosanitaria Redundante",            canal: "Costo administrativo",     jerarquia: "Administrativo" },
+    { id: "reserva-mercado-exportadores-ec",    titulo: "Reserva de Mercado para Exportadores Establecidos", canal: "Incumbentes/competencia",  jerarquia: "Reglamentario" },
   ],
   Perú: [
-    { titulo: "Certidumbre por Renovación de Registros", canal: "Tiempo/incertidumbre", jerarquia: "Reglamentario" },
-    { titulo: "Restricción de Registro Minero",          canal: "Costo administrativo", jerarquia: "Reglamentario" },
-    { titulo: "Capital Mínimo Desproporcionado",         canal: "Capital/liquidez",     jerarquia: "Legal" },
+    { id: "certidumbre-renovacion-registros-pe", titulo: "Certidumbre por Renovación de Registros", canal: "Tiempo/incertidumbre", jerarquia: "Reglamentario" },
+    { id: "restriccion-registro-minero-pe",      titulo: "Restricción de Registro Minero",          canal: "Costo administrativo", jerarquia: "Reglamentario" },
+    { id: "capital-minimo-desproporcionado-pe",  titulo: "Capital Mínimo Desproporcionado",         canal: "Capital/liquidez",     jerarquia: "Legal" },
   ],
 };
 
 type TopBarrerasPaisFila = {
   irr: 4 | 3 | 2 | 1; clasificacion: "Entrada" | "Operación"; subdimension: string; sector: string; instrumento: string; estadoHitl: "Publicado" | "Por decidir" | "Etapa 3";
-  titulo: string; canal: string; jerarquia: string;
+  id: string; titulo: string; canal: string; jerarquia: string; pais: Exclude<Country, "Todos">;
 };
 
 const TOP_BARRERAS_PAIS_TABLA: Record<Exclude<Country, "Todos">, TopBarrerasPaisFila[]> = (() => {
   const result = {} as Record<Exclude<Country, "Todos">, TopBarrerasPaisFila[]>;
   for (const pais of COUNTRIES) {
     const key = pais as Exclude<Country, "Todos">;
-    result[key] = TOP_BARRERAS_POR_PAIS_MUESTRA[key].map((b, i) => ({ ...b, ...TOP_BARRERAS_PAIS_TABLA_EXTRA[key][i] }));
+    result[key] = TOP_BARRERAS_POR_PAIS_MUESTRA[key].map((b, i) => ({ ...b, ...TOP_BARRERAS_PAIS_TABLA_EXTRA[key][i], pais: key }));
   }
   return result;
 })();
@@ -2048,9 +2127,9 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
       }));
     };
 
-    const topBarrerasFilas = COUNTRIES.flatMap(pais =>
-      (TOP_BARRERAS_POR_PAIS_MUESTRA[pais as Exclude<Country, "Todos">] ?? []).map(b => ({ pais, ...b }))
-    );
+    // TOP_BARRERAS_PAIS_TABLA ya trae "id" y "pais" por fila (ver más abajo,
+    // reutilizado tal cual — no se reconstruye la lista a mano acá).
+    const topBarrerasFilas = COUNTRIES.flatMap(pais => TOP_BARRERAS_PAIS_TABLA[pais as Exclude<Country, "Todos">] ?? []);
 
     const SEV_LEGEND = [
       { label: "4 · Crítico", color: "#C75450" },
@@ -2179,7 +2258,12 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
               </thead>
               <tbody>
                 {topBarrerasFilas.map((b, i) => (
-                  <tr key={i} style={{ borderBottom: `1px solid ${C.border}` }}>
+                  <tr
+                    key={i}
+                    className="hover:bg-[#F4F7FB] transition-colors"
+                    style={{ borderBottom: `1px solid ${C.border}`, cursor: b.id ? "pointer" : "default" }}
+                    onClick={() => { if (b.id) onNavigate({ screen: "barrera-detail", id: b.id }); }}
+                  >
                     <td className="px-4 py-3 text-[13px] font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>{b.pais}</td>
                     <td className="px-4 py-3"><SeverityBadge level={IRR_LABELS[b.irr]} /></td>
                     <td className="px-4 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{b.clasificacion}</td>
@@ -2436,38 +2520,144 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
 }
 
 // ─── Screen 4 — Barrera Detail ────────────────────────────────────────────────
+// ─── Panel de ficha genérico (label izquierda muted, valor derecha) ───────────
+// Reutilizado por los 3 paneles de la Ficha lateral de BarreraDetail
+// (Identificación / Clasificación / Validación) — mismo patrón visual que ya
+// usaba el panel único "Ficha".
+function FichaPanel({ title, rows }: { title: string; rows: [string, React.ReactNode][] }) {
+  return (
+    <div className="rounded-lg p-5" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
+      <p className="text-[11px] uppercase tracking-widest font-medium mb-3" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>{title}</p>
+      {rows.map(([k, v]) => (
+        <div key={k} className="flex justify-between py-2 border-b last:border-0 gap-3" style={{ borderColor: C.border }}>
+          <span className="text-[12px] flex-shrink-0" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{k}</span>
+          <span className="text-[12px] font-medium text-right" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text, maxWidth: "60%" }}>{v}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function BarreraDetail({ id, onNavigate }: { id: string; onNavigate: (v: View) => void }) {
-  const barrera = ALL_BARRERAS.find(b => b.id === id);
-  if (!barrera) return null;
+  const real = ALL_BARRERAS.find(b => b.id === id);
 
-  const affectedTramites = ALL_TRAMITES.filter(t => barrera.tramitesAfectados.includes(t.id));
+  // dato de muestra: id que solo existe en TOP_BARRERAS_PAIS_TABLA (filas de
+  // las tablas "Top 3 barreras según IRR") -- no hay catálogo real de
+  // barreras individuales para Argentina, Chile, Ecuador y Perú todavía
+  // (mismo pendiente ya anotado en las tareas de Barreras). Se arma la misma
+  // pantalla con lo que sí trae la fila de la tabla (título, sector,
+  // instrumento, clasificación, subdimensión, canal, estado HITL); el resto
+  // de los campos que no existen a este nivel de detalle se muestra como "—".
+  let muestra: TopBarrerasPaisFila | undefined;
+  if (!real) {
+    for (const pais of COUNTRIES) {
+      muestra = TOP_BARRERAS_PAIS_TABLA[pais as Exclude<Country, "Todos">]?.find(f => f.id === id);
+      if (muestra) break;
+    }
+  }
 
-  const textParts = barrera.textNormativo.split(barrera.pasajeResaltado);
+  if (!real && !muestra) return null;
+
+  const titulo = real?.titulo ?? muestra!.titulo;
+  const severidad = real?.severidad ?? IRR_LABELS[muestra!.irr];
+  const sector = real?.sector ?? muestra!.sector;
+  const instrumento = real?.instrumento ?? muestra!.instrumento;
+  const clasificacion = real?.clasificacion ?? muestra!.clasificacion;
+  const jerarquiaVal = real?.jerarquia ?? muestra!.jerarquia;
+  const pais = real?.pais ?? muestra!.pais;
+  const anio = real?.anio ?? "—";
+  const subdimension = real ? (BARRERA_META[real.id]?.subdimension ?? "—") : muestra!.subdimension;
+  const etapaCicloVida = real ? (BARRERA_META[real.id]?.etapaCicloVida ?? "—") : "—";
+  const estadoHitl = real?.validacion.estadoHitl ?? muestra!.estadoHitl;
+  const canalTransmision = real?.canalTransmision ?? muestra!.canal;
+
+  const affectedTramites = real ? ALL_TRAMITES.filter(t => real.tramitesAfectados.includes(t.id)) : [];
+
+  const identificacionRows: [string, React.ReactNode][] = [
+    ["ID del hallazgo", real?.idHallazgo ?? "—"],
+    ["Instrumento", instrumento],
+    ["Enlace oficial", real?.enlaceOficial ? (
+      <a
+        href={`https://${real.enlaceOficial}`}
+        target="_blank"
+        rel="noreferrer"
+        className="inline-flex items-center gap-1"
+        style={{ color: C.steel3, fontFamily: "Space Grotesk, sans-serif", fontSize: 12, fontWeight: 500, textDecoration: "none" }}
+      >
+        {real.enlaceOficial} <ExternalLink size={11} />
+      </a>
+    ) : "—"],
+    ["Entidad", real?.entidad ?? "—"],
+    ["Jerarquía", jerarquiaVal],
+  ];
+
+  const clasificacionRows: [string, React.ReactNode][] = [
+    ["Clasificación", clasificacion],
+    ["Subdimensión", subdimension],
+    ["Tipo de restricción", real?.tipoRestriccion ?? "—"],
+    ["Etapa del ciclo de vida", etapaCicloVida],
+    ["Sector", sector],
+    ["Severidad", severidad],
+    ["Año", String(anio)],
+    ["Canal de transmisión", canalTransmision],
+    ["Afectación MIPYME", real?.afectacionMipyme ?? "—"],
+  ];
+
+  const estadoHitlMeta = ESTADO_HITL_META[estadoHitl];
+  const validacionRows: [string, React.ReactNode][] = [
+    ["Severidad IA", real?.validacion.severidadIA ?? severidad],
+    ["Severidad validada", real?.validacion.severidadValidada ?? "—"],
+    ["Estado HITL", (
+      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium"
+        style={{ backgroundColor: estadoHitlMeta.bg, color: estadoHitlMeta.color, fontFamily: "IBM Plex Sans, sans-serif" }}>
+        {estadoHitl}
+      </span>
+    )],
+    ["Comentario del BID", real?.validacion.comentarioBID ?? "—"],
+    ["Comentario del Consultor", real?.validacion.comentarioConsultor ?? "—"],
+    ["Comentario del gobierno", real?.validacion.comentarioGobierno ?? "—"],
+  ];
+
+  // Filas de la tarjeta "Acción sugerida" — bold cuando el valor es una
+  // etiqueta Alta/Media/Baja (Prioridad, Factibilidad).
+  const accionSugeridaRows: [string, string][] = [
+    ["Acción sugerida", real?.accionSugerida.accion ?? "—"],
+    ["Prioridad", real?.accionSugerida.prioridad ?? "—"],
+    ["Tipo de cambio requerido", real?.accionSugerida.tipoCambioRequerido ?? "—"],
+    ["Factibilidad", real?.accionSugerida.factibilidad ?? "—"],
+    ["Objetivo legítimo y proporcionalidad", real?.accionSugerida.objetivoLegitimo ?? "—"],
+  ];
+  const ESCALA_ALTA_MEDIA_BAJA = ["Alta", "Media", "Baja"];
 
   return (
     <div className="p-4 md:p-8 overflow-y-auto h-full">
+      <Header
+        breadcrumb="Barreras Regulatorias › Detalle Barrera"
+        title={titulo}
+        actions={
+          <>
+            <button style={HDR_BTN_PRIMARY} onClick={() => onNavigate({ screen: "reportes", prefill: { tipoHallazgo: "distorsion", pais, sectores: [sector] } })}>
+              <Download size={13} /><span className="hidden sm:inline">Generar reporte</span><span className="sm:hidden">Reporte</span>
+            </button>
+            {/* TODO: dropdown de opciones de descarga */}
+            <button style={HDR_BTN_SECONDARY}>
+              Descargar <ChevronDown size={13} />
+            </button>
+          </>
+        }
+      />
+
       <button className="flex items-center gap-1 text-[12px] mb-4 min-h-[44px]" style={{ color: C.textMuted, fontFamily: "IBM Plex Sans, sans-serif", background: "none", border: "none" }}
-        onClick={() => onNavigate({ screen: "barreras", sector: barrera.sector })}>
+        onClick={() => onNavigate({ screen: "barreras", sector })}>
         ← Volver a Barreras
       </button>
-      <div className="flex items-center justify-between mb-1 gap-2">
-        <p className="text-[10px] md:text-[11px] uppercase tracking-widest" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>Regulaciones › Barreras › Detalle</p>
-        <button className="flex items-center gap-2 px-3 md:px-4 py-2 rounded-lg text-[12px] font-medium flex-shrink-0"
-          style={{ backgroundColor: C.text, color: "#FAFBFC", fontFamily: "Space Grotesk, sans-serif", border: "none" }}
-          onClick={() => onNavigate({ screen: "reporte-pdf", context: barrera.sector })}>
-          <Download size={13} /> Exportar PDF
-        </button>
-      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Main column */}
         <div className="md:col-span-2 flex flex-col gap-5">
-          <div>
-            <div className="flex items-center gap-3 mb-2">
-              <SeverityBadge level={barrera.severidad} />
-              <span className="text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{barrera.sector}</span>
-            </div>
-            <h1 className="text-[24px] font-semibold" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>{barrera.titulo}</h1>
+          <div className="flex items-center gap-3">
+            <SeverityBadge level={severidad} />
+            <span className="text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{sector} · {pais}</span>
           </div>
 
           {/* Legal text */}
@@ -2475,24 +2665,32 @@ function BarreraDetail({ id, onNavigate }: { id: string; onNavigate: (v: View) =
             <div className="px-5 py-3 border-b flex items-center justify-between" style={{ borderColor: C.border, backgroundColor: "#F0F4F8" }}>
               <div>
                 <p className="text-[11px] uppercase tracking-widest font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Texto normativo de origen</p>
-                <p className="text-[12px] font-semibold mt-0.5" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>{barrera.instrumento}</p>
+                <p className="text-[12px] font-semibold mt-0.5" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>{instrumento}</p>
               </div>
               <div className="text-right">
-                <p className="text-[11px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>Jerarquía: Decreto Ejecutivo</p>
-                <p className="text-[11px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>Bolivia · 2022</p>
+                <p className="text-[11px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>Jerarquía: {jerarquiaVal}</p>
+                <p className="text-[11px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{pais} · {anio}</p>
               </div>
             </div>
             <div className="flex">
               <div className="w-1 flex-shrink-0" style={{ backgroundColor: C.steel2 }} />
               <div className="p-5">
-                <p className="text-[12px] italic mb-1 text-right" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>texto de muestra</p>
-                <p className="text-[13px] leading-relaxed whitespace-pre-line" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text }}>
-                  {textParts[0]}
-                  <mark style={{ backgroundColor: "#C7545025", borderBottom: `2px solid ${C.critico}`, padding: "1px 2px" }}>
-                    {barrera.pasajeResaltado}
-                  </mark>
-                  {textParts[1]}
-                </p>
+                {real ? (
+                  <>
+                    <p className="text-[12px] italic mb-1 text-right" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>texto de muestra</p>
+                    <p className="text-[13px] leading-relaxed whitespace-pre-line" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text }}>
+                      {real.textNormativo.split(real.pasajeResaltado)[0]}
+                      <mark style={{ backgroundColor: "#C7545025", borderBottom: `2px solid ${C.critico}`, padding: "1px 2px" }}>
+                        {real.pasajeResaltado}
+                      </mark>
+                      {real.textNormativo.split(real.pasajeResaltado)[1]}
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-[13px] leading-relaxed italic" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>
+                    Dato de muestra — todavía no hay texto normativo capturado para esta barrera (no existe catálogo real de barreras individuales para {pais}).
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -2500,50 +2698,46 @@ function BarreraDetail({ id, onNavigate }: { id: string; onNavigate: (v: View) =
           {/* Diagnostic */}
           <div className="rounded-lg p-5" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
             <p className="text-[11px] uppercase tracking-widest font-medium mb-2" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Diagnóstico económico</p>
-            <p className="text-[13px] leading-relaxed" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text }}>{barrera.diagnostico}</p>
+            <p className="text-[13px] leading-relaxed" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: real ? C.text : C.textMuted }}>
+              {real ? real.diagnostico : "Dato de muestra — todavía no hay diagnóstico económico capturado para esta barrera."}
+            </p>
           </div>
 
-          {/* Reform */}
-          <div className="rounded-lg overflow-hidden hidden" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
-            <div className="px-5 py-3 border-b flex items-center justify-between" style={{ borderColor: C.border }}>
-              <p className="text-[11px] uppercase tracking-widest font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Propuesta de reforma</p>
-              <span className="text-[10px] px-2.5 py-1 rounded-full font-medium uppercase tracking-wide" style={{ backgroundColor: C.steel3 + "22", color: C.steel3, fontFamily: "Space Grotesk, sans-serif" }}>
-                {barrera.reforma.palanca}
-              </span>
+          {/* Acción sugerida — reemplaza el bloque "Propuesta de reforma" (Dice/Debe
+              Decir). El campo `reforma` (dice/debeDedir/palanca) NO se borra del tipo
+              de dato, solo deja de renderizarse acá. */}
+          <div className="rounded-lg overflow-hidden" style={{ backgroundColor: C.steel2 }}>
+            <div className="px-5 py-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.15)" }}>
+              <p className="text-[11px] uppercase tracking-widest font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: "#CFE0F0" }}>Acción sugerida</p>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-0">
-              <div className="p-5 border-r" style={{ borderColor: C.border }}>
-                <p className="text-[10px] uppercase tracking-widest font-semibold mb-2" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.critico }}>Dice</p>
-                <p className="text-[13px] italic leading-relaxed" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text }}>"{barrera.reforma.dice}"</p>
-              </div>
-              <div className="p-5">
-                <p className="text-[10px] uppercase tracking-widest font-semibold mb-2" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.steel3 }}>Debe Decir</p>
-                <p className="text-[13px] leading-relaxed" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text }}>"{barrera.reforma.debeDedir}"</p>
-              </div>
+            <div className="px-5">
+              {accionSugeridaRows.map(([k, v], i) => (
+                <div key={k} className="flex items-start justify-between gap-3 py-3"
+                  style={{ borderBottom: i < accionSugeridaRows.length - 1 ? "1px solid rgba(255,255,255,0.15)" : "none" }}>
+                  <span style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 11, color: "#CFE0F0" }}>{k}</span>
+                  <span
+                    className="text-right"
+                    style={{
+                      fontFamily: "Space Grotesk, sans-serif",
+                      fontSize: 13,
+                      color: "white",
+                      fontWeight: ESCALA_ALTA_MEDIA_BAJA.includes(v) ? 700 : 400,
+                      maxWidth: "60%",
+                    }}
+                  >
+                    {v}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
         </div>
 
         {/* Sidebar */}
         <div className="flex flex-col gap-4">
-          <div className="rounded-lg p-5" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
-            <p className="text-[11px] uppercase tracking-widest font-medium mb-3" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Ficha</p>
-            {([
-              ["Clasificación",          (barrera as any).clasificacion || "—"],
-              ["Subdimensión",           BARRERA_META[barrera.id]?.subdimension || "—"],
-              ["Etapa del ciclo de vida", BARRERA_META[barrera.id]?.etapaCicloVida || "—"],
-              ["Sector",                 barrera.sector],
-              ["Severidad",              barrera.severidad],
-              ["Instrumento",            barrera.instrumento.split(",")[0]],
-              ["Año",                    "2022"],
-              ["Jerarquía",              "Decreto Ejecutivo"],
-            ] as [string, string][]).map(([k, v]) => (
-              <div key={k} className="flex justify-between py-2 border-b last:border-0" style={{ borderColor: C.border }}>
-                <span className="text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{k}</span>
-                <span className="text-[12px] font-medium text-right" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text, maxWidth: "60%" }}>{v}</span>
-              </div>
-            ))}
-          </div>
+          <FichaPanel title="Identificación" rows={identificacionRows} />
+          <FichaPanel title="Clasificación" rows={clasificacionRows} />
+          <FichaPanel title="Validación" rows={validacionRows} />
 
           {/* Bridge to tramites */}
           <div className="rounded-lg p-5 hidden" style={{ backgroundColor: C.card, border: `1px solid ${C.steel2}44` }}>
