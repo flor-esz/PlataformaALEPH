@@ -49,6 +49,10 @@ import PanelRegional from "./PanelRegional";
 // DATA, ... } -- ImpactoEconomico.tsx solo los usa dentro del cuerpo de su
 // componente, nunca en el top-level de su módulo. Import estático seguro.
 import ImpactoEconomico from "./ImpactoEconomico";
+// Mismo criterio que PanelRegional / ImpactoEconomico -- IndiceIDR.tsx solo
+// usa lo que importa de vuelta desde este archivo dentro del cuerpo de
+// IndiceIDR(), nunca en el top-level de su módulo. Import estático seguro.
+import IndiceIDR from "./IndiceIDR";
 import {
   PieChart,
   Pie,
@@ -241,13 +245,25 @@ const DOC_ESTRUCTURA_PCT_MUESTRA = [6, 12, 18, 25, 35];
 // TODO: falta decidir si esta escala (0–100) o la escala 1–4 de irrPromedio
 // (COUNTRY_BARRERAS_DATA / KpiCard "IRR promedio" en BarrerasScreen) es la
 // oficial — son dos escalas conviviendo hoy.
-const IRR_GENERAL_MUESTRA: Record<Exclude<Country, "Todos">, number> = {
+// Exportado: es el mismo "Puntaje general" (0–100) que consume IndiceIDR.tsx
+// para el KPI y la grilla "IDR por país" — no hay un IDR_GENERAL_MUESTRA
+// separado, es este mismo dato (visible como "IDR", interno como IRR, ver
+// PROJECT.md / conversación sobre el rebrand IRR → IDR de solo texto visible).
+export const IRR_GENERAL_MUESTRA: Record<Exclude<Country, "Todos">, number> = {
   Argentina: 58.4,
   Bolivia: 61.3,
   Chile: 66.0,
   Ecuador: 55.7,
   Perú: 63.8,
 };
+
+// Proporción de hallazgos detectados que efectivamente se usan en el cálculo
+// del IDR, tras excluir los sin fuente trazable o en log_errores — dato de
+// muestra, la regla real de exclusión ya está descrita en el pie de
+// metodología de IndiceIDR.tsx, falta implementarla contra datos reales.
+// TODO: reemplazar por el cálculo real (fuente trazable / log_errores) cuando
+// exista ese cruce con los datos de scraping/trazabilidad.
+export const IDR_USADAS_RATIO_MUESTRA = 0.71;
 
 // Fuentes oficiales / procesadas / entidades emisoras por país — dato de
 // muestra, sin fuente real (mismo pendiente que Panel Regional).
@@ -1930,7 +1946,7 @@ const BOL_JERARQUIA: JerarquiaBar[] = [
   { nombre: "Técnico o local", total: 58,  n4: 10, n3: 24, n2: 15, n1: 9  },
 ];
 
-const COUNTRY_BARRERAS_DATA: Record<Country, {
+export const COUNTRY_BARRERAS_DATA: Record<Country, {
   total: number; criticas: number; irrPromedio: string; sectores: number;
   clasificacion: Record<string, TipoDato>;
   jerarquia: JerarquiaBar[];
@@ -1962,11 +1978,22 @@ function severidadLabel(v: number): string {
   return "Baja";
 }
 
+// Mapea el "Puntaje general" del IDR (escala 0–100, IRR_GENERAL_MUESTRA) a una
+// etiqueta de nivel de fricción — usado por el KPI "Nivel de fricciones" de
+// IndiceIDR.tsx. Escala 0–100, NO confundir con severidadLabel (que es
+// escala 1–4).
+export function nivelFriccionLabel(v: number): string {
+  if (v >= 75) return "Alto";
+  if (v >= 50) return "Medio-Alto";
+  if (v >= 25) return "Medio";
+  return "Bajo";
+}
+
 // % validado HITL por país — dato de muestra, sin fuente real todavía (primer
 // cruce entre Barreras y el módulo de Validación HITL). "Todos" es el valor
 // usado por el KPI regional.
 // TODO: reemplazar con el cálculo real cuando exista el cruce Barreras↔HITL.
-const VALIDADO_HITL_MUESTRA: Record<Country, number> = {
+export const VALIDADO_HITL_MUESTRA: Record<Country, number> = {
   Todos: 68,
   Argentina: 65,
   Bolivia: 68,
@@ -7366,6 +7393,7 @@ export default function App() {
       case "tramites": return <TramitesScreen country={activeCountry} onCountryChange={c => setActiveCountry(c)} onNavigate={navigate} />;
       case "tramite-detail": return <TramiteDetail id={view.id} onNavigate={navigate} />;
       case "distorsion-detail": return <DistorsionDetail id={view.id} onNavigate={navigate} />;
+      case "indice": return <IndiceIDR country={activeCountry} onCountryChange={c => setActiveCountry(c)} onNavigate={navigate} />;
       case "administracion": {
         const adminTab = (view as { screen: "administracion"; tab?: string }).tab ?? "usuarios";
         if (adminTab === "catalogos") return <AdminCatalogosScreen />;
