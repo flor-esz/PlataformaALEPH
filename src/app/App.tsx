@@ -27,6 +27,8 @@ import { EvolucionInstrumentosPanel } from "./components/ui/EvolucionInstrumento
 import { DocumentosEstructuraPanel } from "./components/ui/DocumentosEstructuraPanel";
 import { FuentesTrazabilidadTable } from "./components/ui/FuentesTrazabilidadTable";
 import { TablaExploratoria } from "./components/ui/TablaExploratoria";
+import { BarrerasPorPaisCard } from "./components/ui/BarrerasPorPaisCard";
+import { MatrizRegional } from "./components/ui/MatrizRegional";
 // PanelRegional importa { C, Header, KpiCard, ... } de vuelta desde este archivo
 // (mismo ciclo App.tsx <-> otros módulos documentado arriba), pero a diferencia
 // de revision/*.tsx nunca los usa en el top-level de su módulo -- solo dentro
@@ -915,6 +917,71 @@ const COUNTRY_BARRERAS_DATA: Record<Country, {
   return result;
 })();
 
+// Mapea el IRR promedio (escala 1–4, string numérico) a una etiqueta
+// categórica de severidad — usado en el KPI "Severidad promedio" del Panel
+// Regional de Barreras.
+function severidadLabel(v: number): string {
+  if (v >= 3.5) return "Alta";
+  if (v >= 2.5) return "Media-Alta";
+  if (v >= 1.5) return "Media";
+  return "Baja";
+}
+
+// % validado HITL por país — dato de muestra, sin fuente real todavía (primer
+// cruce entre Barreras y el módulo de Validación HITL). "Todos" es el valor
+// usado por el KPI regional.
+// TODO: reemplazar con el cálculo real cuando exista el cruce Barreras↔HITL.
+const VALIDADO_HITL_MUESTRA: Record<Country, number> = {
+  Todos: 68,
+  Argentina: 65,
+  Bolivia: 68,
+  Chile: 74,
+  Ecuador: 61,
+  Perú: 70,
+};
+
+// Top 3 barreras por país según IRR — dato de muestra: no hay catálogo real
+// de barreras individuales para Argentina, Chile, Ecuador y Perú todavía
+// (solo Bolivia tiene BARRERAS_NIVEL4_LIST; sus 3 filas de abajo reusan
+// entradas reales de esa lista).
+// TODO: reemplazar por catálogo real por país cuando exista.
+const TOP_BARRERAS_POR_PAIS_MUESTRA: Record<Exclude<Country, "Todos">, {
+  irr: 4 | 3 | 2 | 1;
+  clasificacion: "Entrada" | "Operación";
+  subdimension: string;
+  sector: string;
+  instrumento: string;
+  estadoHitl: "Publicado" | "Por decidir" | "Etapa 3";
+}[]> = {
+  Argentina: [
+    { irr: 4, clasificacion: "Entrada",   subdimension: "Comercio",                  sector: "Manufactura Automotriz",      instrumento: "Res. 445/2023",      estadoHitl: "Publicado" },
+    { irr: 4, clasificacion: "Operación", subdimension: "Certidumbre procedimental", sector: "Agroindustria y Commodities", instrumento: "Decreto 1187/2022",  estadoHitl: "Por decidir" },
+    { irr: 4, clasificacion: "Entrada",   subdimension: "Inversión",                 sector: "Servicios Financieros",       instrumento: "Ley 27.349, Art. 9", estadoHitl: "Etapa 3" },
+  ],
+  // Reusa 3 entradas reales de BARRERAS_NIVEL4_LIST (bloqueo-renovacion,
+  // "Restricción de Venta Local en ZOLI", "Monopolio de Distribución Estatal").
+  Bolivia: [
+    { irr: 4, clasificacion: "Operación", subdimension: "Certidumbre procedimental", sector: "Agroindustria Cafetalera", instrumento: "Regl. Gral. Registros Sanitarios, Art. 47", estadoHitl: "Por decidir" },
+    { irr: 4, clasificacion: "Entrada",   subdimension: "Comercio",                  sector: "Textil y Confección",      instrumento: "Ley ZOLI Art. 12",                          estadoHitl: "Publicado" },
+    { irr: 4, clasificacion: "Entrada",   subdimension: "Competencia",               sector: "Fibras Sintéticas",        instrumento: "Decreto Ejecutivo 2891",                    estadoHitl: "Etapa 3" },
+  ],
+  Chile: [
+    { irr: 4, clasificacion: "Entrada",   subdimension: "Comercio",   sector: "Minería y Exportaciones", instrumento: "Decreto PCM-027-2022", estadoHitl: "Etapa 3" },
+    { irr: 4, clasificacion: "Operación", subdimension: "Inversión",  sector: "Energías Renovables",     instrumento: "Res. Exenta 118/2021", estadoHitl: "Por decidir" },
+    { irr: 4, clasificacion: "Entrada",   subdimension: "Inversión",  sector: "Servicios Financieros",   instrumento: "Ley 21.000, Art. 33",  estadoHitl: "Publicado" },
+  ],
+  Ecuador: [
+    { irr: 4, clasificacion: "Operación", subdimension: "Certidumbre procedimental", sector: "Petróleo y Gas",          instrumento: "Regl. LORHUHI Art. 22", estadoHitl: "Por decidir" },
+    { irr: 4, clasificacion: "Entrada",   subdimension: "Comercio",                  sector: "Flores y Exportaciones",  instrumento: "Res. MAG-006-2022",     estadoHitl: "Publicado" },
+    { irr: 4, clasificacion: "Entrada",   subdimension: "Competencia",               sector: "Agroindustria Bananera",  instrumento: "Decreto 1234-EC",       estadoHitl: "Etapa 3" },
+  ],
+  Perú: [
+    { irr: 4, clasificacion: "Operación", subdimension: "Certidumbre procedimental", sector: "Agroindustria",       instrumento: "Regl. Gral. Registros Sanitarios, Art. 47", estadoHitl: "Por decidir" },
+    { irr: 4, clasificacion: "Entrada",   subdimension: "Comercio",                  sector: "Minería",             instrumento: "D.S. 4523-2023",                            estadoHitl: "Publicado" },
+    { irr: 4, clasificacion: "Entrada",   subdimension: "Inversión",                 sector: "Textil y Confección", instrumento: "Ley 1178, Art. 6",                          estadoHitl: "Etapa 3" },
+  ],
+};
+
 // ─── Barreras nivel-4 list (Bolivia) ──────────────────────────────────────────
 const BARRERAS_NIVEL4_LIST = [
   { id: "bloqueo-renovacion",   titulo: "Bloqueo por Renovación de Registros",        irr: 4, clasificacion: "Operación",  subdimension: "Certidumbre procedimental",             jerarquia: "Reglamentario",  sector: "Agroindustria Cafetalera",              entidad: "ARSA",                                               instrumento: "Regl. Gral. Registros Sanitarios, Art. 47" },
@@ -1586,7 +1653,7 @@ function CountryDashboard({ country, onCountryChange, onNavigate }: { country: s
 }
 
 // ─── BarraFiltrosBarreras ──────────────────────────────────────────────────────
-function BarraFiltrosBarreras({ country, setCountry, sector, setSector, entidad, setEntidad, clasificacion, setClasificacion, subdimension, setSubdimension, jerarquia, setJerarquia, severidad, setSeveridad, sectors, entidades }: {
+function BarraFiltrosBarreras({ country, setCountry, sector, setSector, entidad, setEntidad, clasificacion, setClasificacion, subdimension, setSubdimension, jerarquia, setJerarquia, severidad, setSeveridad, sectors, entidades, twoRows }: {
   country: Country; setCountry: (c: Country) => void;
   sector: string; setSector: (v: string) => void;
   entidad: string; setEntidad: (v: string) => void;
@@ -1596,6 +1663,10 @@ function BarraFiltrosBarreras({ country, setCountry, sector, setSector, entidad,
   severidad: string; setSeveridad: (v: string) => void;
   sectors: string[];
   entidades: string[];
+  // true: 2 filas (3 + 4 columnas) — usado en el panel regional (country === "Todos"),
+  // que necesita acomodar los 7 filtros junto al resto del contenido de la pantalla.
+  // Sin agregar filtros nuevos, es solo maquetación.
+  twoRows?: boolean;
 }) {
   const sel = (disabled?: boolean): React.CSSProperties => ({
     fontFamily: "IBM Plex Sans, sans-serif",
@@ -1613,56 +1684,159 @@ function BarraFiltrosBarreras({ country, setCountry, sector, setSector, entidad,
 
   const subdimOpts = clasificacion ? (SUBDIMS_BY_CLASIFICACION[clasificacion] ?? []) : [];
 
+  const paisSelect = (
+    <select key="pais" className="grow" style={sel()} value={country} onChange={e => setCountry(e.target.value as Country)}>
+      <option value="Todos">Todos los países</option>
+      <option value="Argentina">Argentina</option>
+      <option value="Bolivia">Bolivia</option>
+      <option value="Chile">Chile</option>
+      <option value="Ecuador">Ecuador</option>
+      <option value="Perú">Perú</option>
+    </select>
+  );
+  const sectorSelect = (
+    <select key="sector" className="grow" style={sel()} value={sector} onChange={e => setSector(e.target.value)}>
+      <option value="">Todos los sectores</option>
+      {sectors.map(s => <option key={s} value={s}>{s}</option>)}
+    </select>
+  );
+  const entidadSelect = (
+    <select key="entidad" className="grow" style={sel()} value={entidad} onChange={e => setEntidad(e.target.value)}>
+      <option value="">Entidad emisora</option>
+      {entidades.map(e => <option key={e} value={e}>{e}</option>)}
+    </select>
+  );
+  const clasificacionSelect = (
+    <select key="clasificacion" className="grow" style={sel()} value={clasificacion} onChange={e => { setClasificacion(e.target.value); setSubdimension(""); }}>
+      <option value="">Clasificación</option>
+      <option value="Entrada">Entrada</option>
+      <option value="Operación">Operación</option>
+    </select>
+  );
+  const subdimensionSelect = (
+    <select key="subdimension" className="grow" style={sel(!clasificacion)} value={subdimension} disabled={!clasificacion}
+      onChange={e => setSubdimension(e.target.value)}>
+      <option value="">Subdimensión</option>
+      {subdimOpts.map(s => <option key={s} value={s}>{s}</option>)}
+    </select>
+  );
+  const jerarquiaSelect = (
+    <select key="jerarquia" className="grow" style={sel()} value={jerarquia} onChange={e => setJerarquia(e.target.value)}>
+      <option value="">Jerarquía normativa</option>
+      <option value="Constitucional">Constitucional</option>
+      <option value="Legal">Legal</option>
+      <option value="Reglamentario">Reglamentario</option>
+      <option value="Administrativo">Administrativo</option>
+      <option value="Técnico o local">Técnico o local</option>
+    </select>
+  );
+  const severidadSelect = (
+    <select key="severidad" className="grow" style={sel()} value={severidad} onChange={e => setSeveridad(e.target.value)}>
+      <option value="">Severidad</option>
+      <option value="Crítico">4 · Crítico</option>
+      <option value="Alto">3 · Alto</option>
+      <option value="Mediano">2 · Mediano</option>
+      <option value="Bajo">1 · Bajo</option>
+    </select>
+  );
+
+  if (twoRows) {
+    return (
+      <div className="flex flex-col gap-2 mb-5">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          {paisSelect}{sectorSelect}{entidadSelect}
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {clasificacionSelect}{subdimensionSelect}{jerarquiaSelect}{severidadSelect}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-wrap gap-2 mb-5 p-0 rounded-lg">
-      {/* País */}
-      <select className="grow" style={sel()} value={country} onChange={e => setCountry(e.target.value as Country)}>
-        <option value="Todos">Todos los países</option>
-        <option value="Argentina">Argentina</option>
-        <option value="Bolivia">Bolivia</option>
-        <option value="Chile">Chile</option>
-        <option value="Ecuador">Ecuador</option>
-        <option value="Perú">Perú</option>
-      </select>
-      {/* Sector */}
-      <select className="grow" style={sel()} value={sector} onChange={e => setSector(e.target.value)}>
-        <option value="">Todos los sectores</option>
-        {sectors.map(s => <option key={s} value={s}>{s}</option>)}
-      </select>
-      {/* Entidad emisora */}
-      <select className="grow" style={sel()} value={entidad} onChange={e => setEntidad(e.target.value)}>
-        <option value="">Entidad emisora</option>
-        {entidades.map(e => <option key={e} value={e}>{e}</option>)}
-      </select>
-      {/* Clasificación */}
-      <select className="grow" style={sel()} value={clasificacion} onChange={e => { setClasificacion(e.target.value); setSubdimension(""); }}>
-        <option value="">Clasificación</option>
-        <option value="Entrada">Entrada</option>
-        <option value="Operación">Operación</option>
-      </select>
-      {/* Subdimensión */}
-      <select className="grow" style={sel(!clasificacion)} value={subdimension} disabled={!clasificacion}
-        onChange={e => setSubdimension(e.target.value)}>
-        <option value="">Subdimensión</option>
-        {subdimOpts.map(s => <option key={s} value={s}>{s}</option>)}
-      </select>
-      {/* Jerarquía normativa */}
-      <select className="grow" style={sel()} value={jerarquia} onChange={e => setJerarquia(e.target.value)}>
-        <option value="">Jerarquía normativa</option>
-        <option value="Constitucional">Constitucional</option>
-        <option value="Legal">Legal</option>
-        <option value="Reglamentario">Reglamentario</option>
-        <option value="Administrativo">Administrativo</option>
-        <option value="Técnico o local">Técnico o local</option>
-      </select>
-      {/* Severidad */}
-      <select className="grow" style={sel()} value={severidad} onChange={e => setSeveridad(e.target.value)}>
-        <option value="">Severidad</option>
-        <option value="Crítico">4 · Crítico</option>
-        <option value="Alto">3 · Alto</option>
-        <option value="Mediano">2 · Mediano</option>
-        <option value="Bajo">1 · Bajo</option>
-      </select>
+      {paisSelect}{sectorSelect}{entidadSelect}{clasificacionSelect}{subdimensionSelect}{jerarquiaSelect}{severidadSelect}
+    </div>
+  );
+}
+
+// ─── Barreras por jerarquía normativa (card) ───────────────────────────────────
+// Reutilizada por BarrerasScreen tanto en modo por país como en el panel
+// regional (country === "Todos") — solo cambia qué `cd` se le pasa y si lleva
+// `footer` (el panel regional agrega cobertura + % validado HITL debajo).
+function BarrerasPorJerarquiaCard({ cd, jerarquiaActiva, footer }: {
+  cd: { criticas: number; jerarquia: JerarquiaBar[] };
+  jerarquiaActiva?: string;
+  footer?: React.ReactNode;
+}) {
+  const JERARQUIA_BARS = cd.jerarquia;
+  const maxTotal = Math.max(...JERARQUIA_BARS.map(b => b.total), 1);
+  const SEV_COLORS = ["#C75450", "#26456B", "#3E6E9E", "#7FA8D4"] as const;
+  return (
+    <div className="rounded-xl flex flex-col h-full" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
+      {/* Card header */}
+      <div className="px-5 pt-4 pb-0" style={{ borderBottom: `1px solid ${C.border}` }}>
+        <p className="text-[11px] uppercase tracking-widest font-medium pb-4" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>
+          Barreras por jerarquía normativa
+        </p>
+      </div>
+
+      <div className="px-5 pt-4 pb-5 flex flex-col flex-1">
+        {/* Context line */}
+        {(() => {
+          const n4Total = JERARQUIA_BARS.reduce((s, b) => s + b.n4, 0);
+          const n4Reformable = JERARQUIA_BARS
+            .filter(b => ["Reglamentario", "Administrativo", "Técnico o local"].includes(b.nombre))
+            .reduce((s, b) => s + b.n4, 0);
+          const totalCriticas = cd.criticas;
+          const reformable = n4Total > 0 ? Math.round(n4Reformable / n4Total * totalCriticas) : 0;
+          if (reformable > totalCriticas) return null;
+          return (
+            <p style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 14, lineHeight: 1.5, color: C.text, marginBottom: 16 }}>
+              <span style={{ fontFamily: "Space Grotesk, sans-serif", fontWeight: 500 }}>{reformable}</span>
+              {" de "}
+              <span style={{ fontFamily: "Space Grotesk, sans-serif", fontWeight: 500 }}>{totalCriticas}</span>
+              {" barreras críticas están en normas de nivel reglamentario o inferior, reformables sin pasar por el legislativo."}
+            </p>
+          );
+        })()}
+
+        {/* Divider */}
+        <div style={{ borderBottom: `1px solid ${C.border}`, marginBottom: 16 }} />
+
+        {/* Bars — flex-1, justified to fill height */}
+        <div className="flex flex-col flex-1 justify-between">
+          {JERARQUIA_BARS.map(bar => {
+            const active = !jerarquiaActiva || jerarquiaActiva === bar.nombre;
+            const pct = (bar.total / maxTotal) * 100;
+            const segs = [
+              { v: bar.n4, color: SEV_COLORS[0] },
+              { v: bar.n3, color: SEV_COLORS[1] },
+              { v: bar.n2, color: SEV_COLORS[2] },
+              { v: bar.n1, color: SEV_COLORS[3] },
+            ].filter(s => s.v > 0);
+            return (
+              <div key={bar.nombre} className="flex items-center gap-3" style={{ opacity: active ? 1 : 0.28, transition: "opacity 0.2s" }}>
+                <span className="flex-shrink-0" style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 11, color: C.textMuted, width: 116, lineHeight: 1.3 }}>{bar.nombre}</span>
+                <div className="flex-1 rounded-full overflow-hidden" style={{ height: 14, backgroundColor: "#E6ECF3" }}>
+                  <div className="h-full flex rounded-full overflow-hidden" style={{ width: `${pct}%` }}>
+                    {segs.map((s, si) => (
+                      <div key={si} style={{ flex: s.v, backgroundColor: s.color, minWidth: s.v > 0 ? 2 : 0 }} />
+                    ))}
+                  </div>
+                </div>
+                <span className="flex-shrink-0 text-right" style={{ fontFamily: "Space Grotesk, sans-serif", fontSize: 12, fontWeight: 600, color: C.textMuted, width: 28 }}>{bar.total}</span>
+              </div>
+            );
+          })}
+        </div>
+
+        {footer && (
+          <div className="pt-4 mt-4" style={{ borderTop: `1px solid ${C.border}` }}>
+            {footer}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -1693,6 +1867,188 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
   const pageItems = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   const reset = (fn: (v: string) => void) => (v: string) => { fn(v); setPage(0); };
+
+  // ── Panel regional (país === "Todos") ───────────────────────────────────────
+  // Si country !== "Todos", cae al layout por país de siempre (sin cambios,
+  // ver el return más abajo).
+  const cd = COUNTRY_BARRERAS_DATA[country] ?? COUNTRY_BARRERAS_DATA["Bolivia"];
+  if (country === "Todos") {
+    const severidadPromedio = severidadLabel(parseFloat(cd.irrPromedio));
+    const validadoHitlRegional = VALIDADO_HITL_MUESTRA["Todos"];
+    const paisesRow1 = COUNTRIES.slice(0, 3);
+    const paisesRow2 = COUNTRIES.slice(3);
+
+    // dato de muestra: no hay desglose real de % validado HITL por
+    // subdimensión, se usa el mismo % del país en todas sus filas de "Entrada".
+    const buildEntradaPorPais = (pais: Country) => {
+      const cdPais = COUNTRY_BARRERAS_DATA[pais];
+      const subdims = cdPais.clasificacion["Entrada"]?.subdimensiones ?? [];
+      return subdims.map(s => ({
+        nombre: s.nombre,
+        total: s.niveles.n4 + s.niveles.n3 + s.niveles.n2 + s.niveles.n1,
+        validadoPct: VALIDADO_HITL_MUESTRA[pais],
+      }));
+    };
+
+    const topBarrerasFilas = COUNTRIES.flatMap(pais =>
+      (TOP_BARRERAS_POR_PAIS_MUESTRA[pais as Exclude<Country, "Todos">] ?? []).map(b => ({ pais, ...b }))
+    );
+
+    const ESTADO_HITL_META: Record<"Publicado" | "Por decidir" | "Etapa 3", { bg: string; color: string }> = {
+      "Publicado":   { bg: C.verde2, color: C.verde1 },
+      "Por decidir": { bg: C.ambar2, color: C.ambarTexto },
+      "Etapa 3":     { bg: "#E8F0FA", color: C.alto },
+    };
+
+    const SEV_LEGEND = [
+      { label: "4 · Crítico", color: "#C75450" },
+      { label: "3 · Alto",    color: "#26456B" },
+      { label: "2 · Mediano", color: "#3E6E9E" },
+      { label: "1 · Bajo",    color: "#7FA8D4" },
+    ];
+
+    const reportesPrefill: ReportesPrefill = {
+      tipoHallazgo: "distorsion",
+      pais: country,
+      sectores: sector ? [sector] : [],
+      eje: clasificacion || "",
+      subdimDistorsion: subdimension || "",
+      severidades: severidadFil ? [severidadFil] : [],
+      entidad: entidad || "",
+    };
+
+    const paisCard = (pais: Country) => (
+      <BarrerasPorPaisCard
+        key={pais}
+        pais={pais}
+        total={COUNTRY_BARRERAS_DATA[pais].total}
+        entrada={buildEntradaPorPais(pais)}
+        coberturaPct={COBERTURA_MUESTRA[pais as Exclude<Country, "Todos">]}
+        validadoHitlPct={VALIDADO_HITL_MUESTRA[pais]}
+        onVerBarreras={() => onCountryChange?.(pais)}
+      />
+    );
+
+    return (
+      <div className="p-4 md:p-8 overflow-y-auto h-full">
+        <Header
+          breadcrumb="Barreras Regulatorias › Panel Regional"
+          title="Barreras Regulatorias"
+          actions={
+            <>
+              {/* TODO: destino de "Ver metodología" (¿documentación / metodología del IRR?) */}
+              <button style={HDR_BTN_PILL}>Ver metodología</button>
+              <button style={HDR_BTN_PRIMARY} onClick={() => onNavigate({ screen: "reportes", prefill: reportesPrefill })}>
+                <ExternalLink size={13} /><span className="hidden sm:inline">Generar reporte</span><span className="sm:hidden">Reporte</span>
+              </button>
+              {/* TODO: dropdown de opciones de descarga */}
+              <button style={HDR_BTN_SECONDARY}>
+                Descargar <ChevronDown size={13} />
+              </button>
+            </>
+          }
+        />
+
+        <BandaCobertura text={`Cobertura regional: 86% de fuentes procesadas · Última actualización: 12 de marzo de 2026 · ${COUNTRIES.length} países activos`} />
+
+        <BarraFiltrosBarreras
+          country={country} setCountry={c => { onCountryChange?.(c); }}
+          sector={sector} setSector={reset(setSector)}
+          entidad={entidad} setEntidad={reset(setEntidad)}
+          clasificacion={clasificacion} setClasificacion={reset(setClasificacion)}
+          subdimension={subdimension} setSubdimension={reset(setSubdimension)}
+          jerarquia={jerarquia} setJerarquia={reset(setJerarquia)}
+          severidad={severidadFil} setSeveridad={reset(setSeveridadFil)}
+          sectors={sectors}
+          entidades={entidades}
+          twoRows
+        />
+
+        {/* KPIs */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+          <KpiCard label="Hallazgos de barreras" value={cd.total.toLocaleString("es-BO")} />
+          <KpiCard label="Hallazgos críticos" value={String(cd.criticas)} valueColor={C.critico} />
+          <KpiCard label="Severidad promedio" value={severidadPromedio} sub={`IRR ${cd.irrPromedio}/4`} />
+          <KpiCard label="Sectores afectados" value={String(cd.sectores)} />
+          {/* TODO: primer cruce Barreras↔Validación HITL, no existe ese cálculo real todavía */}
+          <KpiCard label="% Validado HITL" value={String(validadoHitlRegional)} valueSuffix="%" />
+        </div>
+
+        {/* Barreras por país */}
+        <p className="uppercase mb-3" style={{ fontFamily: "Space Grotesk, sans-serif", fontSize: 11, color: C.textMuted }}>Barreras por país</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 mb-3.5">
+          {paisesRow1.map(paisCard)}
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 mb-6">
+          {paisesRow2.map(paisCard)}
+        </div>
+
+        {/* Leyenda de severidad */}
+        <div className="flex flex-wrap items-center gap-5 mb-6">
+          {SEV_LEGEND.map(s => (
+            <div key={s.label} className="flex items-center gap-1.5">
+              <span className="rounded-full flex-shrink-0" style={{ width: 8, height: 8, backgroundColor: s.color, display: "inline-block" }} />
+              <span style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 12, color: C.textMuted }}>{s.label}</span>
+            </div>
+          ))}
+        </div>
+
+        <MatrizRegional clasificacion={cd.clasificacion} />
+
+        <div className="mt-6 mb-6">
+          <BarrerasPorJerarquiaCard
+            cd={cd}
+            jerarquiaActiva={jerarquia}
+            footer={
+              <div className="flex items-center justify-between">
+                <span style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 11, color: C.textMuted }}>Cobertura 91%</span>
+                <span style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 11, color: C.textMuted }}>{validadoHitlRegional}% validado HITL</span>
+              </div>
+            }
+          />
+        </div>
+
+        {/* Top 3 barreras según IRR por país — dato de muestra (ver TODO en TOP_BARRERAS_POR_PAIS_MUESTRA) */}
+        <div className="rounded-lg" style={{ backgroundColor: C.card }}>
+          <div className="p-5 border-b" style={{ borderColor: C.border }}>
+            <h3 className="text-[13px] uppercase tracking-widest font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>
+              Top 3 barreras según IRR por país
+            </h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[900px]">
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${C.border}` }}>
+                  {["País", "IRR", "Clasificación", "Subdimensión", "Sector", "Instrumento", "Estado HITL"].map(h => (
+                    <th key={h} className="px-4 py-3 text-left text-[11px] uppercase tracking-widest whitespace-nowrap"
+                      style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {topBarrerasFilas.map((b, i) => (
+                  <tr key={i} style={{ borderBottom: `1px solid ${C.border}` }}>
+                    <td className="px-4 py-3 text-[13px] font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>{b.pais}</td>
+                    <td className="px-4 py-3"><SeverityBadge level={IRR_LABELS[b.irr]} /></td>
+                    <td className="px-4 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{b.clasificacion}</td>
+                    <td className="px-4 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted, maxWidth: 180 }}>{b.subdimension}</td>
+                    <td className="px-4 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{b.sector}</td>
+                    <td className="px-4 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted, maxWidth: 180 }}>{b.instrumento}</td>
+                    <td className="px-4 py-3">
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium"
+                        style={{ backgroundColor: ESTADO_HITL_META[b.estadoHitl].bg, color: ESTADO_HITL_META[b.estadoHitl].color, fontFamily: "IBM Plex Sans, sans-serif" }}>
+                        {b.estadoHitl}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 md:p-8 overflow-y-auto h-full">
@@ -1760,9 +2116,6 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
       {/* Charts row — IRR por clasificación · Barreras por jerarquía */}
       {(() => {
         const cd = COUNTRY_BARRERAS_DATA[country] ?? COUNTRY_BARRERAS_DATA["Bolivia"];
-        const JERARQUIA_BARS = cd.jerarquia;
-        const maxTotal = Math.max(...JERARQUIA_BARS.map(b => b.total), 1);
-        const SEV_COLORS = ["#C75450", "#26456B", "#3E6E9E", "#7FA8D4"] as const;
         return (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6" style={{ alignItems: "stretch" }}>
             <PanelTipoSubdimension
@@ -1771,67 +2124,7 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
               datos={cd.clasificacion}
               className="h-full"
             />
-
-            {/* Barreras por jerarquía normativa */}
-            <div className="rounded-xl flex flex-col h-full" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
-              {/* Card header */}
-              <div className="px-5 pt-4 pb-0" style={{ borderBottom: `1px solid ${C.border}` }}>
-                <p className="text-[11px] uppercase tracking-widest font-medium pb-4" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>
-                  Barreras por jerarquía normativa
-                </p>
-              </div>
-
-              <div className="px-5 pt-4 pb-5 flex flex-col flex-1">
-                {/* Context line */}
-                {(() => {
-                  const n4Total = JERARQUIA_BARS.reduce((s, b) => s + b.n4, 0);
-                  const n4Reformable = JERARQUIA_BARS
-                    .filter(b => ["Reglamentario", "Administrativo", "Técnico o local"].includes(b.nombre))
-                    .reduce((s, b) => s + b.n4, 0);
-                  const totalCriticas = cd.criticas;
-                  const reformable = n4Total > 0 ? Math.round(n4Reformable / n4Total * totalCriticas) : 0;
-                  if (reformable > totalCriticas) return null;
-                  return (
-                    <p style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 14, lineHeight: 1.5, color: C.text, marginBottom: 16 }}>
-                      <span style={{ fontFamily: "Space Grotesk, sans-serif", fontWeight: 500 }}>{reformable}</span>
-                      {" de "}
-                      <span style={{ fontFamily: "Space Grotesk, sans-serif", fontWeight: 500 }}>{totalCriticas}</span>
-                      {" barreras críticas están en normas de nivel reglamentario o inferior, reformables sin pasar por el legislativo."}
-                    </p>
-                  );
-                })()}
-
-                {/* Divider */}
-                <div style={{ borderBottom: `1px solid ${C.border}`, marginBottom: 16 }} />
-
-                {/* Bars — flex-1, justified to fill height */}
-                <div className="flex flex-col flex-1 justify-between">
-                  {JERARQUIA_BARS.map(bar => {
-                    const active = !jerarquia || jerarquia === bar.nombre;
-                    const pct = (bar.total / maxTotal) * 100;
-                    const segs = [
-                      { v: bar.n4, color: SEV_COLORS[0] },
-                      { v: bar.n3, color: SEV_COLORS[1] },
-                      { v: bar.n2, color: SEV_COLORS[2] },
-                      { v: bar.n1, color: SEV_COLORS[3] },
-                    ].filter(s => s.v > 0);
-                    return (
-                      <div key={bar.nombre} className="flex items-center gap-3" style={{ opacity: active ? 1 : 0.28, transition: "opacity 0.2s" }}>
-                        <span className="flex-shrink-0" style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 11, color: C.textMuted, width: 116, lineHeight: 1.3 }}>{bar.nombre}</span>
-                        <div className="flex-1 rounded-full overflow-hidden" style={{ height: 14, backgroundColor: "#E6ECF3" }}>
-                          <div className="h-full flex rounded-full overflow-hidden" style={{ width: `${pct}%` }}>
-                            {segs.map((s, si) => (
-                              <div key={si} style={{ flex: s.v, backgroundColor: s.color, minWidth: s.v > 0 ? 2 : 0 }} />
-                            ))}
-                          </div>
-                        </div>
-                        <span className="flex-shrink-0 text-right" style={{ fontFamily: "Space Grotesk, sans-serif", fontSize: 12, fontWeight: 600, color: C.textMuted, width: 28 }}>{bar.total}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
+            <BarrerasPorJerarquiaCard cd={cd} jerarquiaActiva={jerarquia} />
           </div>
         );
       })()}
