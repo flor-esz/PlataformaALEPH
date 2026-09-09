@@ -495,6 +495,7 @@ const BARRERAS_CAFE = [
     canalTransmision: "Tiempo/incertidumbre",
     afectacionMipyme: "Alta" as const,
     accionCategoria: "Eliminar" as const,
+    fuente: "Gaceta Oficial de Bolivia" as const,
     validacion: {
       severidadIA: "Crítico" as const,
       severidadValidada: "Crítico" as const,
@@ -539,6 +540,7 @@ const BARRERAS_CAFE = [
     canalTransmision: "Modelo de negocio",
     afectacionMipyme: "Alta" as const,
     accionCategoria: "Simplificar" as const,
+    fuente: "Asamblea Legislativa Plurinacional" as const,
     validacion: {
       severidadIA: "Crítico" as const,
       severidadValidada: "Alto" as const,
@@ -586,6 +588,7 @@ const BARRERAS_TEXTIL = [
     canalTransmision: "Costo administrativo",
     afectacionMipyme: "Media" as const,
     accionCategoria: "Sustituir" as const,
+    fuente: "Ministerio de Economía y Finanzas Públicas" as const,
     validacion: {
       severidadIA: "Crítico" as const,
       severidadValidada: "Alto" as const,
@@ -1082,21 +1085,30 @@ const TRAMITES_PRIORITARIOS_BASE: Record<Exclude<Country, "Todos">, {
 // trámite lo que ya existe en TRAMITES_PRIORITARIOS_BASE (arriba) — así la
 // tabla "Trámites prioritarios" y esta pantalla siempre coinciden para el
 // mismo trámite.
-const TRAMITE_META_POR_NOMBRE = new Map<string, { pais: Country; severidad: "Crítica" | "Alta"; estadoHitl: "Publicado" | "Por decidir" | "Etapa 3"; accionSugerida: string }>();
+// fuente -- dato de muestra NUEVO, mismo criterio que ALL_BARRERAS.fuente:
+// cada trámite toma su fuente de FUENTES_TRAZABILIDAD_MUESTRA[pais] (nunca de
+// la lista de otro país), asignada acá cíclicamente por índice de fila dentro
+// de cada país (reparto simple, no hace falta lógica sofisticada).
+const TRAMITE_META_POR_NOMBRE = new Map<string, { pais: Country; severidad: "Crítica" | "Alta"; estadoHitl: "Publicado" | "Por decidir" | "Etapa 3"; accionSugerida: string; fuente: string }>();
 for (const pais of COUNTRIES) {
-  for (const fila of TRAMITES_PRIORITARIOS_BASE[pais]) {
-    TRAMITE_META_POR_NOMBRE.set(fila.tramite, { pais, severidad: fila.severidad, estadoHitl: fila.estadoHitl, accionSugerida: fila.accion });
-  }
+  const fuentesPais = FUENTES_TRAZABILIDAD_MUESTRA[pais];
+  TRAMITES_PRIORITARIOS_BASE[pais].forEach((fila, idx) => {
+    const fuente = fuentesPais[idx % fuentesPais.length].fuente;
+    TRAMITE_META_POR_NOMBRE.set(fila.tramite, { pais, severidad: fila.severidad, estadoHitl: fila.estadoHitl, accionSugerida: fila.accion, fuente });
+  });
 }
 // Único trámite de ALL_TRAMITES sin nombre exacto en TRAMITES_PRIORITARIOS_
 // BASE: "Obtención de Registro Sanitario de Alimentos" (TRAMITES_CAFE) es un
 // trámite propio del café, distinto del genérico "Registro Sanitario de
-// Alimentos (ARSA)" que sí tiene par ahí (Bolivia). Dato de muestra.
+// Alimentos (ARSA)" que sí tiene par ahí (Bolivia). Dato de muestra —
+// fuente reusa la misma que su par más cercano ("Registro Sanitario de
+// Alimentos (ARSA)", índice 2 en Bolivia).
 const TRAMITE_META_FALLBACK = {
   pais: "Bolivia" as Country,
   severidad: "Alta" as const,
   estadoHitl: "Publicado" as const,
   accionSugerida: "Permitir variaciones de empaque bajo el mismo registro sanitario sin repetir el trámite completo",
+  fuente: FUENTES_TRAZABILIDAD_MUESTRA["Bolivia"][2].fuente,
 };
 
 // canalTransmision/afectacionMipyme/tipoAfectacion -- dato de muestra NUEVO,
@@ -1240,6 +1252,7 @@ const BARRERAS_MUESTRA = [
     canalTransmision: "Costo administrativo",
     afectacionMipyme: "Alta" as const,
     accionCategoria: "Clarificar" as const,
+    fuente: "Gaceta Oficial de Argentina" as const,
     validacion: {
       severidadIA: "Crítico" as const,
       severidadValidada: "Crítico" as const,
@@ -1285,6 +1298,7 @@ const BARRERAS_MUESTRA = [
     canalTransmision: "Tiempo/incertidumbre",
     afectacionMipyme: "Media" as const,
     accionCategoria: "Eliminar" as const,
+    fuente: "Congreso de la Nación" as const,
     validacion: {
       severidadIA: "Crítico" as const,
       severidadValidada: "Alto" as const,
@@ -1330,6 +1344,7 @@ const BARRERAS_MUESTRA = [
     canalTransmision: "Capital/liquidez",
     afectacionMipyme: "Alta" as const,
     accionCategoria: "Proporcionalizar" as const,
+    fuente: "Ministerio de Economía" as const,
     validacion: {
       severidadIA: "Crítico" as const,
       severidadValidada: "Alto" as const,
@@ -1375,6 +1390,7 @@ const BARRERAS_MUESTRA = [
     canalTransmision: "Costo administrativo",
     afectacionMipyme: "Media" as const,
     accionCategoria: "Simplificar" as const,
+    fuente: "SENAPI" as const,
     validacion: {
       severidadIA: "Crítico" as const,
       severidadValidada: "Crítico" as const,
@@ -1420,6 +1436,7 @@ const BARRERAS_MUESTRA = [
     canalTransmision: "Incumbentes/competencia",
     afectacionMipyme: "Alta" as const,
     accionCategoria: "Eliminar" as const,
+    fuente: "Gaceta Oficial de Bolivia" as const,
     validacion: {
       severidadIA: "Crítico" as const,
       severidadValidada: "Crítico" as const,
@@ -1465,6 +1482,7 @@ const BARRERAS_MUESTRA = [
     canalTransmision: "Costo administrativo",
     afectacionMipyme: "Media" as const,
     accionCategoria: "Sustituir" as const,
+    fuente: "Diario Oficial de Chile" as const,
     validacion: {
       severidadIA: "Crítico" as const,
       severidadValidada: "Alto" as const,
@@ -1510,6 +1528,7 @@ const BARRERAS_MUESTRA = [
     canalTransmision: "Capital/liquidez",
     afectacionMipyme: "Alta" as const,
     accionCategoria: "Eliminar" as const,
+    fuente: "Congreso Nacional" as const,
     validacion: {
       severidadIA: "Crítico" as const,
       severidadValidada: "Crítico" as const,
@@ -1555,6 +1574,7 @@ const BARRERAS_MUESTRA = [
     canalTransmision: "Capacidad técnica",
     afectacionMipyme: "Media" as const,
     accionCategoria: "Simplificar" as const,
+    fuente: "Ministerio de Economía, Fomento y Turismo" as const,
     validacion: {
       severidadIA: "Crítico" as const,
       severidadValidada: "Alto" as const,
@@ -1600,6 +1620,7 @@ const BARRERAS_MUESTRA = [
     canalTransmision: "Tiempo/incertidumbre",
     afectacionMipyme: "Baja" as const,
     accionCategoria: "Clarificar" as const,
+    fuente: "Registro Oficial de Ecuador" as const,
     validacion: {
       severidadIA: "Crítico" as const,
       severidadValidada: "Alto" as const,
@@ -1645,6 +1666,7 @@ const BARRERAS_MUESTRA = [
     canalTransmision: "Costo administrativo",
     afectacionMipyme: "Alta" as const,
     accionCategoria: "Eliminar" as const,
+    fuente: "Asamblea Nacional" as const,
     validacion: {
       severidadIA: "Crítico" as const,
       severidadValidada: "Crítico" as const,
@@ -1690,6 +1712,7 @@ const BARRERAS_MUESTRA = [
     canalTransmision: "Incumbentes/competencia",
     afectacionMipyme: "Alta" as const,
     accionCategoria: "Proporcionalizar" as const,
+    fuente: "Ministerio de Producción, Comercio Exterior" as const,
     validacion: {
       severidadIA: "Crítico" as const,
       severidadValidada: "Crítico" as const,
@@ -1735,6 +1758,7 @@ const BARRERAS_MUESTRA = [
     canalTransmision: "Tiempo/incertidumbre",
     afectacionMipyme: "Alta" as const,
     accionCategoria: "Sustituir" as const,
+    fuente: "Gaceta Oficial de Perú" as const,
     validacion: {
       severidadIA: "Crítico" as const,
       severidadValidada: "Crítico" as const,
@@ -1780,6 +1804,7 @@ const BARRERAS_MUESTRA = [
     canalTransmision: "Costo administrativo",
     afectacionMipyme: "Alta" as const,
     accionCategoria: "Simplificar" as const,
+    fuente: "Asamblea Legislativa" as const,
     validacion: {
       severidadIA: "Crítico" as const,
       severidadValidada: "Crítico" as const,
@@ -1825,6 +1850,7 @@ const BARRERAS_MUESTRA = [
     canalTransmision: "Capital/liquidez",
     afectacionMipyme: "Alta" as const,
     accionCategoria: "Eliminar" as const,
+    fuente: "Ministerio de Economía" as const,
     validacion: {
       severidadIA: "Crítico" as const,
       severidadValidada: "Alto" as const,
@@ -6281,6 +6307,19 @@ function ReportesScreen({ prefill, onNavigate }: { prefill?: ReportesPrefill; on
   const TIPOS_RESTRICCION = ["Licencia", "Cupo", "Exclusividad", "Autorización previa", "Capital mínimo", "Restricción de canal", "Precio", "Publicidad", "Nacionalidad", "Presencia local", "Discrecionalidad", "Desproporcionalidad"];
   const ACCIONES_AMR = ["Eliminar", "Simplificar", "Digitalizar", "Interoperar", "Clarificar", "Proporcionalizar", "Sustituir", "Armonizar", "Neutralidad competitiva", "Mantener con justificación"];
   const SEVERIDADES = ["Crítico", "Alto", "Mediano", "Bajo"];
+  const ESTADOS_HITL = ["Publicado", "Por decidir", "Etapa 3"];
+  const COBERTURA_OPTS = [
+    { value: 0,  label: "Cualquiera" },
+    { value: 70, label: "70% o más" },
+    { value: 80, label: "80% o más" },
+    { value: 90, label: "90% o más" },
+  ];
+  const IDR_MIN_OPTS = [
+    { value: 0,  label: "Cualquiera" },
+    { value: 50, label: "50 o más" },
+    { value: 60, label: "60 o más" },
+    { value: 70, label: "70 o más" },
+  ];
 
   // ── State (initialised from prefill when navigating from Barreras / Trámites) ──
   const [tipoHallazgo, setTipoHallazgo] = useState<"distorsion" | "carga">(prefill?.tipoHallazgo ?? "distorsion");
@@ -6288,6 +6327,10 @@ function ReportesScreen({ prefill, onNavigate }: { prefill?: ReportesPrefill; on
   // Siempre visibles
   const [pais, setPais] = useState<Country>(prefill?.pais ?? "Todos");
   const [selectedSectors, setSelectedSectors] = useState<string[]>(prefill?.sectores ?? []);
+  const [selectedFuentes, setSelectedFuentes] = useState<string[]>([]);
+  const [coberturaMin, setCoberturaMin] = useState<number>(0);
+  const [selectedEstadoHitl, setSelectedEstadoHitl] = useState<string[]>([]);
+  const [idrMin, setIdrMin] = useState<number>(0);
   const [periodoTipo, setPeriodoTipo] = useState<"todo" | "1ano" | "3anos" | "5anos" | "personalizado">("todo");
   const [periodoDesde, setPeriodoDesde] = useState("2015-01");
   const [periodoHasta, setPeriodoHasta] = useState("2026-03");
@@ -6317,6 +6360,25 @@ function ReportesScreen({ prefill, onNavigate }: { prefill?: ReportesPrefill; on
   const subdimDistorsionOpts = eje ? (SUBDIMS_BY_EJE[eje] ?? []) : [];
   const subdimCargaOpts = tipoCarga ? (SUBDIMS_BY_TIPO_CARGA[tipoCarga] ?? []) : [];
 
+  // Fuentes disponibles para el país seleccionado (FUENTES_TRAZABILIDAD_MUESTRA).
+  // Si "Todos", se unen las fuentes de los 5 países sin duplicar nombres
+  // repetidos (p. ej. "Ministerio de Economía" aparece en más de un país).
+  const availableFuentes = pais === "Todos"
+    ? Array.from(new Set(
+        COUNTRIES.filter((c): c is Exclude<Country, "Todos"> => c !== "Todos")
+          .flatMap(c => FUENTES_TRAZABILIDAD_MUESTRA[c].map(f => f.fuente))
+      ))
+    : FUENTES_TRAZABILIDAD_MUESTRA[pais as Exclude<Country, "Todos">].map(f => f.fuente);
+
+  // Países que cumplen los mínimos de cobertura/IDR — solo aplica exclusión
+  // cuando pais === "Todos"; con un país específico seleccionado, no se
+  // excluye (se avisa en su lugar, ver coberturaPaisOk/idrPaisOk).
+  const paisesIncluidos: Exclude<Country, "Todos">[] | null = pais !== "Todos" ? null :
+    (COUNTRIES.filter((c): c is Exclude<Country, "Todos"> => c !== "Todos"))
+      .filter(c => COBERTURA_MUESTRA[c] >= coberturaMin && IRR_GENERAL_MUESTRA[c] >= idrMin);
+  const coberturaPaisOk = pais === "Todos" || COBERTURA_MUESTRA[pais as Exclude<Country, "Todos">] >= coberturaMin;
+  const idrPaisOk = pais === "Todos" || IRR_GENERAL_MUESTRA[pais as Exclude<Country, "Todos">] >= idrMin;
+
   const periodoOpt = PERIODO_OPTS.find(p => p.value === periodoTipo)!;
   const periodoLabel = periodoTipo === "personalizado"
     ? (periodoDesde && periodoHasta ? `${periodoDesde} – ${periodoHasta}` : "Rango personalizado")
@@ -6338,17 +6400,29 @@ function ReportesScreen({ prefill, onNavigate }: { prefill?: ReportesPrefill; on
       : [tipoCarga || null, subdimCarga || null]
     ).filter(Boolean) as string[],
     periodoTipo === "todo" ? "Todos los periodos" : periodoLabel,
+    ...([
+      selectedFuentes.length > 0 ? `${selectedFuentes.length} fuente${selectedFuentes.length > 1 ? "s" : ""}` : null,
+      coberturaMin > 0 ? `Cobertura ≥ ${coberturaMin}%` : null,
+      selectedEstadoHitl.length > 0 ? `Estado HITL: ${selectedEstadoHitl.join(", ")}` : null,
+      idrMin > 0 ? `IDR ≥ ${idrMin}` : null,
+    ].filter(Boolean) as string[]),
   ];
   const scopeSummary = scopeParts.join(" · ");
 
   const previewBarreras = ALL_BARRERAS.filter(b => {
     if (selectedSectors.length > 0 && !selectedSectors.includes(b.sector)) return false;
     if (selectedSeveridades.length > 0 && !selectedSeveridades.includes(b.severidad)) return false;
+    if (selectedEstadoHitl.length > 0 && !selectedEstadoHitl.includes(b.validacion?.estadoHitl ?? "")) return false;
+    if (selectedFuentes.length > 0 && !selectedFuentes.includes(b.fuente)) return false;
+    if (paisesIncluidos && !paisesIncluidos.includes(b.pais as Exclude<Country, "Todos">)) return false;
     return true;
   });
   const previewTramites = ALL_TRAMITES.filter(t => {
     if (selectedSectors.length > 0 && !selectedSectors.includes(t.sector)) return false;
     if (tipoTramite && t.tipo !== tipoTramite) return false;
+    if (selectedEstadoHitl.length > 0 && !selectedEstadoHitl.includes(t.estadoHitl ?? "")) return false;
+    if (selectedFuentes.length > 0 && !selectedFuentes.includes(t.fuente)) return false;
+    if (paisesIncluidos && !paisesIncluidos.includes(t.pais as Exclude<Country, "Todos">)) return false;
     return true;
   });
   const previewItems = tipoHallazgo === "distorsion" ? previewBarreras : previewTramites;
@@ -6403,7 +6477,7 @@ function ReportesScreen({ prefill, onNavigate }: { prefill?: ReportesPrefill; on
 
           {/* 2. País — always visible */}
           <SectionCard title="País">
-            <select style={selStyle} value={pais} onChange={e => { setPais(e.target.value as Country); setSelectedSectors([]); }}>
+            <select style={selStyle} value={pais} onChange={e => { setPais(e.target.value as Country); setSelectedSectors([]); setSelectedFuentes([]); }}>
               {COUNTRIES.map(c => <option key={c} value={c}>{c === "Todos" ? "Todos los países" : c}</option>)}
             </select>
           </SectionCard>
@@ -6416,6 +6490,49 @@ function ReportesScreen({ prefill, onNavigate }: { prefill?: ReportesPrefill; on
                 <ChipToggle key={s} label={s} active={selectedSectors.includes(s)} onClick={() => toggle(selectedSectors, setSelectedSectors, s)} />
               ))}
             </div>
+          </SectionCard>
+
+          {/* 3b. Fuentes — siempre visible */}
+          <SectionCard title={`Fuentes ${selectedFuentes.length > 0 ? `(${selectedFuentes.length} seleccionadas)` : "(todas)"}`}>
+            <div className="flex flex-wrap gap-2">
+              <ChipToggle label="Todas las fuentes" active={selectedFuentes.length === 0} onClick={() => setSelectedFuentes([])} />
+              {availableFuentes.map(f => (
+                <ChipToggle key={f} label={f} active={selectedFuentes.includes(f)} onClick={() => toggle(selectedFuentes, setSelectedFuentes, f)} />
+              ))}
+            </div>
+          </SectionCard>
+
+          {/* 3c. Cobertura mínima — siempre visible */}
+          <SectionCard title="Cobertura mínima">
+            <select style={selStyle} value={coberturaMin} onChange={e => setCoberturaMin(Number(e.target.value))}>
+              {COBERTURA_OPTS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+            {!coberturaPaisOk && (
+              <p className="text-[11px] mt-2" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.critico }}>
+                {pais} tiene una cobertura de {COBERTURA_MUESTRA[pais as Exclude<Country, "Todos">]}%, por debajo del mínimo seleccionado — la vista previa no excluye países cuando hay uno específico seleccionado.
+              </p>
+            )}
+          </SectionCard>
+
+          {/* 3d. Estado HITL — siempre visible */}
+          <SectionCard title="Estado HITL">
+            <div className="flex flex-wrap gap-2">
+              {ESTADOS_HITL.map(e => (
+                <ChipToggle key={e} label={e} active={selectedEstadoHitl.includes(e)} onClick={() => toggle(selectedEstadoHitl, setSelectedEstadoHitl, e)} />
+              ))}
+            </div>
+          </SectionCard>
+
+          {/* 3e. IDR general mínimo — siempre visible */}
+          <SectionCard title="IDR general mínimo">
+            <select style={selStyle} value={idrMin} onChange={e => setIdrMin(Number(e.target.value))}>
+              {IDR_MIN_OPTS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+            {!idrPaisOk && (
+              <p className="text-[11px] mt-2" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.critico }}>
+                {pais} tiene un IDR general de {IRR_GENERAL_MUESTRA[pais as Exclude<Country, "Todos">]}, por debajo del mínimo seleccionado — la vista previa no excluye países cuando hay uno específico seleccionado.
+              </p>
+            )}
           </SectionCard>
 
           {/* 4. Filtros condicionales por tipo de hallazgo */}
@@ -6591,6 +6708,26 @@ function ReportesScreen({ prefill, onNavigate }: { prefill?: ReportesPrefill; on
               )}
               {tipoHallazgo === "carga" && tipoCarga && (
                 <span className="text-[11px] px-2.5 py-1 rounded-full" style={{ backgroundColor: C.border, color: C.textMuted, fontFamily: "IBM Plex Sans, sans-serif" }}>{tipoCarga}</span>
+              )}
+              {selectedFuentes.length > 0 && (
+                <span className="text-[11px] px-2.5 py-1 rounded-full" style={{ backgroundColor: C.border, color: C.textMuted, fontFamily: "IBM Plex Sans, sans-serif" }}>
+                  {selectedFuentes.length} fuente{selectedFuentes.length > 1 ? "s" : ""}
+                </span>
+              )}
+              {coberturaMin > 0 && (
+                <span className="text-[11px] px-2.5 py-1 rounded-full" style={{ backgroundColor: C.border, color: C.textMuted, fontFamily: "IBM Plex Sans, sans-serif" }}>
+                  Cobertura ≥ {coberturaMin}%
+                </span>
+              )}
+              {selectedEstadoHitl.length > 0 && (
+                <span className="text-[11px] px-2.5 py-1 rounded-full" style={{ backgroundColor: C.border, color: C.textMuted, fontFamily: "IBM Plex Sans, sans-serif" }}>
+                  HITL: {selectedEstadoHitl.join(", ")}
+                </span>
+              )}
+              {idrMin > 0 && (
+                <span className="text-[11px] px-2.5 py-1 rounded-full" style={{ backgroundColor: C.border, color: C.textMuted, fontFamily: "IBM Plex Sans, sans-serif" }}>
+                  IDR ≥ {idrMin}
+                </span>
               )}
             </div>
 
