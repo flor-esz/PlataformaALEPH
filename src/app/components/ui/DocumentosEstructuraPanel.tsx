@@ -6,6 +6,8 @@ const TXT_MUTED: React.CSSProperties = {
 };
 
 // ─── Public types ─────────────────────────────────────────────────────────────
+export type Estructura = "Estructurado" | "No estructurado";
+
 export type DocumentosEstructuraFila = {
   nombre: string;
   pctNoEstructurado: number;
@@ -15,10 +17,15 @@ export type DocumentosEstructuraPanelProps = {
   filas: DocumentosEstructuraFila[];
   onVerTabla?: () => void;
   className?: string;
+  // Si se pasa, cada mitad de la barra de cada fila (Estructurado/No
+  // estructurado) se vuelve clicable, con el nivel (`nombre` de la fila) y
+  // cuál de las dos mitades se clickeó. Cuando se omite, se comporta
+  // exactamente igual que hoy (no clicable).
+  onSegmentClick?: (nivel: string, estructura: Estructura) => void;
 };
 
 // ─── Single row ───────────────────────────────────────────────────────────────
-function EstructuraRow({ nombre, pctNoEstructurado }: DocumentosEstructuraFila) {
+function EstructuraRow({ nombre, pctNoEstructurado, onSegmentClick }: DocumentosEstructuraFila & { onSegmentClick?: (nivel: string, estructura: Estructura) => void }) {
   const pctEstructurado = 100 - pctNoEstructurado;
   return (
     <div className="flex items-center gap-3">
@@ -30,8 +37,14 @@ function EstructuraRow({ nombre, pctNoEstructurado }: DocumentosEstructuraFila) 
         {nombre}
       </span>
       <div className="flex-1 rounded overflow-hidden flex" style={{ height: 13 }}>
-        <div style={{ width: `${pctEstructurado}%`, backgroundColor: "#3E6E9E" }} />
-        <div style={{ width: `${pctNoEstructurado}%`, backgroundColor: "#DCE3EB" }} />
+        <div
+          onClick={onSegmentClick ? () => onSegmentClick(nombre, "Estructurado") : undefined}
+          style={{ width: `${pctEstructurado}%`, backgroundColor: "#3E6E9E", cursor: onSegmentClick ? "pointer" : undefined }}
+        />
+        <div
+          onClick={onSegmentClick ? () => onSegmentClick(nombre, "No estructurado") : undefined}
+          style={{ width: `${pctNoEstructurado}%`, backgroundColor: "#DCE3EB", cursor: onSegmentClick ? "pointer" : undefined }}
+        />
       </div>
       <span
         className="flex-shrink-0 text-right"
@@ -44,7 +57,7 @@ function EstructuraRow({ nombre, pctNoEstructurado }: DocumentosEstructuraFila) 
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
-export function DocumentosEstructuraPanel({ filas, onVerTabla, className }: DocumentosEstructuraPanelProps) {
+export function DocumentosEstructuraPanel({ filas, onVerTabla, className, onSegmentClick }: DocumentosEstructuraPanelProps) {
   return (
     <div className={["rounded-lg", className ?? ""].join(" ").trim()} style={{ backgroundColor: "#FAFBFC", padding: 20 }}>
       <div className="flex items-center justify-between mb-4">
@@ -73,7 +86,7 @@ export function DocumentosEstructuraPanel({ filas, onVerTabla, className }: Docu
       </div>
 
       <div className="flex flex-col gap-3 mb-4">
-        {filas.map(f => <EstructuraRow key={f.nombre} {...f} />)}
+        {filas.map(f => <EstructuraRow key={f.nombre} {...f} onSegmentClick={onSegmentClick} />)}
       </div>
 
       <div className="flex items-center gap-5">

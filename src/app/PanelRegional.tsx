@@ -14,7 +14,7 @@ import { BarrasComposicion } from "./components/ui/BarrasComposicion";
 import type { BarrasComposicionCategoria } from "./components/ui/BarrasComposicion";
 import { IrrGeneralCard } from "./components/ui/IrrGeneralCard";
 import { EstadoProcesamientoPanel } from "./components/ui/EstadoProcesamientoPanel";
-import { JERARQUIA_N2N6_TOTALES } from "./data/instrumentosMuestra";
+import { JERARQUIA_N2N6_TOTALES, ESTADO_PROCESAMIENTO_RATIOS } from "./data/instrumentosMuestra";
 
 // ─── Panel Regional ─────────────────────────────────────────────────────────
 // Vista agregada de los COUNTRIES.length países activos — punto de entrada de
@@ -40,6 +40,18 @@ function PanelRegional({ onNavigate }: { onNavigate: (v: View) => void }) {
     total,
     componentes: [{ nombre: nivel, valor: total }],
   }));
+
+  // Colores por etapa (presentación, vive acá) — los nombres/porcentajes
+  // vienen de ESTADO_PROCESAMIENTO_RATIOS (data/instrumentosMuestra.ts),
+  // misma fuente única que usa el catálogo detrás de "Ver hallazgos
+  // filtrados" al clickear un segmento, para que siempre coincidan.
+  const ESTADO_PROCESAMIENTO_COLOR: Record<string, string> = {
+    "Analizados": C.steel4,
+    "Con metadatos": C.steel3,
+    "Procesados": C.steel2,
+    "Scrapeados": C.steel1,
+    "Pendientes": C.border,
+  };
 
   return (
     <div className="p-4 md:p-8 overflow-y-auto h-full">
@@ -104,13 +116,9 @@ function PanelRegional({ onNavigate }: { onNavigate: (v: View) => void }) {
       <div className="grid grid-cols-1 md:grid-cols-[280px_1fr] gap-4 items-stretch mb-6">
         <IrrGeneralCard valor={54.2} onVerDetalle={() => onNavigate({ screen: "indice" })} />
         <EstadoProcesamientoPanel
-          etapas={[
-            { nombre: "Analizados",    pct: 38, color: C.steel4 },
-            { nombre: "Con metadatos", pct: 24, color: C.steel3 },
-            { nombre: "Procesados",    pct: 20, color: C.steel2 },
-            { nombre: "Scrapeados",    pct: 12, color: C.steel1 },
-            { nombre: "Pendientes",    pct: 6,  color: C.border },
-          ]}
+          etapas={ESTADO_PROCESAMIENTO_RATIOS.map(e => ({ nombre: e.nombre, pct: e.pct, color: ESTADO_PROCESAMIENTO_COLOR[e.nombre] }))}
+          onEtapaClick={(etapa) => onNavigate({ screen: "hallazgos-filtrados", filtros: { estadoProcesamiento: etapa } })}
+          onVerDetalle={() => onNavigate({ screen: "hallazgos-filtrados", filtros: {} })}
         />
       </div>
 

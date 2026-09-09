@@ -59,7 +59,13 @@ import IndiceIDR from "./IndiceIDR";
 // (self-contained, mismo criterio que components/ui/*.tsx) así que ese
 // import no forma parte de ningún ciclo.
 import { HallazgosFiltrados } from "./components/ui/HallazgosFiltrados";
-import { INSTRUMENTOS_MUESTRA } from "./data/instrumentosMuestra";
+// Mismo criterio -- HallazgosFiltradosBarreras.tsx/HallazgosFiltradosTramites.tsx
+// (y el shell que ambas comparten con HallazgosFiltrados.tsx) solo usan lo
+// que importan de vuelta desde este archivo dentro del cuerpo de sus
+// respectivos componentes, nunca en el top-level de sus módulos.
+import { HallazgosFiltradosBarreras } from "./components/ui/HallazgosFiltradosBarreras";
+import { HallazgosFiltradosTramites } from "./components/ui/HallazgosFiltradosTramites";
+import { INSTRUMENTOS_MUESTRA, EVOLUCION_ANIOS, EVOLUCION_FACTORES, DOC_ESTRUCTURA_PCT_MUESTRA } from "./data/instrumentosMuestra";
 import {
   PieChart,
   Pie,
@@ -147,7 +153,9 @@ export type View =
   | { screen: "revision-log-errores-detalle"; id: string }
   | { screen: "revision-notificaciones" }
   | { screen: "indice" }
-  | { screen: "hallazgos-filtrados"; filtros: Record<string, string> };
+  | { screen: "hallazgos-filtrados"; filtros: Record<string, string> }
+  | { screen: "hallazgos-filtrados-barreras"; filtros: Record<string, string> }
+  | { screen: "hallazgos-filtrados-tramites"; filtros: Record<string, string> };
 type AuthView = "login" | "recover" | "recover-sent" | "recover-new" | "recover-confirmed" | "recover-expired";
 
 type ReportesPrefill = {
@@ -224,9 +232,10 @@ function buildJerarquiaN2N6(totalInstrumentos: number): BarrasComposicionCategor
 
 // Curva histórica de instrumentos — dato de muestra, no hay snapshot histórico
 // real todavía. TODO: reemplazar por valores reales por año cuando existan.
-const EVOLUCION_ANIOS = [2015, 2018, 2021, 2024, 2026];
-const EVOLUCION_FACTORES = [0.63, 0.75, 0.84, 0.94, 1.00];
-
+// EVOLUCION_ANIOS/EVOLUCION_FACTORES vienen de data/instrumentosMuestra.ts —
+// fuente única compartida con el campo `año` de INSTRUMENTOS_MUESTRA (ver
+// AÑO_BUCKET_RANGOS ahí), para que esta curva y ese catálogo describan la
+// misma evolución.
 function buildEvolucion(totalActual: number): { anio: number; total: number; segmentos: { nombre: string; valor: number; color: string }[] }[] {
   return EVOLUCION_ANIOS.map((anio, i) => {
     const total = Math.round(totalActual * EVOLUCION_FACTORES[i]);
@@ -246,8 +255,8 @@ const RESPALDO_RATIOS = { conRespaldo: 0.779, sinRespaldo: 0.221 };
 const TIPO_USUARIO_RATIOS = { empresarial: 0.471, ciudadano: 0.393, mixto: 0.136 };
 
 // % no estructurado por nivel N2–N6 (mismo orden) — dato de muestra, igual para
-// los 5 países por ahora.
-const DOC_ESTRUCTURA_PCT_MUESTRA = [6, 12, 18, 25, 35];
+// los 5 países por ahora. Viene de data/instrumentosMuestra.ts -- fuente única
+// compartida con el campo `estructura` de INSTRUMENTOS_MUESTRA.
 
 // IRR general por país en escala 0–100 — dato de muestra, sin fuente real.
 // TODO: falta decidir si esta escala (0–100) o la escala 1–4 de irrPromedio
@@ -475,6 +484,7 @@ const BARRERAS_CAFE = [
     instrumento: "Reglamento General de Registros Sanitarios",
     tramitesAfectados: ["cert-exportacion", "registro-sanitario"],
     clasificacion: "Operación",
+    subdimension: "Competencia",
     jerarquia: "Reglamentario",
     idHallazgo: "BOL-BAR-0842",
     pais: "Bolivia" as Country,
@@ -517,6 +527,7 @@ const BARRERAS_CAFE = [
     instrumento: "Ley de Regulación de Exportaciones de Café PCM-2019",
     tramitesAfectados: ["registro-exportador"],
     clasificacion: "Entrada",
+    subdimension: "Comercio",
     jerarquia: "Legal",
     idHallazgo: "BOL-BAR-0843",
     pais: "Bolivia" as Country,
@@ -562,6 +573,7 @@ const BARRERAS_TEXTIL = [
     instrumento: "Decreto Ejecutivo PCM-027-2022",
     tramitesAfectados: ["declaracion-mensual-isv"],
     clasificacion: "Entrada",
+    subdimension: "Competencia",
     jerarquia: "Reglamentario",
     idHallazgo: "BOL-BAR-0844",
     pais: "Bolivia" as Country,
@@ -1015,7 +1027,79 @@ const TRAMITES_MUESTRA = [
   },
 ];
 
-export const ALL_TRAMITES = [...TRAMITES_CAFE, ...TRAMITES_TEXTIL, ...TRAMITES_MUESTRA];
+// Trámites prioritarios por país — dato de muestra. TODO: no hay catálogo
+// real de trámites individuales priorizados para ningún país todavía (mismo
+// pendiente ya anotado en Barreras) — estas filas alimentan la tabla
+// "Trámites prioritarios" hasta que exista ese catálogo, y también
+// pais/severidad/estadoHitl/accionSugerida de ALL_TRAMITES (ver más abajo).
+// Reubicado acá arriba (antes vivía junto a TRAMITES_PRIORITARIOS_MUESTRA)
+// porque ALL_TRAMITES ahora lo necesita para enriquecerse — `id` sigue
+// resolviéndose con slugOrRealId más abajo, sin cambios en ese mecanismo.
+const TRAMITES_PRIORITARIOS_BASE: Record<Exclude<Country, "Todos">, {
+  tramite: string; entidad: string; eje: string; costo: string;
+  severidad: "Crítica" | "Alta"; estadoHitl: "Publicado" | "Por decidir" | "Etapa 3"; accion: string;
+  tipoUsuario: "Empresarial" | "Ciudadano"; sector: string;
+}[]> = {
+  Argentina: [
+    { tramite: "Certificado de Origen Mercosur",  entidad: "Dirección General de Aduanas",   eje: "Comercio exterior",        costo: "USD 380/operación", severidad: "Crítica", estadoHitl: "Por decidir", accion: "Emitir certificado electrónico integrado al sistema aduanero", tipoUsuario: "Empresarial", sector: "Agroindustria y Commodities" },
+    { tramite: "Habilitación Municipal Comercial", entidad: "Municipalidad de Buenos Aires",  eje: "Apertura de negocio",      costo: "USD 210/trámite",   severidad: "Alta",    estadoHitl: "Publicado",   accion: "Unificar habilitación con inspección única por rubro", tipoUsuario: "Empresarial", sector: "Comercio y Servicios" },
+    { tramite: "Registro de Marca y Producto",     entidad: "INPI",                           eje: "Cumplimiento normativo",   costo: "USD 320/registro",  severidad: "Alta",    estadoHitl: "Etapa 3",     accion: "Reducir plazos de examen de fondo con revisión digital", tipoUsuario: "Empresarial", sector: "Manufactura y Consumo" },
+    { tramite: "Declaración Jurada de IVA",        entidad: "AFIP",                           eje: "Cumplimiento tributario",  costo: "USD 150/mes",       severidad: "Alta",    estadoHitl: "Publicado",   accion: "Prellenar declaración con datos de facturación electrónica", tipoUsuario: "Empresarial", sector: "Multisectorial" },
+  ],
+  Bolivia: [
+    { tramite: "Certificado de Exportación y de Origen", entidad: "Dirección General de Aduanas / IHCAFE", eje: "Comercio exterior",       costo: "USD 420/operación", severidad: "Crítica", estadoHitl: "Publicado",   accion: "Digitalizar certificado vía ventanilla única de comercio exterior", tipoUsuario: "Empresarial", sector: "Agroindustria Cafetalera" },
+    { tramite: "Habilitación Municipal de Negocio",      entidad: "Alcaldía Municipal de La Paz",           eje: "Apertura de negocio",     costo: "USD 180/trámite",   severidad: "Alta",    estadoHitl: "Por decidir", accion: "Habilitar registro en línea con validación automática de zonificación", tipoUsuario: "Empresarial", sector: "Comercio y Servicios" },
+    { tramite: "Registro Sanitario de Alimentos (ARSA)", entidad: "ARSA — Agencia de Regulación Sanitaria", eje: "Cumplimiento sanitario",  costo: "USD 850/producto",  severidad: "Alta",    estadoHitl: "Etapa 3",     accion: "Permitir variaciones de empaque bajo el mismo registro sanitario", tipoUsuario: "Empresarial", sector: "Agroindustria Cafetalera" },
+    { tramite: "Declaración Jurada Mensual de ISV",      entidad: "Servicio de Impuestos Nacionales (SIN)", eje: "Cumplimiento tributario", costo: "USD 180/mes",       severidad: "Alta",    estadoHitl: "Publicado",   accion: "Prellenar la declaración con datos de facturación electrónica", tipoUsuario: "Empresarial", sector: "Textil y Confección" },
+  ],
+  Chile: [
+    { tramite: "Autorización de Ampliación de Planta",   entidad: "Superintendencia del Medio Ambiente", eje: "Ambiental",                costo: "USD 640/trámite",  severidad: "Crítica", estadoHitl: "Por decidir", accion: "Habilitar evaluación ambiental expedita para ampliaciones menores", tipoUsuario: "Empresarial", sector: "Industria y Manufactura" },
+    { tramite: "Certificado de Origen para Exportación (Aduanas Chile)", entidad: "Dirección Nacional de Aduanas",       eje: "Comercio exterior",        costo: "USD 300/operación", severidad: "Alta",   estadoHitl: "Publicado",   accion: "Emitir certificado electrónico integrado al sistema aduanero", tipoUsuario: "Empresarial", sector: "Minería y Exportaciones" },
+    { tramite: "Patente Municipal de Actividad",         entidad: "Municipalidad de Santiago",           eje: "Apertura de negocio",      costo: "USD 190/trámite",   severidad: "Alta",   estadoHitl: "Etapa 3",     accion: "Digitalizar el pago y renovación de patente", tipoUsuario: "Empresarial", sector: "Comercio y Servicios" },
+    { tramite: "Declaración Mensual de IVA (SII)",       entidad: "Servicio de Impuestos Internos (SII)", eje: "Cumplimiento tributario", costo: "USD 140/mes",       severidad: "Alta",   estadoHitl: "Publicado",   accion: "Prellenar declaración con datos de facturación electrónica", tipoUsuario: "Empresarial", sector: "Multisectorial" },
+  ],
+  Ecuador: [
+    { tramite: "Certificado Fitosanitario de Exportación", entidad: "Agrocalidad",                        eje: "Comercio exterior",        costo: "USD 260/operación", severidad: "Crítica", estadoHitl: "Por decidir", accion: "Emitir certificado electrónico integrado a ventanilla única", tipoUsuario: "Empresarial", sector: "Agroindustria Bananera" },
+    { tramite: "Permiso de Funcionamiento Municipal",       entidad: "Municipio de Quito",                 eje: "Apertura de negocio",      costo: "USD 170/trámite",   severidad: "Alta",    estadoHitl: "Publicado",   accion: "Unificar permiso con inspección única por rubro", tipoUsuario: "Empresarial", sector: "Comercio y Servicios" },
+    { tramite: "Registro Sanitario de Alimentos (ARCSA)",   entidad: "ARCSA",                              eje: "Cumplimiento sanitario",   costo: "USD 600/producto",  severidad: "Alta",    estadoHitl: "Etapa 3",     accion: "Permitir variaciones de empaque bajo el mismo registro", tipoUsuario: "Empresarial", sector: "Manufactura" },
+    { tramite: "Declaración Mensual de IVA (SRI)",          entidad: "Servicio de Rentas Internas (SRI)",  eje: "Cumplimiento tributario",  costo: "USD 130/mes",       severidad: "Alta",    estadoHitl: "Publicado",   accion: "Prellenar declaración con datos de facturación electrónica", tipoUsuario: "Empresarial", sector: "Multisectorial" },
+  ],
+  Perú: [
+    { tramite: "Permiso de Operación MEF",                entidad: "Ministerio de Economía y Finanzas", eje: "Cumplimiento normativo",  costo: "USD 410/trámite",   severidad: "Crítica", estadoHitl: "Por decidir", accion: "Sustituir permiso previo por declaración jurada con fiscalización posterior", tipoUsuario: "Empresarial", sector: "Servicios Financieros y de Seguros" },
+    { tramite: "Certificado de Origen para Exportación (SUNAT)", entidad: "SUNAT",                       eje: "Comercio exterior",       costo: "USD 290/operación", severidad: "Alta",    estadoHitl: "Publicado",   accion: "Emitir certificado electrónico integrado a ventanilla única", tipoUsuario: "Empresarial", sector: "Minería" },
+    { tramite: "Licencia Municipal de Funcionamiento",    entidad: "Municipalidad de Lima",              eje: "Apertura de negocio",     costo: "USD 160/trámite",   severidad: "Alta",    estadoHitl: "Etapa 3",     accion: "Unificar licencia con inspección única por rubro", tipoUsuario: "Empresarial", sector: "Comercio y Servicios" },
+    { tramite: "Declaración Mensual de IGV",              entidad: "SUNAT",                              eje: "Cumplimiento tributario", costo: "USD 120/mes",       severidad: "Alta",    estadoHitl: "Publicado",   accion: "Prellenar declaración con datos de facturación electrónica", tipoUsuario: "Empresarial", sector: "Multisectorial" },
+  ],
+};
+
+// pais/severidad/estadoHitl/accionSugerida de cada trámite de ALL_TRAMITES —
+// dato de muestra agregado tras el fix de HallazgosFiltradosTramites, MISMO
+// criterio que ALL_BARRERAS (que ya los tenía). En vez de fabricar un
+// segundo dato de muestra desconectado, se reusa por nombre exacto de
+// trámite lo que ya existe en TRAMITES_PRIORITARIOS_BASE (arriba) — así la
+// tabla "Trámites prioritarios" y esta pantalla siempre coinciden para el
+// mismo trámite.
+const TRAMITE_META_POR_NOMBRE = new Map<string, { pais: Country; severidad: "Crítica" | "Alta"; estadoHitl: "Publicado" | "Por decidir" | "Etapa 3"; accionSugerida: string }>();
+for (const pais of COUNTRIES) {
+  for (const fila of TRAMITES_PRIORITARIOS_BASE[pais]) {
+    TRAMITE_META_POR_NOMBRE.set(fila.tramite, { pais, severidad: fila.severidad, estadoHitl: fila.estadoHitl, accionSugerida: fila.accion });
+  }
+}
+// Único trámite de ALL_TRAMITES sin nombre exacto en TRAMITES_PRIORITARIOS_
+// BASE: "Obtención de Registro Sanitario de Alimentos" (TRAMITES_CAFE) es un
+// trámite propio del café, distinto del genérico "Registro Sanitario de
+// Alimentos (ARSA)" que sí tiene par ahí (Bolivia). Dato de muestra.
+const TRAMITE_META_FALLBACK = {
+  pais: "Bolivia" as Country,
+  severidad: "Alta" as const,
+  estadoHitl: "Publicado" as const,
+  accionSugerida: "Permitir variaciones de empaque bajo el mismo registro sanitario sin repetir el trámite completo",
+};
+
+export const ALL_TRAMITES = [...TRAMITES_CAFE, ...TRAMITES_TEXTIL, ...TRAMITES_MUESTRA].map(t => ({
+  ...t,
+  ...(TRAMITE_META_POR_NOMBRE.get(t.nombre) ?? TRAMITE_META_FALLBACK),
+}));
 
 // Registros completos de muestra para las filas de TOP_BARRERAS_POR_PAIS_MUESTRA
 // que no tienen barrera real correspondiente en BARRERAS_CAFE/BARRERAS_TEXTIL
@@ -1039,6 +1123,7 @@ const BARRERAS_MUESTRA = [
     instrumento: "Res. 445/2023",
     tramitesAfectados: [],
     clasificacion: "Entrada",
+    subdimension: "Inversión",
     jerarquia: "Reglamentario",
     idHallazgo: "ARG-BAR-0801",
     pais: "Argentina" as Country,
@@ -1082,6 +1167,7 @@ const BARRERAS_MUESTRA = [
     instrumento: "Decreto 1187/2022",
     tramitesAfectados: [],
     clasificacion: "Operación",
+    subdimension: "Innovación",
     jerarquia: "Reglamentario",
     idHallazgo: "ARG-BAR-0802",
     pais: "Argentina" as Country,
@@ -1125,6 +1211,7 @@ const BARRERAS_MUESTRA = [
     instrumento: "Ley 27.349, Art. 9",
     tramitesAfectados: [],
     clasificacion: "Entrada",
+    subdimension: "Comercio",
     jerarquia: "Legal",
     idHallazgo: "ARG-BAR-0803",
     pais: "Argentina" as Country,
@@ -1168,6 +1255,7 @@ const BARRERAS_MUESTRA = [
     instrumento: "Ley ZOLI Art. 12",
     tramitesAfectados: [],
     clasificacion: "Entrada",
+    subdimension: "Competencia",
     jerarquia: "Legal",
     idHallazgo: "BOL-BAR-0845",
     pais: "Bolivia" as Country,
@@ -1211,6 +1299,7 @@ const BARRERAS_MUESTRA = [
     instrumento: "Decreto Ejecutivo 2891",
     tramitesAfectados: [],
     clasificacion: "Entrada",
+    subdimension: "Inversión",
     jerarquia: "Legal",
     idHallazgo: "BOL-BAR-0846",
     pais: "Bolivia" as Country,
@@ -1254,6 +1343,7 @@ const BARRERAS_MUESTRA = [
     instrumento: "Decreto PCM-027-2022",
     tramitesAfectados: [],
     clasificacion: "Entrada",
+    subdimension: "Comercio",
     jerarquia: "Reglamentario",
     idHallazgo: "CHL-BAR-0801",
     pais: "Chile" as Country,
@@ -1297,6 +1387,7 @@ const BARRERAS_MUESTRA = [
     instrumento: "Res. Exenta 118/2021",
     tramitesAfectados: [],
     clasificacion: "Operación",
+    subdimension: "Inversión",
     jerarquia: "Administrativo",
     idHallazgo: "CHL-BAR-0802",
     pais: "Chile" as Country,
@@ -1340,6 +1431,7 @@ const BARRERAS_MUESTRA = [
     instrumento: "Ley 21.000, Art. 33",
     tramitesAfectados: [],
     clasificacion: "Entrada",
+    subdimension: "Competencia",
     jerarquia: "Legal",
     idHallazgo: "CHL-BAR-0803",
     pais: "Chile" as Country,
@@ -1383,6 +1475,7 @@ const BARRERAS_MUESTRA = [
     instrumento: "Regl. LORHUHI Art. 22",
     tramitesAfectados: [],
     clasificacion: "Operación",
+    subdimension: "Competencia",
     jerarquia: "Reglamentario",
     idHallazgo: "ECU-BAR-0801",
     pais: "Ecuador" as Country,
@@ -1426,6 +1519,7 @@ const BARRERAS_MUESTRA = [
     instrumento: "Res. MAG-006-2022",
     tramitesAfectados: [],
     clasificacion: "Entrada",
+    subdimension: "Inversión",
     jerarquia: "Administrativo",
     idHallazgo: "ECU-BAR-0802",
     pais: "Ecuador" as Country,
@@ -1469,6 +1563,7 @@ const BARRERAS_MUESTRA = [
     instrumento: "Decreto 1234-EC",
     tramitesAfectados: [],
     clasificacion: "Entrada",
+    subdimension: "Comercio",
     jerarquia: "Reglamentario",
     idHallazgo: "ECU-BAR-0803",
     pais: "Ecuador" as Country,
@@ -1512,6 +1607,7 @@ const BARRERAS_MUESTRA = [
     instrumento: "Regl. Gral. Registros Sanitarios, Art. 47",
     tramitesAfectados: [],
     clasificacion: "Operación",
+    subdimension: "Innovación",
     jerarquia: "Reglamentario",
     idHallazgo: "PER-BAR-0801",
     pais: "Perú" as Country,
@@ -1555,6 +1651,7 @@ const BARRERAS_MUESTRA = [
     instrumento: "D.S. 4523-2023",
     tramitesAfectados: [],
     clasificacion: "Entrada",
+    subdimension: "Competencia",
     jerarquia: "Reglamentario",
     idHallazgo: "PER-BAR-0802",
     pais: "Perú" as Country,
@@ -1598,6 +1695,7 @@ const BARRERAS_MUESTRA = [
     instrumento: "Ley 1178, Art. 6",
     tramitesAfectados: [],
     clasificacion: "Entrada",
+    subdimension: "Inversión",
     jerarquia: "Legal",
     idHallazgo: "PER-BAR-0803",
     pais: "Perú" as Country,
@@ -1634,7 +1732,7 @@ const BARRERAS_MUESTRA = [
   },
 ];
 
-const ALL_BARRERAS = [...BARRERAS_CAFE, ...BARRERAS_TEXTIL, ...BARRERAS_MUESTRA];
+export const ALL_BARRERAS = [...BARRERAS_CAFE, ...BARRERAS_TEXTIL, ...BARRERAS_MUESTRA];
 
 // ─── Distorsiones de carga ─────────────────────────────────────────────────────
 const IRR_LABELS: Record<number, string> = { 4: "Crítico", 3: "Alto", 2: "Mediano", 1: "Bajo" };
@@ -2330,54 +2428,6 @@ const TRAMITES_VALIDADO_HITL_MUESTRA: Record<Country, number> = {
   Perú: 63,
 };
 
-// Trámites prioritarios por país — dato de muestra. TODO: no hay catálogo
-// real de trámites individuales priorizados para ningún país todavía (mismo
-// pendiente ya anotado en Barreras) — estas filas alimentan la tabla
-// "Trámites prioritarios" hasta que exista ese catálogo.
-// `id` se resuelve con slugOrRealId (ver arriba, junto a TOP_BARRERAS_PAIS_
-// TABLA): si el nombre coincide exacto con un trámite de ALL_TRAMITES —hoy
-// Bolivia "Certificado de Exportación y de Origen", "Registro Sanitario de
-// Alimentos" y "Declaración Jurada Mensual de ISV"— reusa su id real (así
-// el onClick ya cableado en la tabla lleva directo al detalle real, con
-// pasos/fricciones/distorsiones reales, en vez de caer en el fallback
-// simplificado de TramiteDetail()); el resto son ids de muestra.
-const TRAMITES_PRIORITARIOS_BASE: Record<Exclude<Country, "Todos">, {
-  tramite: string; entidad: string; eje: string; costo: string;
-  severidad: "Crítica" | "Alta"; estadoHitl: EstadoHitl; accion: string;
-  tipoUsuario: "Empresarial" | "Ciudadano"; sector: string;
-}[]> = {
-  Argentina: [
-    { tramite: "Certificado de Origen Mercosur",  entidad: "Dirección General de Aduanas",   eje: "Comercio exterior",        costo: "USD 380/operación", severidad: "Crítica", estadoHitl: "Por decidir", accion: "Emitir certificado electrónico integrado al sistema aduanero", tipoUsuario: "Empresarial", sector: "Agroindustria y Commodities" },
-    { tramite: "Habilitación Municipal Comercial", entidad: "Municipalidad de Buenos Aires",  eje: "Apertura de negocio",      costo: "USD 210/trámite",   severidad: "Alta",    estadoHitl: "Publicado",   accion: "Unificar habilitación con inspección única por rubro", tipoUsuario: "Empresarial", sector: "Comercio y Servicios" },
-    { tramite: "Registro de Marca y Producto",     entidad: "INPI",                           eje: "Cumplimiento normativo",   costo: "USD 320/registro",  severidad: "Alta",    estadoHitl: "Etapa 3",     accion: "Reducir plazos de examen de fondo con revisión digital", tipoUsuario: "Empresarial", sector: "Manufactura y Consumo" },
-    { tramite: "Declaración Jurada de IVA",        entidad: "AFIP",                           eje: "Cumplimiento tributario",  costo: "USD 150/mes",       severidad: "Alta",    estadoHitl: "Publicado",   accion: "Prellenar declaración con datos de facturación electrónica", tipoUsuario: "Empresarial", sector: "Multisectorial" },
-  ],
-  Bolivia: [
-    { tramite: "Certificado de Exportación y de Origen", entidad: "Dirección General de Aduanas / IHCAFE", eje: "Comercio exterior",       costo: "USD 420/operación", severidad: "Crítica", estadoHitl: "Publicado",   accion: "Digitalizar certificado vía ventanilla única de comercio exterior", tipoUsuario: "Empresarial", sector: "Agroindustria Cafetalera" },
-    { tramite: "Habilitación Municipal de Negocio",      entidad: "Alcaldía Municipal de La Paz",           eje: "Apertura de negocio",     costo: "USD 180/trámite",   severidad: "Alta",    estadoHitl: "Por decidir", accion: "Habilitar registro en línea con validación automática de zonificación", tipoUsuario: "Empresarial", sector: "Comercio y Servicios" },
-    { tramite: "Registro Sanitario de Alimentos (ARSA)", entidad: "ARSA — Agencia de Regulación Sanitaria", eje: "Cumplimiento sanitario",  costo: "USD 850/producto",  severidad: "Alta",    estadoHitl: "Etapa 3",     accion: "Permitir variaciones de empaque bajo el mismo registro sanitario", tipoUsuario: "Empresarial", sector: "Agroindustria Cafetalera" },
-    { tramite: "Declaración Jurada Mensual de ISV",      entidad: "Servicio de Impuestos Nacionales (SIN)", eje: "Cumplimiento tributario", costo: "USD 180/mes",       severidad: "Alta",    estadoHitl: "Publicado",   accion: "Prellenar la declaración con datos de facturación electrónica", tipoUsuario: "Empresarial", sector: "Textil y Confección" },
-  ],
-  Chile: [
-    { tramite: "Autorización de Ampliación de Planta",   entidad: "Superintendencia del Medio Ambiente", eje: "Ambiental",                costo: "USD 640/trámite",  severidad: "Crítica", estadoHitl: "Por decidir", accion: "Habilitar evaluación ambiental expedita para ampliaciones menores", tipoUsuario: "Empresarial", sector: "Industria y Manufactura" },
-    { tramite: "Certificado de Origen para Exportación (Aduanas Chile)", entidad: "Dirección Nacional de Aduanas",       eje: "Comercio exterior",        costo: "USD 300/operación", severidad: "Alta",   estadoHitl: "Publicado",   accion: "Emitir certificado electrónico integrado al sistema aduanero", tipoUsuario: "Empresarial", sector: "Minería y Exportaciones" },
-    { tramite: "Patente Municipal de Actividad",         entidad: "Municipalidad de Santiago",           eje: "Apertura de negocio",      costo: "USD 190/trámite",   severidad: "Alta",   estadoHitl: "Etapa 3",     accion: "Digitalizar el pago y renovación de patente", tipoUsuario: "Empresarial", sector: "Comercio y Servicios" },
-    { tramite: "Declaración Mensual de IVA (SII)",       entidad: "Servicio de Impuestos Internos (SII)", eje: "Cumplimiento tributario", costo: "USD 140/mes",       severidad: "Alta",   estadoHitl: "Publicado",   accion: "Prellenar declaración con datos de facturación electrónica", tipoUsuario: "Empresarial", sector: "Multisectorial" },
-  ],
-  Ecuador: [
-    { tramite: "Certificado Fitosanitario de Exportación", entidad: "Agrocalidad",                        eje: "Comercio exterior",        costo: "USD 260/operación", severidad: "Crítica", estadoHitl: "Por decidir", accion: "Emitir certificado electrónico integrado a ventanilla única", tipoUsuario: "Empresarial", sector: "Agroindustria Bananera" },
-    { tramite: "Permiso de Funcionamiento Municipal",       entidad: "Municipio de Quito",                 eje: "Apertura de negocio",      costo: "USD 170/trámite",   severidad: "Alta",    estadoHitl: "Publicado",   accion: "Unificar permiso con inspección única por rubro", tipoUsuario: "Empresarial", sector: "Comercio y Servicios" },
-    { tramite: "Registro Sanitario de Alimentos (ARCSA)",   entidad: "ARCSA",                              eje: "Cumplimiento sanitario",   costo: "USD 600/producto",  severidad: "Alta",    estadoHitl: "Etapa 3",     accion: "Permitir variaciones de empaque bajo el mismo registro", tipoUsuario: "Empresarial", sector: "Manufactura" },
-    { tramite: "Declaración Mensual de IVA (SRI)",          entidad: "Servicio de Rentas Internas (SRI)",  eje: "Cumplimiento tributario",  costo: "USD 130/mes",       severidad: "Alta",    estadoHitl: "Publicado",   accion: "Prellenar declaración con datos de facturación electrónica", tipoUsuario: "Empresarial", sector: "Multisectorial" },
-  ],
-  Perú: [
-    { tramite: "Permiso de Operación MEF",                entidad: "Ministerio de Economía y Finanzas", eje: "Cumplimiento normativo",  costo: "USD 410/trámite",   severidad: "Crítica", estadoHitl: "Por decidir", accion: "Sustituir permiso previo por declaración jurada con fiscalización posterior", tipoUsuario: "Empresarial", sector: "Servicios Financieros y de Seguros" },
-    { tramite: "Certificado de Origen para Exportación (SUNAT)", entidad: "SUNAT",                       eje: "Comercio exterior",       costo: "USD 290/operación", severidad: "Alta",    estadoHitl: "Publicado",   accion: "Emitir certificado electrónico integrado a ventanilla única", tipoUsuario: "Empresarial", sector: "Minería" },
-    { tramite: "Licencia Municipal de Funcionamiento",    entidad: "Municipalidad de Lima",              eje: "Apertura de negocio",     costo: "USD 160/trámite",   severidad: "Alta",    estadoHitl: "Etapa 3",     accion: "Unificar licencia con inspección única por rubro", tipoUsuario: "Empresarial", sector: "Comercio y Servicios" },
-    { tramite: "Declaración Mensual de IGV",              entidad: "SUNAT",                              eje: "Cumplimiento tributario", costo: "USD 120/mes",       severidad: "Alta",    estadoHitl: "Publicado",   accion: "Prellenar declaración con datos de facturación electrónica", tipoUsuario: "Empresarial", sector: "Multisectorial" },
-  ],
-};
-
 const ALL_TRAMITES_POR_NOMBRE = ALL_TRAMITES.map(t => ({ id: t.id, nombre: t.nombre }));
 
 type TramitePrioritarioFila = {
@@ -2490,7 +2540,7 @@ export function TramiteSeveridadBadge({ level }: { level: "Crítica" | "Alta" })
 }
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
-function SeverityBadge({ level }: { level: string }) {
+export function SeverityBadge({ level }: { level: string }) {
   const color = SEVERITY_COLOR[level] || C.bajo;
   return (
     <span
@@ -3007,7 +3057,16 @@ function CountryDashboard({ country, onCountryChange, onNavigate }: { country: s
 
       <BandaCobertura text={`Periodo de análisis: enero 2015 – marzo 2026 · última actualización 12 mar 2026 · cobertura ${COBERTURA_MUESTRA[paisKey] ?? COBERTURA_MUESTRA["Bolivia"]}%`} />
 
-      <EvolucionInstrumentosPanel anios={buildEvolucion(instrumentos)} className="mb-6" onVerTodo={() => onNavigate({ screen: "indice" })} />
+      {/* onSegmentClick: INSTRUMENTOS_MUESTRA no tiene país (es un catálogo a
+          nivel regional, mismo criterio ya aplicado al filtro "País" de
+          HallazgosFiltrados) -- el filtro resultante trae resultados a nivel
+          regional para ese año+jerarquía, no acotados a este país. */}
+      <EvolucionInstrumentosPanel
+        anios={buildEvolucion(instrumentos)}
+        className="mb-6"
+        onVerTodo={() => onNavigate({ screen: "indice" })}
+        onSegmentClick={(anio, jerarquia) => onNavigate({ screen: "hallazgos-filtrados", filtros: { anioDesde: String(anio), anioHasta: String(anio), jerarquia } })}
+      />
 
       {/* KPIs fila 1 — datos reales */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
@@ -3032,11 +3091,16 @@ function CountryDashboard({ country, onCountryChange, onNavigate }: { country: s
           label="Instrumentos por jerarquía normativa"
           total={instrumentos}
           categorias={buildJerarquiaN2N6(instrumentos)}
+          onRowClick={(cat) => onNavigate({ screen: "hallazgos-filtrados", filtros: { jerarquia: cat.nombre } })}
         />
+        {/* Misma categoría N2–N6 que el gráfico de arriba (solo cambia qué
+            número se muestra a la derecha), así que el filtro es el mismo
+            `jerarquia`, no una dimensión nueva. */}
         <BarrasComposicion
           label="Instrumentos por: Cantidad de palabras"
           total={instrumentosPorPalabrasTotal}
           categorias={instrumentosPorPalabrasData}
+          onRowClick={(cat) => onNavigate({ screen: "hallazgos-filtrados", filtros: { jerarquia: cat.nombre } })}
           headerRight={
             <select
               defaultValue="palabras"
@@ -3049,7 +3113,12 @@ function CountryDashboard({ country, onCountryChange, onNavigate }: { country: s
         />
       </div>
 
-      <DocumentosEstructuraPanel filas={docEstructuraFilas} className="mb-6" onVerTabla={() => onNavigate({ screen: "indice" })} />
+      <DocumentosEstructuraPanel
+        filas={docEstructuraFilas}
+        className="mb-6"
+        onVerTabla={() => onNavigate({ screen: "indice" })}
+        onSegmentClick={(nivel, estructura) => onNavigate({ screen: "hallazgos-filtrados", filtros: { jerarquia: nivel, estructura } })}
+      />
 
       <FuentesTrazabilidadTable filas={fuentesTrazabilidad} onVerDetalle={() => onNavigate({ screen: "indice" })} />
 
@@ -3081,7 +3150,9 @@ function CountryDashboard({ country, onCountryChange, onNavigate }: { country: s
 }
 
 // ─── BarraFiltrosBarreras ──────────────────────────────────────────────────────
-function BarraFiltrosBarreras({ country, setCountry, sector, setSector, entidad, setEntidad, clasificacion, setClasificacion, subdimension, setSubdimension, jerarquia, setJerarquia, severidad, setSeveridad, sectors, entidades, twoRows }: {
+// Exportada: HallazgosFiltrados.tsx la reusa (mismo maquetado de 2 filas) en
+// vez de duplicar los 7 selects -- ver comentario junto a su import ahí.
+export function BarraFiltrosBarreras({ country, setCountry, sector, setSector, entidad, setEntidad, clasificacion, setClasificacion, subdimension, setSubdimension, jerarquia, setJerarquia, severidad, setSeveridad, sectors, entidades, jerarquiaOptions, twoRows }: {
   country: Country; setCountry: (c: Country) => void;
   sector: string; setSector: (v: string) => void;
   entidad: string; setEntidad: (v: string) => void;
@@ -3091,6 +3162,12 @@ function BarraFiltrosBarreras({ country, setCountry, sector, setSector, entidad,
   severidad: string; setSeveridad: (v: string) => void;
   sectors: string[];
   entidades: string[];
+  // Override de las opciones del <select> de jerarquía -- por defecto son las
+  // 5 de la jerarquía normativa de Barreras (Constitucional/Legal/...).
+  // HallazgosFiltrados.tsx pasa las 5 de jerarquía de Instrumentos (N2–N6),
+  // que son una escala DISTINTA -- mismo campo "jerarquía", dos taxonomías
+  // que ya conviven en la plataforma (ver JERARQUIA_N2N6_TOTALES vs. esta).
+  jerarquiaOptions?: string[];
   // true: 2 filas (3 + 4 columnas) — usado en el panel regional (country === "Todos"),
   // que necesita acomodar los 7 filtros junto al resto del contenido de la pantalla.
   // Sin agregar filtros nuevos, es solo maquetación.
@@ -3151,11 +3228,9 @@ function BarraFiltrosBarreras({ country, setCountry, sector, setSector, entidad,
   const jerarquiaSelect = (
     <select key="jerarquia" className="grow" style={sel()} value={jerarquia} onChange={e => setJerarquia(e.target.value)}>
       <option value="">Jerarquía normativa</option>
-      <option value="Constitucional">Constitucional</option>
-      <option value="Legal">Legal</option>
-      <option value="Reglamentario">Reglamentario</option>
-      <option value="Administrativo">Administrativo</option>
-      <option value="Técnico o local">Técnico o local</option>
+      {(jerarquiaOptions ?? ["Constitucional", "Legal", "Reglamentario", "Administrativo", "Técnico o local"]).map(j => (
+        <option key={j} value={j}>{j}</option>
+      ))}
     </select>
   );
   const severidadSelect = (
@@ -3192,10 +3267,13 @@ function BarraFiltrosBarreras({ country, setCountry, sector, setSector, entidad,
 // Reutilizada por BarrerasScreen tanto en modo por país como en el panel
 // regional (country === "Todos") — solo cambia qué `cd` se le pasa y si lleva
 // `footer` (el panel regional agrega cobertura + % validado HITL debajo).
-function BarrerasPorJerarquiaCard({ cd, jerarquiaActiva, footer }: {
+function BarrerasPorJerarquiaCard({ cd, jerarquiaActiva, footer, onSegmentClick }: {
   cd: { criticas: number; jerarquia: JerarquiaBar[] };
   jerarquiaActiva?: string;
   footer?: React.ReactNode;
+  // Si se pasa, cada segmento de severidad dentro de cada fila se vuelve
+  // clicable, con el nombre de esa jerarquía y la severidad de ese segmento.
+  onSegmentClick?: (jerarquia: string, severidad: string) => void;
 }) {
   const JERARQUIA_BARS = cd.jerarquia;
   const maxTotal = Math.max(...JERARQUIA_BARS.map(b => b.total), 1);
@@ -3238,10 +3316,10 @@ function BarrerasPorJerarquiaCard({ cd, jerarquiaActiva, footer }: {
             const active = !jerarquiaActiva || jerarquiaActiva === bar.nombre;
             const pct = (bar.total / maxTotal) * 100;
             const segs = [
-              { v: bar.n4, color: SEV_COLORS[0] },
-              { v: bar.n3, color: SEV_COLORS[1] },
-              { v: bar.n2, color: SEV_COLORS[2] },
-              { v: bar.n1, color: SEV_COLORS[3] },
+              { v: bar.n4, color: SEV_COLORS[0], severidad: "Crítico" },
+              { v: bar.n3, color: SEV_COLORS[1], severidad: "Alto" },
+              { v: bar.n2, color: SEV_COLORS[2], severidad: "Mediano" },
+              { v: bar.n1, color: SEV_COLORS[3], severidad: "Bajo" },
             ].filter(s => s.v > 0);
             return (
               <div key={bar.nombre} className="flex items-center gap-3" style={{ opacity: active ? 1 : 0.28, transition: "opacity 0.2s" }}>
@@ -3249,7 +3327,11 @@ function BarrerasPorJerarquiaCard({ cd, jerarquiaActiva, footer }: {
                 <div className="flex-1 rounded-full overflow-hidden" style={{ height: 14, backgroundColor: "#E6ECF3" }}>
                   <div className="h-full flex rounded-full overflow-hidden" style={{ width: `${pct}%` }}>
                     {segs.map((s, si) => (
-                      <div key={si} style={{ flex: s.v, backgroundColor: s.color, minWidth: s.v > 0 ? 2 : 0 }} />
+                      <div
+                        key={si}
+                        onClick={onSegmentClick ? () => onSegmentClick(bar.nombre, s.severidad) : undefined}
+                        style={{ flex: s.v, backgroundColor: s.color, minWidth: s.v > 0 ? 2 : 0, cursor: onSegmentClick ? "pointer" : undefined }}
+                      />
                     ))}
                   </div>
                 </div>
@@ -3275,7 +3357,7 @@ function BarrerasPorJerarquiaCard({ cd, jerarquiaActiva, footer }: {
 // Barreras — mismo lenguaje visual que BarrasComposicion, pero SIN leyenda de
 // severidad (esto es composición, no severidad): degradado C.steel4→steel1 y
 // dos tonos más claros de la misma rampa categórica para filas adicionales.
-export function ComposicionSimplePanel({ label, filas, actionLabel, onAction, formatValor, headerExtra }: {
+export function ComposicionSimplePanel({ label, filas, actionLabel, onAction, formatValor, headerExtra, onRowClick }: {
   label: string;
   filas: { nombre: string; valor: number }[];
   actionLabel?: string;
@@ -3286,6 +3368,9 @@ export function ComposicionSimplePanel({ label, filas, actionLabel, onAction, fo
   // Contenido extra en el header, antes del botón de acción (ej. un select
   // visual de "medida").
   headerExtra?: React.ReactNode;
+  // Si se pasa, cada fila se vuelve clicable, con su `nombre`. Cuando se
+  // omite, se comporta exactamente igual que hoy (no clicable).
+  onRowClick?: (nombre: string) => void;
 }) {
   const maxValor = Math.max(...filas.map(f => f.valor), 1);
   const gradient = [C.steel4, C.steel3, C.steel2, C.steel1, "#A0C1E0", "#BDD0DD"];
@@ -3309,7 +3394,12 @@ export function ComposicionSimplePanel({ label, filas, actionLabel, onAction, fo
         {filas.map((f, i) => {
           const pct = (f.valor / maxValor) * 100;
           return (
-            <div key={f.nombre} className="flex items-center gap-3">
+            <div
+              key={f.nombre}
+              className="flex items-center gap-3"
+              onClick={onRowClick ? () => onRowClick(f.nombre) : undefined}
+              style={{ cursor: onRowClick ? "pointer" : undefined }}
+            >
               <span className="flex-shrink-0" style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 11, color: C.textMuted, width: 150, lineHeight: 1.3 }}>{f.nombre}</span>
               <div className="flex-1 rounded-full overflow-hidden" style={{ height: 12, backgroundColor: "#E6ECF3" }}>
                 <div style={{ width: `${pct}%`, height: "100%", backgroundColor: gradient[i % gradient.length] }} />
@@ -3402,6 +3492,7 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
         coberturaPct={COBERTURA_MUESTRA[pais as Exclude<Country, "Todos">]}
         validadoHitlPct={VALIDADO_HITL_MUESTRA[pais]}
         onVerBarreras={() => onCountryChange?.(pais)}
+        onEntradaClick={(subdimension) => onNavigate({ screen: "hallazgos-filtrados-barreras", filtros: { pais, clasificacion: "Entrada", subdimension } })}
       />
     );
 
@@ -3469,12 +3560,16 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
           ))}
         </div>
 
-        <MatrizRegional clasificacion={cd.clasificacion} />
+        <MatrizRegional
+          clasificacion={cd.clasificacion}
+          onCellClick={(clasificacion, subdimension) => onNavigate({ screen: "hallazgos-filtrados-barreras", filtros: { clasificacion, subdimension } })}
+        />
 
         <div className="mt-6 mb-6">
           <BarrerasPorJerarquiaCard
             cd={cd}
             jerarquiaActiva={jerarquia}
+            onSegmentClick={(jerarquia, severidad) => onNavigate({ screen: "hallazgos-filtrados-barreras", filtros: { jerarquia, severidad } })}
             footer={
               <div className="flex items-center justify-between">
                 <span style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 11, color: C.textMuted }}>Cobertura 91%</span>
@@ -3616,7 +3711,10 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
               datos={cd.clasificacion}
               className="h-full"
             />
-            <MatrizRegional clasificacion={cd.clasificacion} />
+            <MatrizRegional
+              clasificacion={cd.clasificacion}
+              onCellClick={(clasificacion, subdimension) => onNavigate({ screen: "hallazgos-filtrados-barreras", filtros: { pais: country, clasificacion, subdimension } })}
+            />
           </div>
         );
       })()}
@@ -3630,6 +3728,7 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
             <BarrerasPorJerarquiaCard
               cd={cd}
               jerarquiaActiva={jerarquia}
+              onSegmentClick={(jerarquia, severidad) => onNavigate({ screen: "hallazgos-filtrados-barreras", filtros: { pais: country, jerarquia, severidad } })}
               footer={
                 <p style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 11, color: C.textMuted }}>
                   Cobertura {coberturaPais}% · {VALIDADO_HITL_MUESTRA[country]}% validado HITL
@@ -4187,7 +4286,12 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
                 { nombre: "Ciudadano", valor: td.tipoUsuario.ciudadano, color: C.steel3 },
                 { nombre: "Mixto", valor: td.tipoUsuario.mixto, color: C.steel2 },
               ].map(f => (
-                <div key={f.nombre} className="flex items-center gap-2.5">
+                <div
+                  key={f.nombre}
+                  className="flex items-center gap-2.5"
+                  onClick={() => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: { tipoUsuario: f.nombre } })}
+                  style={{ cursor: "pointer" }}
+                >
                   <span className="flex-shrink-0" style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 11, color: C.textMuted, width: 72 }}>{f.nombre}</span>
                   <div className="flex-1 rounded-full overflow-hidden" style={{ height: 10, backgroundColor: C.border }}>
                     <div style={{ width: `${td.total > 0 ? (f.valor / td.total) * 100 : 0}%`, height: "100%", backgroundColor: f.color }} />
@@ -4212,7 +4316,12 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
             </div>
             <div className="px-5 pt-4 flex flex-col gap-2.5 flex-1">
               {td.topEntidades.map(e => (
-                <div key={e.name} className="flex items-center gap-3">
+                <div
+                  key={e.name}
+                  className="flex items-center gap-3"
+                  onClick={() => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: { entidad: e.name } })}
+                  style={{ cursor: "pointer" }}
+                >
                   <span className="flex-shrink-0 leading-tight" style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 11, color: C.textMuted, width: 150 }}>{e.name}</span>
                   <div className="flex-1 rounded-full overflow-hidden" style={{ height: 10, backgroundColor: "#E6ECF3" }}>
                     <div style={{ width: `${(e.value / maxEntidad) * 100}%`, height: "100%", backgroundColor: C.steel2 }} />
@@ -4452,7 +4561,11 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
             filas={ETAPA_CICLO_MUESTRA[country as Exclude<Country, "Todos">] ?? ETAPA_CICLO_MUESTRA["Bolivia"]}
             actionLabel="Ver tabla completa"
             onAction={() => console.log("Ver tabla completa — Etapa del ciclo empresarial")}
+            onRowClick={(etapaCiclo) => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: { pais: country, etapaCiclo } })}
           />
+          {/* TODO: afectación MIPYME es un concepto nuevo sin metodología
+              real -- falta agregar un campo real a ALL_TRAMITES antes de
+              poder filtrar por esto (ver aviso al usuario). */}
           <ComposicionSimplePanel
             label="Afectación MIPYME"
             filas={MIPYME_MUESTRA[country as Exclude<Country, "Todos">] ?? MIPYME_MUESTRA["Bolivia"]}
@@ -4469,6 +4582,7 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
           ]}
           actionLabel="Ver tabla completa"
           onAction={() => console.log("Ver tabla completa — Tipo de usuario")}
+          onRowClick={(tipoUsuario) => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: { pais: country, tipoUsuario } })}
         />
       </div>
 
@@ -7407,27 +7521,149 @@ export default function App() {
       case "distorsion-detail": return <DistorsionDetail id={view.id} onNavigate={navigate} />;
       case "indice": return <IndiceIDR country={activeCountry} onCountryChange={c => setActiveCountry(c)} onNavigate={navigate} />;
       case "hallazgos-filtrados": {
-        // Label legible por cada key de filtro soportada -- hoy solo
-        // "jerarquia" (ver PanelRegional.tsx, única fila clickable todavía).
-        const FILTRO_LABELS: Record<string, string> = { jerarquia: "Jerarquía" };
+        // Label legible por cada key de filtro soportada -- "jerarquia" y
+        // "estadoProcesamiento" llegan de un clic en gráfica de PanelRegional.tsx;
+        // "sector"/"entidad"/"anioDesde"/"anioHasta" se agregan desde la barra de
+        // filtros de esta misma pantalla (ver HallazgosFiltrados.tsx) -- misma
+        // fuente (filtros/chips y los <select> de la barra son dos vistas del
+        // mismo view.filtros). "estructura" y "anioDesde"/"anioHasta" llegan
+        // también de un clic en gráfica de Panel País (CountryDashboard).
+        const FILTRO_LABELS: Record<string, string> = {
+          jerarquia: "Jerarquía",
+          estadoProcesamiento: "Estado de procesamiento",
+          sector: "Sector",
+          entidad: "Entidad emisora",
+          anioDesde: "Año desde",
+          anioHasta: "Año hasta",
+          estructura: "Estructura",
+        };
         const filtrosObj = view.filtros;
         const filtrosArr = Object.entries(filtrosObj).map(([key, value]) => ({ key, value, label: FILTRO_LABELS[key] ?? key }));
+        // anioDesde/anioHasta son rango (sobre el campo `año`), no igualdad
+        // exacta como el resto de las keys de filtro.
         const resultados = INSTRUMENTOS_MUESTRA.filter(instr => {
           const rec = instr as unknown as Record<string, string | number>;
-          return Object.entries(filtrosObj).every(([key, value]) => String(rec[key]) === value);
+          return Object.entries(filtrosObj).every(([key, value]) => {
+            if (key === "anioDesde") return instr.año >= Number(value);
+            if (key === "anioHasta") return instr.año <= Number(value);
+            return String(rec[key]) === value;
+          });
         });
-        const quitarFiltro = (key: string) => {
-          const next = { ...filtrosObj };
-          delete next[key];
-          if (Object.keys(next).length === 0) navigate({ screen: "panel-regional" });
-          else navigate({ screen: "hallazgos-filtrados", filtros: next });
+        // Setea/reemplaza una key de filtro (vacío = quitarla) -- usado tanto
+        // por la X de un chip como por un <select> de la barra de filtros, así
+        // que ambos leen y escriben el mismo view.filtros (una sola fuente).
+        const setFiltro = (key: string, value: string) => {
+          if (!value) {
+            const next = { ...filtrosObj };
+            delete next[key];
+            navigate({ screen: "hallazgos-filtrados", filtros: next });
+            return;
+          }
+          navigate({ screen: "hallazgos-filtrados", filtros: { ...filtrosObj, [key]: value } });
         };
         return (
           <HallazgosFiltrados
             filtros={filtrosArr}
             resultados={resultados}
-            onQuitarFiltro={quitarFiltro}
-            onLimpiarTodos={() => navigate({ screen: "panel-regional" })}
+            onSetFiltro={setFiltro}
+            onQuitarFiltro={(key) => setFiltro(key, "")}
+            onLimpiarTodos={() => navigate({ screen: "hallazgos-filtrados", filtros: {} })}
+            onNavigate={navigate}
+          />
+        );
+      }
+      case "hallazgos-filtrados-barreras": {
+        // Label legible por cada key de filtro soportada -- llegan de un clic
+        // en gráfica de Barreras (BarrerasPorPaisCard/MatrizRegional/
+        // BarrerasPorJerarquiaCard, Regional y por país) o de la barra de
+        // filtros de esta pantalla (ver HallazgosFiltradosBarreras.tsx).
+        // TODO: ALL_BARRERAS es un catálogo de 17 registros de muestra, muy
+        // chico frente a los totales agregados que muestran esas gráficas
+        // (COUNTRY_BARRERAS_DATA) -- el filtro resultante puede traer muchos
+        // menos resultados de los que el número en la gráfica sugiere, mismo
+        // criterio ya aceptado para Instrumentos (INSTRUMENTOS_MUESTRA vs.
+        // los totales por país de Panel País).
+        const FILTRO_LABELS: Record<string, string> = {
+          pais: "País",
+          sector: "Sector",
+          entidad: "Entidad emisora",
+          clasificacion: "Clasificación",
+          subdimension: "Subdimensión",
+          jerarquia: "Jerarquía",
+          severidad: "Severidad",
+        };
+        const filtrosObj = view.filtros;
+        const filtrosArr = Object.entries(filtrosObj).map(([key, value]) => ({ key, value, label: FILTRO_LABELS[key] ?? key }));
+        const resultados = ALL_BARRERAS.filter(b => {
+          const rec = b as unknown as Record<string, string>;
+          return Object.entries(filtrosObj).every(([key, value]) => String(rec[key]) === value);
+        });
+        const setFiltro = (key: string, value: string) => {
+          if (!value) {
+            const next = { ...filtrosObj };
+            delete next[key];
+            navigate({ screen: "hallazgos-filtrados-barreras", filtros: next });
+            return;
+          }
+          navigate({ screen: "hallazgos-filtrados-barreras", filtros: { ...filtrosObj, [key]: value } });
+        };
+        return (
+          <HallazgosFiltradosBarreras
+            filtros={filtrosArr}
+            resultados={resultados}
+            onSetFiltro={setFiltro}
+            onQuitarFiltro={(key) => setFiltro(key, "")}
+            onLimpiarTodos={() => navigate({ screen: "hallazgos-filtrados-barreras", filtros: {} })}
+            onNavigate={navigate}
+          />
+        );
+      }
+      case "hallazgos-filtrados-tramites": {
+        // Label legible por cada key de filtro soportada -- "entidad",
+        // "tipoUsuario" y "etapaCiclo" llegan de un clic en gráfica de
+        // Trámites (Regional y por país); "pais"/"sector"/"severidad" desde
+        // la barra de filtros de esta pantalla (ver
+        // HallazgosFiltradosTramites.tsx). "tipoCarga", "subdimension" (de
+        // trámites) y "accionSugerida" NO están cableadas todavía -- son
+        // categorías agregadas (PANEL_CARGA_TIPO_DATA / TRAMITES_ACCION_
+        // MEJORA_MUESTRA) que no existen como campo individual comparable en
+        // ALL_TRAMITES (ver aviso al usuario).
+        const FILTRO_LABELS: Record<string, string> = {
+          pais: "País",
+          sector: "Sector",
+          entidad: "Entidad",
+          severidad: "Severidad",
+          tipoUsuario: "Tipo de usuario",
+          etapaCiclo: "Etapa del ciclo",
+        };
+        const filtrosObj = view.filtros;
+        const filtrosArr = Object.entries(filtrosObj).map(([key, value]) => ({ key, value, label: FILTRO_LABELS[key] ?? key }));
+        // "tipoUsuario" filtra sobre el campo `tipo` y "etapaCiclo" sobre
+        // `etapa` de ALL_TRAMITES -- mismos campos, nombre de filtro distinto.
+        const CAMPO_POR_FILTRO_TRAMITES: Record<string, string> = { tipoUsuario: "tipo", etapaCiclo: "etapa" };
+        const resultados = ALL_TRAMITES.filter(t => {
+          const rec = t as unknown as Record<string, string>;
+          return Object.entries(filtrosObj).every(([key, value]) => {
+            const campo = CAMPO_POR_FILTRO_TRAMITES[key] ?? key;
+            return String(rec[campo]) === value;
+          });
+        });
+        const setFiltro = (key: string, value: string) => {
+          if (!value) {
+            const next = { ...filtrosObj };
+            delete next[key];
+            navigate({ screen: "hallazgos-filtrados-tramites", filtros: next });
+            return;
+          }
+          navigate({ screen: "hallazgos-filtrados-tramites", filtros: { ...filtrosObj, [key]: value } });
+        };
+        return (
+          <HallazgosFiltradosTramites
+            filtros={filtrosArr}
+            resultados={resultados}
+            onSetFiltro={setFiltro}
+            onQuitarFiltro={(key) => setFiltro(key, "")}
+            onLimpiarTodos={() => navigate({ screen: "hallazgos-filtrados-tramites", filtros: {} })}
             onNavigate={navigate}
           />
         );

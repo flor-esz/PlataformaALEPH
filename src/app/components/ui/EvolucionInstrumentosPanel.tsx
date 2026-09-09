@@ -26,6 +26,10 @@ export type EvolucionInstrumentosPanelProps = {
   // (usado en Panel País); otras pantallas pueden reusar el componente con
   // un título distinto para la misma métrica.
   label?: string;
+  // Si se pasa, cada segmento de la barra apilada de cada año se vuelve
+  // clicable, con el año de esa fila y el nombre del segmento (jerarquía).
+  // Cuando se omite, se comporta exactamente igual que hoy (no clicable).
+  onSegmentClick?: (anio: number, jerarquia: string) => void;
 };
 
 // ─── Build a stable legend: first-encounter order across all years ────────────
@@ -40,7 +44,7 @@ function buildLegend(anios: EvolucionAnio[]): Map<string, string> {
 }
 
 // ─── Single year row ──────────────────────────────────────────────────────────
-function AnioRow({ anio, total, segmentos }: EvolucionAnio) {
+function AnioRow({ anio, total, segmentos, onSegmentClick }: EvolucionAnio & { onSegmentClick?: (anio: number, jerarquia: string) => void }) {
   return (
     <div className="flex items-center gap-3">
       <span
@@ -52,7 +56,11 @@ function AnioRow({ anio, total, segmentos }: EvolucionAnio) {
       <div className="flex-1 rounded overflow-hidden" style={{ height: 16, backgroundColor: "#DCE3EB" }}>
         <div className="h-full flex">
           {segmentos.filter(s => s.valor > 0).map(s => (
-            <div key={s.nombre} style={{ width: `${total > 0 ? (s.valor / total) * 100 : 0}%`, backgroundColor: s.color }} />
+            <div
+              key={s.nombre}
+              onClick={onSegmentClick ? () => onSegmentClick(anio, s.nombre) : undefined}
+              style={{ width: `${total > 0 ? (s.valor / total) * 100 : 0}%`, backgroundColor: s.color, cursor: onSegmentClick ? "pointer" : undefined }}
+            />
           ))}
         </div>
       </div>
@@ -67,7 +75,7 @@ function AnioRow({ anio, total, segmentos }: EvolucionAnio) {
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
-export function EvolucionInstrumentosPanel({ anios, onVerTodo, className, label }: EvolucionInstrumentosPanelProps) {
+export function EvolucionInstrumentosPanel({ anios, onVerTodo, className, label, onSegmentClick }: EvolucionInstrumentosPanelProps) {
   const legend = buildLegend(anios);
 
   return (
@@ -98,7 +106,7 @@ export function EvolucionInstrumentosPanel({ anios, onVerTodo, className, label 
       </div>
 
       <div className="flex flex-col gap-3">
-        {anios.map(a => <AnioRow key={a.anio} {...a} />)}
+        {anios.map(a => <AnioRow key={a.anio} {...a} onSegmentClick={onSegmentClick} />)}
       </div>
 
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mt-5">

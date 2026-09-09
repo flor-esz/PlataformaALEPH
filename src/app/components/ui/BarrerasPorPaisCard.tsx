@@ -28,12 +28,16 @@ export type BarrerasPorPaisCardProps = {
   // Muestra el <select> visual "Entrada" del header — por defecto true.
   // Solo aplica a la clasificación Entrada/Operación de Barreras.
   showEntradaSelect?: boolean;
+  // Si se pasa, cada subfila (Comercio/Competencia/Inversión) se vuelve
+  // clicable, con el nombre de esa subdimensión. Cuando se omite, se
+  // comporta exactamente igual que hoy (no clicable).
+  onEntradaClick?: (nombre: string) => void;
 };
 
 // ─── Single subdimensión row ────────────────────────────────────────────────
-function EntradaRow({ nombre, total, validadoPct, maxTotal }: BarrerasPorPaisEntrada & { maxTotal: number }) {
+function EntradaRow({ nombre, total, validadoPct, maxTotal, onClick }: BarrerasPorPaisEntrada & { maxTotal: number; onClick?: () => void }) {
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center gap-3" onClick={onClick} style={{ cursor: onClick ? "pointer" : undefined }}>
       <span
         className="flex-shrink-0 leading-tight overflow-hidden"
         style={{ ...TXT_MUTED, fontSize: 11, width: 88, whiteSpace: "nowrap", textOverflow: "ellipsis" }}
@@ -60,7 +64,7 @@ function EntradaRow({ nombre, total, validadoPct, maxTotal }: BarrerasPorPaisEnt
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
-export function BarrerasPorPaisCard({ pais, total, entrada, coberturaPct, validadoHitlPct, onVerBarreras, buttonLabel, showEntradaSelect = true }: BarrerasPorPaisCardProps) {
+export function BarrerasPorPaisCard({ pais, total, entrada, coberturaPct, validadoHitlPct, onVerBarreras, buttonLabel, showEntradaSelect = true, onEntradaClick }: BarrerasPorPaisCardProps) {
   const maxTotal = Math.max(...entrada.map(e => e.total), 1);
   return (
     <div className="rounded-lg flex flex-col" style={{ backgroundColor: "#FAFBFC", padding: 18 }}>
@@ -81,7 +85,7 @@ export function BarrerasPorPaisCard({ pais, total, entrada, coberturaPct, valida
       </div>
 
       <div className="flex flex-col gap-2.5 mb-4">
-        {entrada.map(e => <EntradaRow key={e.nombre} {...e} maxTotal={maxTotal} />)}
+        {entrada.map(e => <EntradaRow key={e.nombre} {...e} maxTotal={maxTotal} onClick={onEntradaClick ? () => onEntradaClick(e.nombre) : undefined} />)}
       </div>
 
       <div className="flex items-center justify-between mb-4">
