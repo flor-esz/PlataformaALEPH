@@ -37,6 +37,14 @@ export type PanelTipoSubdimensionProps = {
   tipos: string[];
   datos: Record<string, TipoDato>;
   className?: string;
+  // Si se pasa, cada fila se vuelve clicable, con el `tipo` actualmente
+  // seleccionado en el <Select> del header y el `nombre` de esa subdimensión.
+  onRowClick?: (tipo: string, subdimension: string) => void;
+  // Si se pasa, cada segmento de severidad DENTRO de una fila se vuelve
+  // clicable por separado (más específico que onRowClick, que sigue andando
+  // para el resto de la fila) -- mismo patrón ya usado en
+  // BarrerasPorJerarquiaCard.
+  onSegmentClick?: (tipo: string, subdimension: string, severidad: string) => void;
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -58,23 +66,27 @@ function StackedBarRow({
   nombre,
   niveles,
   maxTotal,
+  onClick,
+  onSegmentClick,
 }: {
   nombre: string;
   niveles: NivelData;
   maxTotal: number;
+  onClick?: () => void;
+  onSegmentClick?: (severidad: string) => void;
 }) {
   const subTotal = totalNiveles(niveles);
   const pct = maxTotal > 0 ? (subTotal / maxTotal) * 100 : 0;
 
-  const segments: { level: SevLevel; value: number; color: string }[] = [
-    { level: 4, value: niveles.n4, color: "#C75450" },
-    { level: 3, value: niveles.n3, color: "#26456B" },
-    { level: 2, value: niveles.n2, color: "#3E6E9E" },
-    { level: 1, value: niveles.n1, color: "#7FA8D4" },
+  const segments: { level: SevLevel; value: number; color: string; label: string }[] = [
+    { level: 4, value: niveles.n4, color: "#C75450", label: "Crítico" },
+    { level: 3, value: niveles.n3, color: "#26456B", label: "Alto" },
+    { level: 2, value: niveles.n2, color: "#3E6E9E", label: "Mediano" },
+    { level: 1, value: niveles.n1, color: "#7FA8D4", label: "Bajo" },
   ].filter((s) => s.value > 0);
 
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center gap-3" onClick={onClick} style={onClick ? { cursor: "pointer" } : undefined}>
       <span
         className="flex-shrink-0 leading-tight overflow-hidden"
         style={{
@@ -99,10 +111,12 @@ function StackedBarRow({
           {segments.map((seg) => (
             <div
               key={seg.level}
+              onClick={onSegmentClick ? (e) => { e.stopPropagation(); onSegmentClick(seg.label); } : undefined}
               style={{
                 flex: seg.value,
                 backgroundColor: seg.color,
                 minWidth: seg.value > 0 ? 2 : 0,
+                cursor: onSegmentClick ? "pointer" : undefined,
               }}
             />
           ))}
@@ -130,6 +144,8 @@ export function PanelTipoSubdimension({
   tipos,
   datos,
   className,
+  onRowClick,
+  onSegmentClick,
 }: PanelTipoSubdimensionProps) {
   const [tipo, setTipo] = useState(tipos[0] ?? "");
   const dato = datos[tipo];
@@ -219,6 +235,8 @@ export function PanelTipoSubdimension({
             nombre={sub.nombre}
             niveles={sub.niveles}
             maxTotal={maxSubTotal}
+            onClick={onRowClick ? () => onRowClick(tipo, sub.nombre) : undefined}
+            onSegmentClick={onSegmentClick ? (severidad) => onSegmentClick(tipo, sub.nombre, severidad) : undefined}
           />
         ))}
       </div>

@@ -23,24 +23,16 @@ function formatUSD(v: number): string {
   return `US$ ${Math.round(v).toLocaleString("es")}`;
 }
 
-// Reparto de muestra de cada fila de MIPYME_MUESTRA en las 4 severidades ya
-// usadas en el resto de la app (crítico/alto/mediano/bajo) — no hay
-// desglose real por severidad para MIPYME todavía, se usa una proporción
-// fija sobre el total de la fila.
-const MIPYME_SEVERIDAD_PROPORCION: [number, number, number, number] = [0.22, 0.38, 0.27, 0.13];
-function segmentosMipyme(valor: number) {
-  const [pCritico, pAlto, pMediano] = MIPYME_SEVERIDAD_PROPORCION;
-  const critico = Math.round(valor * pCritico);
-  const alto = Math.round(valor * pAlto);
-  const mediano = Math.round(valor * pMediano);
-  const bajo = valor - critico - alto - mediano; // ajuste para que sume exacto
-  return [
-    { nombre: "Crítico", valor: critico, color: C.critico },
-    { nombre: "Alto", valor: alto, color: C.alto },
-    { nombre: "Mediano", valor: mediano, color: C.mediano },
-    { nombre: "Bajo", valor: bajo, color: C.bajo },
-  ];
-}
+// Color por fila de MIPYME_MUESTRA -- sus filas son ahora niveles de
+// afectación (Alta/Media/Baja, el mismo dominio que barrera.afectacionMipyme
+// y tramite.afectacionMipyme) en vez de tamaño de empresa, así que ya no
+// hace falta desglosarlas por severidad (ver comentario junto a
+// MIPYME_MUESTRA en App.tsx). Rampa steel (composición, NO severidad): "Alta"
+// de afectación MIPYME no es lo mismo que "Crítico" de severidad -- C.critico
+// está reservado exclusivamente para severidad nivel 4 en hallazgos
+// individuales de barreras/trámites, nunca para otra clasificación
+// categórica aunque el nombre se parezca.
+const MIPYME_NIVEL_COLOR: Record<string, string> = { Alta: C.steel4, Media: C.steel3, Baja: C.steel1 };
 
 const selStyle: React.CSSProperties = {
   fontFamily: "IBM Plex Sans, sans-serif",
@@ -232,7 +224,7 @@ function ImpactoEconomico({ country = "Todos", onCountryChange, onNavigate }: {
             <p className="text-[10px] uppercase tracking-widest font-semibold" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.ambarTexto }}>Limitaciones</p>
             {[
               "No captura costos de oportunidad ni tiempos de espera por corrupción o discrecionalidad.",
-              "No diferencia por tamaño de empresa — ver Afectación MIPYME.",
+              "No diferencia por tamaño de empresa dentro de cada nivel de Afectación MIPYME.",
               "El costo de canales digitales vs. presenciales se promedia, no se distingue.",
               "No aplica a barreras regulatorias, solo a trámites con procedimiento identificable.",
             ].map(l => (
@@ -248,7 +240,7 @@ function ImpactoEconomico({ country = "Todos", onCountryChange, onNavigate }: {
         filas={costoPorPaisFilas}
         formatValor={formatUSDCompacto}
         actionLabel="Ver tabla completa"
-        onAction={() => console.log("Ver tabla completa — Costo estimado por país")}
+        onAction={() => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: {} })}
         headerExtra={
           // TODO: falta decidir si "Costo estimado por: [dimensión]" tendrá
           // más opciones además de "País" (ej. Sector, Entidad) — visual,
@@ -269,48 +261,45 @@ function ImpactoEconomico({ country = "Todos", onCountryChange, onNavigate }: {
           label="Trámites afectados por canal de transmisión económica"
           filas={canalesTramites}
           actionLabel="Ver tabla completa"
-          onAction={() => console.log("Ver tabla completa — Trámites por canal de transmisión")}
+          onAction={() => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: { ...(country !== "Todos" ? { pais: country } : {}) } })}
+          onRowClick={(canalTransmision) => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: { canalTransmision, ...(country !== "Todos" ? { pais: country } : {}) } })}
         />
+        {/* CANALES_TRANSMISION_MUESTRA sí está por país (canalesBarreras ya usa
+            `country` arriba) -- la nota anterior de que "no distingue país
+            propio" era un error, corregido acá junto con el resto del barrido. */}
         <ComposicionSimplePanel
           label="Barreras afectados por canal de transmisión económica"
           filas={canalesBarreras}
           actionLabel="Ver tabla completa"
-          onAction={() => console.log("Ver tabla completa — Barreras por canal de transmisión")}
+          onAction={() => onNavigate({ screen: "hallazgos-filtrados-barreras", filtros: { ...(country !== "Todos" ? { pais: country } : {}) } })}
+          onRowClick={(canalTransmision) => onNavigate({ screen: "hallazgos-filtrados-barreras", filtros: { canalTransmision, ...(country !== "Todos" ? { pais: country } : {}) } })}
         />
       </div>
 
-      {/* Afectación MIPYME — barra segmentada por severidad (dato de muestra:
-          MIPYME_MUESTRA no trae desglose real por severidad todavía, se usa
-          una proporción fija — ver segmentosMipyme arriba). */}
+      {/* Afectación MIPYME — filas por nivel de afectación (Alta/Media/Baja,
+          mismo dominio que barrera.afectacionMipyme/tramite.afectacionMipyme;
+          ver comentario junto a MIPYME_MUESTRA en App.tsx). */}
       <div className="rounded-xl mb-6" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
         <div className="px-5 pt-4 pb-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${C.border}` }}>
           <p className="text-[11px] uppercase tracking-widest font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Afectación MIPYME</p>
           <button style={{ backgroundColor: C.text, color: "white", border: "none", borderRadius: 999, padding: "6px 14px", fontFamily: "Space Grotesk, sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
-            onClick={() => console.log("Ver tabla completa — Afectación MIPYME")}>
+            onClick={() => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: { ...(country !== "Todos" ? { pais: country } : {}) } })}>
             Ver tabla completa
           </button>
         </div>
         <div className="px-5 pt-4 pb-3 flex flex-col gap-3">
-          {mipymeFilas.map(f => {
-            const segmentos = segmentosMipyme(f.valor);
-            return (
-              <div key={f.nombre} className="flex items-center gap-3">
-                <span className="flex-shrink-0" style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 11, color: C.textMuted, width: 130 }}>{f.nombre}</span>
-                <div className="flex-1 rounded-full overflow-hidden flex" style={{ height: 12, backgroundColor: "#E6ECF3" }}>
-                  {segmentos.filter(s => s.valor > 0).map(s => (
-                    <div key={s.nombre} style={{ flex: s.valor, backgroundColor: s.color, minWidth: 2 }} />
-                  ))}
-                </div>
-                <span className="flex-shrink-0 text-right" style={{ fontFamily: "Space Grotesk, sans-serif", fontSize: 12, fontWeight: 600, color: C.textMuted, width: 32 }}>{f.valor}</span>
+          {mipymeFilas.map(f => (
+            <div
+              key={f.nombre}
+              className="flex items-center gap-3"
+              onClick={() => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: { afectacionMipyme: f.nombre, ...(country !== "Todos" ? { pais: country } : {}) } })}
+              style={{ cursor: "pointer" }}
+            >
+              <span className="flex-shrink-0" style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 11, color: C.textMuted, width: 130 }}>{f.nombre}</span>
+              <div className="flex-1 rounded-full overflow-hidden" style={{ height: 12, backgroundColor: "#E6ECF3" }}>
+                <div style={{ width: "100%", height: "100%", backgroundColor: MIPYME_NIVEL_COLOR[f.nombre] ?? C.steel1 }} />
               </div>
-            );
-          })}
-        </div>
-        <div className="px-5 pb-4 flex flex-wrap items-center gap-4">
-          {[["Crítico", C.critico], ["Alto", C.alto], ["Mediano", C.mediano], ["Bajo", C.bajo]].map(([label, color]) => (
-            <div key={label} className="flex items-center gap-1.5">
-              <span className="rounded-full flex-shrink-0" style={{ width: 8, height: 8, backgroundColor: color, display: "inline-block" }} />
-              <span style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 11, color: C.textMuted }}>{label}</span>
+              <span className="flex-shrink-0 text-right" style={{ fontFamily: "Space Grotesk, sans-serif", fontSize: 12, fontWeight: 600, color: C.textMuted, width: 32 }}>{f.valor}</span>
             </div>
           ))}
         </div>
@@ -324,7 +313,7 @@ function ImpactoEconomico({ country = "Todos", onCountryChange, onNavigate }: {
             <span className="text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.steel3 }}>({costoPorTramiteFilas.length})</span>
           </div>
           <button style={{ backgroundColor: C.text, color: "white", border: "none", borderRadius: 999, padding: "6px 14px", fontFamily: "Space Grotesk, sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
-            onClick={() => console.log("Ver tabla completa — Costo por trámite")}>
+            onClick={() => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: { ...(country !== "Todos" ? { pais: country } : {}) } })}>
             Ver tabla completa
           </button>
         </div>

@@ -93,8 +93,11 @@ export const ESTADO_PROCESAMIENTO_RATIOS: { nombre: EstadoProcesamiento; pct: nu
 // intercalados (no en bloques contiguos) y con la cuota de cada uno exacta
 // -- en cada paso avanza el que va más atrasado respecto de su proporción
 // objetivo (reparto proporcional tipo "Bresenham"). Reusado para
-// estadoProcesamiento, año (por nivel) y estructura (por nivel).
-function repartoProporcional<T>(total: number, items: { valor: T; pct: number }[]): T[] {
+// estadoProcesamiento, año (por nivel), estructura (por nivel), y exportado
+// para que App.tsx lo reuse al asignar canalTransmision/afectacionMipyme/
+// tipoAfectacion a ALL_TRAMITES (mismo criterio, evita reimplementar el
+// mismo reparto proporcional dos veces).
+export function repartoProporcional<T>(total: number, items: { valor: T; pct: number }[]): T[] {
   const cuotas = items.map(it => Math.round(total * (it.pct / 100)));
   const sumaSinUltima = cuotas.slice(0, -1).reduce((s, v) => s + v, 0);
   cuotas[cuotas.length - 1] = total - sumaSinUltima; // ajuste para que sume exacto

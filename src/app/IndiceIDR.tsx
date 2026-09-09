@@ -64,7 +64,7 @@ const CARGA_REGIONAL = {
 // total como header — específico de esta pantalla, por eso no vive en
 // ComposicionSimplePanel (evita tocar sus muchos otros usos en Barreras/
 // Impacto Económico por un layout que solo necesita IndiceIDR).
-function PesoIndicePanel({ label, peso, total, selectValue, filas, actionLabel, onAction }: {
+function PesoIndicePanel({ label, peso, total, selectValue, filas, actionLabel, onAction, onRowClick }: {
   label: string;
   peso: number;
   total: number;
@@ -72,6 +72,8 @@ function PesoIndicePanel({ label, peso, total, selectValue, filas, actionLabel, 
   filas: { nombre: string; valor: number }[];
   actionLabel: string;
   onAction: () => void;
+  // Si se pasa, cada fila se vuelve clicable, con su `nombre`.
+  onRowClick?: (nombre: string) => void;
 }) {
   const maxValor = Math.max(...filas.map(f => f.valor), 1);
   const gradient = [C.steel4, C.steel3, C.steel2, C.steel1];
@@ -102,7 +104,12 @@ function PesoIndicePanel({ label, peso, total, selectValue, filas, actionLabel, 
         {filas.map((f, i) => {
           const pct = (f.valor / maxValor) * 100;
           return (
-            <div key={f.nombre} className="flex items-center gap-3">
+            <div
+              key={f.nombre}
+              className="flex items-center gap-3"
+              onClick={onRowClick ? () => onRowClick(f.nombre) : undefined}
+              style={{ cursor: onRowClick ? "pointer" : undefined }}
+            >
               <span className="flex-shrink-0" style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 11, color: C.textMuted, width: 190, lineHeight: 1.3 }}>{f.nombre}</span>
               <div className="flex-1 rounded-full overflow-hidden" style={{ height: 12, backgroundColor: "#E6ECF3" }}>
                 <div style={{ width: `${pct}%`, height: "100%", backgroundColor: gradient[i % gradient.length] }} />
@@ -301,6 +308,7 @@ function IndiceIDR({ country = "Todos", onCountryChange, onNavigate }: {
           filas={distorsiones.filas}
           actionLabel="Ver barreras →"
           onAction={() => onNavigate({ screen: "barreras" })}
+          onRowClick={(subdimension) => onNavigate({ screen: "hallazgos-filtrados-barreras", filtros: { clasificacion: "Entrada", subdimension, ...(country !== "Todos" ? { pais: country } : {}) } })}
         />
         <PesoIndicePanel
           label="Carga administrativa"
@@ -310,6 +318,7 @@ function IndiceIDR({ country = "Todos", onCountryChange, onNavigate }: {
           filas={carga.filas}
           actionLabel="Ver trámites →"
           onAction={() => onNavigate({ screen: "tramites" })}
+          onRowClick={(subdimension) => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: { tipoCarga: "Accesibilidad", subdimension, ...(country !== "Todos" ? { pais: country } : {}) } })}
         />
       </div>
 

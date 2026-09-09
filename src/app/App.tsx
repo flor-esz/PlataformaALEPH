@@ -65,7 +65,7 @@ import { HallazgosFiltrados } from "./components/ui/HallazgosFiltrados";
 // respectivos componentes, nunca en el top-level de sus módulos.
 import { HallazgosFiltradosBarreras } from "./components/ui/HallazgosFiltradosBarreras";
 import { HallazgosFiltradosTramites } from "./components/ui/HallazgosFiltradosTramites";
-import { INSTRUMENTOS_MUESTRA, EVOLUCION_ANIOS, EVOLUCION_FACTORES, DOC_ESTRUCTURA_PCT_MUESTRA } from "./data/instrumentosMuestra";
+import { INSTRUMENTOS_MUESTRA, EVOLUCION_ANIOS, EVOLUCION_FACTORES, DOC_ESTRUCTURA_PCT_MUESTRA, repartoProporcional } from "./data/instrumentosMuestra";
 import {
   PieChart,
   Pie,
@@ -494,6 +494,7 @@ const BARRERAS_CAFE = [
     tipoRestriccion: "Certificación previa obligatoria",
     canalTransmision: "Tiempo/incertidumbre",
     afectacionMipyme: "Alta" as const,
+    accionCategoria: "Eliminar" as const,
     validacion: {
       severidadIA: "Crítico" as const,
       severidadValidada: "Crítico" as const,
@@ -537,6 +538,7 @@ const BARRERAS_CAFE = [
     tipoRestriccion: "Requisito de infraestructura propia",
     canalTransmision: "Modelo de negocio",
     afectacionMipyme: "Alta" as const,
+    accionCategoria: "Simplificar" as const,
     validacion: {
       severidadIA: "Crítico" as const,
       severidadValidada: "Alto" as const,
@@ -583,6 +585,7 @@ const BARRERAS_TEXTIL = [
     tipoRestriccion: "Reporte físico obligatorio",
     canalTransmision: "Costo administrativo",
     afectacionMipyme: "Media" as const,
+    accionCategoria: "Sustituir" as const,
     validacion: {
       severidadIA: "Crítico" as const,
       severidadValidada: "Alto" as const,
@@ -1096,9 +1099,112 @@ const TRAMITE_META_FALLBACK = {
   accionSugerida: "Permitir variaciones de empaque bajo el mismo registro sanitario sin repetir el trámite completo",
 };
 
-export const ALL_TRAMITES = [...TRAMITES_CAFE, ...TRAMITES_TEXTIL, ...TRAMITES_MUESTRA].map(t => ({
+// canalTransmision/afectacionMipyme/tipoAfectacion -- dato de muestra NUEVO,
+// sin metodología real todavía (mismo criterio que el resto de datos de
+// muestra del proyecto). Asignado con repartoProporcional (mismo reparto que
+// ya usa INSTRUMENTOS_MUESTRA, ver data/instrumentosMuestra.ts) sobre las
+// proporciones de CANALES_TRANSMISION_TRAMITES_MUESTRA/MIPYME_MUESTRA/
+// TRAMITES_AFECTACIONES_MUESTRA (más abajo), para que la distribución
+// agregada por país cuadre razonablemente con esos datos ya definidos -- no
+// tiene que ser exacto, alcanza con el orden de magnitud.
+const CANT_TRAMITES_TOTAL = TRAMITES_CAFE.length + TRAMITES_TEXTIL.length + TRAMITES_MUESTRA.length;
+const CANAL_TRANSMISION_TRAMITES_POR_INDICE = repartoProporcional(CANT_TRAMITES_TOTAL, [
+  { valor: "Costo administrativo", pct: 33 },
+  { valor: "Tiempo/incertidumbre", pct: 25 },
+  { valor: "Incumbentes/competencia", pct: 14 },
+  { valor: "Capital/liquidez", pct: 11 },
+  { valor: "Capacidad técnica", pct: 10 },
+  { valor: "Modelo de negocio", pct: 7 },
+]);
+// Misma escala 62/30/8 usada para redefinir MIPYME_MUESTRA (ver más abajo,
+// junto a CANALES_TRANSMISION_MUESTRA) a partir de la distribución real de
+// ALL_BARRERAS.afectacionMipyme.
+const AFECTACION_MIPYME_TRAMITES_POR_INDICE = repartoProporcional<"Alta" | "Media" | "Baja">(CANT_TRAMITES_TOTAL, [
+  { valor: "Alta", pct: 62 },
+  { valor: "Media", pct: 30 },
+  { valor: "Baja", pct: 8 },
+]);
+const TIPO_AFECTACION_POR_INDICE = repartoProporcional(CANT_TRAMITES_TOTAL, [
+  { valor: "Costos administrativos", pct: 40 },
+  { valor: "Demoras", pct: 24 },
+  { valor: "Duplicidad", pct: 17 },
+  { valor: "Discrecionalidad", pct: 11 },
+  { valor: "Falta de interoperabilidad", pct: 8 },
+]);
+// accionCategoria -- mismo criterio, categoría corta adicional (NO reemplaza
+// accionSugerida, la descripción larga que ya usan las tablas). Proporciones
+// de TRAMITES_ACCION_MEJORA_MUESTRA (180/113/86/52/47 sobre 478 ≈ 38/24/18/
+// 11/10%) -- mismos números que ACCION_MEJORA_MUESTRA (Barreras), solo
+// cambian 2 de los 5 nombres de categoría.
+const ACCION_CATEGORIA_TRAMITES_POR_INDICE = repartoProporcional(CANT_TRAMITES_TOTAL, [
+  { valor: "Simplificar", pct: 38 },
+  { valor: "Digitalizar", pct: 24 },
+  { valor: "Interoperar", pct: 18 },
+  { valor: "Clarificar", pct: 11 },
+  { valor: "Proporcionalizar", pct: 10 },
+]);
+
+// tipoCarga/subdimension -- mismo criterio que los 3 campos de arriba, dato
+// de muestra nuevo. Los porcentajes son literales (no una referencia viva a
+// PANEL_CARGA_TIPO_DATA, que se define más abajo en el archivo -- un const
+// no puede usarse antes de su declaración aunque sea en el mismo módulo),
+// pero son los mismos números reales de ahí: por tipoCarga, Accesibilidad
+// 168/Certidumbre 247/Cumplimiento 141/Proporcionalidad 56 (total 612); por
+// subdimensión dentro de cada tipoCarga, la proporción de cada una sobre el
+// total de su tipoCarga. Reparto en dos niveles (primero tipoCarga, después
+// subdimension dentro de cada tipoCarga) para que la distribución agregada
+// cuadre razonablemente con "CARGA POR EJE" / "Trámites por país", que sí
+// usan PANEL_CARGA_TIPO_DATA en vivo.
+const TIPO_CARGA_POR_INDICE = repartoProporcional(CANT_TRAMITES_TOTAL, [
+  { valor: "Accesibilidad", pct: 28 },
+  { valor: "Certidumbre", pct: 40 },
+  { valor: "Cumplimiento", pct: 23 },
+  { valor: "Proporcionalidad", pct: 9 },
+]);
+const SUBDIM_RATIOS_POR_TIPO_CARGA: Record<string, { valor: string; pct: number }[]> = {
+  "Accesibilidad": [
+    { valor: "Duplicidad e interoperabilidad", pct: 56 },
+    { valor: "Digitalización y accesibilidad", pct: 44 },
+  ],
+  "Certidumbre": [
+    { valor: "Discrecionalidad administrativa", pct: 23 },
+    { valor: "Trámites y requisitos de cumplimiento", pct: 19 },
+    { valor: "Certidumbre procedimental", pct: 17 },
+    { valor: "Duplicidad e interoperabilidad", pct: 16 },
+    { valor: "Diseño y estructura de trámites", pct: 15 },
+    { valor: "Recursos y debido proceso", pct: 10 },
+  ],
+  "Cumplimiento": [
+    { valor: "Trámites y requisitos de cumplimiento", pct: 58 },
+    { valor: "Costos y cargas recurrentes", pct: 42 },
+  ],
+  "Proporcionalidad": [
+    { valor: "Proporcionalidad e inspecciones basado en riesgo", pct: 100 },
+  ],
+};
+const SUBDIMENSION_CARGA_POR_INDICE: string[] = (() => {
+  const cursorPorTipoCarga: Record<string, number> = {};
+  const subdimAsignadaPorTipoCarga: Record<string, string[]> = {};
+  for (const [tipoCarga, ratios] of Object.entries(SUBDIM_RATIOS_POR_TIPO_CARGA)) {
+    const cantidadEnGrupo = TIPO_CARGA_POR_INDICE.filter(t => t === tipoCarga).length;
+    subdimAsignadaPorTipoCarga[tipoCarga] = repartoProporcional(cantidadEnGrupo, ratios);
+    cursorPorTipoCarga[tipoCarga] = 0;
+  }
+  return TIPO_CARGA_POR_INDICE.map(tipoCarga => {
+    const idx = cursorPorTipoCarga[tipoCarga]++;
+    return subdimAsignadaPorTipoCarga[tipoCarga][idx];
+  });
+})();
+
+export const ALL_TRAMITES = [...TRAMITES_CAFE, ...TRAMITES_TEXTIL, ...TRAMITES_MUESTRA].map((t, i) => ({
   ...t,
   ...(TRAMITE_META_POR_NOMBRE.get(t.nombre) ?? TRAMITE_META_FALLBACK),
+  tipoCarga: TIPO_CARGA_POR_INDICE[i],
+  subdimension: SUBDIMENSION_CARGA_POR_INDICE[i],
+  canalTransmision: CANAL_TRANSMISION_TRAMITES_POR_INDICE[i],
+  afectacionMipyme: AFECTACION_MIPYME_TRAMITES_POR_INDICE[i],
+  tipoAfectacion: TIPO_AFECTACION_POR_INDICE[i],
+  accionCategoria: ACCION_CATEGORIA_TRAMITES_POR_INDICE[i],
 }));
 
 // Registros completos de muestra para las filas de TOP_BARRERAS_POR_PAIS_MUESTRA
@@ -1133,6 +1239,7 @@ const BARRERAS_MUESTRA = [
     tipoRestriccion: "Registro previo obligatorio por lote de producción",
     canalTransmision: "Costo administrativo",
     afectacionMipyme: "Alta" as const,
+    accionCategoria: "Clarificar" as const,
     validacion: {
       severidadIA: "Crítico" as const,
       severidadValidada: "Crítico" as const,
@@ -1177,6 +1284,7 @@ const BARRERAS_MUESTRA = [
     tipoRestriccion: "Renovación sin plazo máximo de resolución",
     canalTransmision: "Tiempo/incertidumbre",
     afectacionMipyme: "Media" as const,
+    accionCategoria: "Eliminar" as const,
     validacion: {
       severidadIA: "Crítico" as const,
       severidadValidada: "Alto" as const,
@@ -1221,6 +1329,7 @@ const BARRERAS_MUESTRA = [
     tipoRestriccion: "Capital mínimo desproporcionado",
     canalTransmision: "Capital/liquidez",
     afectacionMipyme: "Alta" as const,
+    accionCategoria: "Proporcionalizar" as const,
     validacion: {
       severidadIA: "Crítico" as const,
       severidadValidada: "Alto" as const,
@@ -1265,6 +1374,7 @@ const BARRERAS_MUESTRA = [
     tipoRestriccion: "Prohibición de venta en mercado interno",
     canalTransmision: "Costo administrativo",
     afectacionMipyme: "Media" as const,
+    accionCategoria: "Simplificar" as const,
     validacion: {
       severidadIA: "Crítico" as const,
       severidadValidada: "Crítico" as const,
@@ -1309,6 +1419,7 @@ const BARRERAS_MUESTRA = [
     tipoRestriccion: "Reserva de distribución a favor de entidad estatal",
     canalTransmision: "Incumbentes/competencia",
     afectacionMipyme: "Alta" as const,
+    accionCategoria: "Eliminar" as const,
     validacion: {
       severidadIA: "Crítico" as const,
       severidadValidada: "Crítico" as const,
@@ -1353,6 +1464,7 @@ const BARRERAS_MUESTRA = [
     tipoRestriccion: "Reporte físico obligatorio",
     canalTransmision: "Costo administrativo",
     afectacionMipyme: "Media" as const,
+    accionCategoria: "Sustituir" as const,
     validacion: {
       severidadIA: "Crítico" as const,
       severidadValidada: "Alto" as const,
@@ -1397,6 +1509,7 @@ const BARRERAS_MUESTRA = [
     tipoRestriccion: "Garantía financiera desproporcionada",
     canalTransmision: "Capital/liquidez",
     afectacionMipyme: "Alta" as const,
+    accionCategoria: "Eliminar" as const,
     validacion: {
       severidadIA: "Crítico" as const,
       severidadValidada: "Crítico" as const,
@@ -1441,6 +1554,7 @@ const BARRERAS_MUESTRA = [
     tipoRestriccion: "Requisito técnico desproporcionado",
     canalTransmision: "Capacidad técnica",
     afectacionMipyme: "Media" as const,
+    accionCategoria: "Simplificar" as const,
     validacion: {
       severidadIA: "Crítico" as const,
       severidadValidada: "Alto" as const,
@@ -1485,6 +1599,7 @@ const BARRERAS_MUESTRA = [
     tipoRestriccion: "Autorización previa sin plazo máximo",
     canalTransmision: "Tiempo/incertidumbre",
     afectacionMipyme: "Baja" as const,
+    accionCategoria: "Clarificar" as const,
     validacion: {
       severidadIA: "Crítico" as const,
       severidadValidada: "Alto" as const,
@@ -1529,6 +1644,7 @@ const BARRERAS_MUESTRA = [
     tipoRestriccion: "Certificación duplicada por destino",
     canalTransmision: "Costo administrativo",
     afectacionMipyme: "Alta" as const,
+    accionCategoria: "Eliminar" as const,
     validacion: {
       severidadIA: "Crítico" as const,
       severidadValidada: "Crítico" as const,
@@ -1573,6 +1689,7 @@ const BARRERAS_MUESTRA = [
     tipoRestriccion: "Cupo de exportación reservado a operadores históricos",
     canalTransmision: "Incumbentes/competencia",
     afectacionMipyme: "Alta" as const,
+    accionCategoria: "Proporcionalizar" as const,
     validacion: {
       severidadIA: "Crítico" as const,
       severidadValidada: "Crítico" as const,
@@ -1617,6 +1734,7 @@ const BARRERAS_MUESTRA = [
     tipoRestriccion: "Certificación previa obligatoria",
     canalTransmision: "Tiempo/incertidumbre",
     afectacionMipyme: "Alta" as const,
+    accionCategoria: "Sustituir" as const,
     validacion: {
       severidadIA: "Crítico" as const,
       severidadValidada: "Crítico" as const,
@@ -1661,6 +1779,7 @@ const BARRERAS_MUESTRA = [
     tipoRestriccion: "Restricción de registro por tamaño de operación",
     canalTransmision: "Costo administrativo",
     afectacionMipyme: "Alta" as const,
+    accionCategoria: "Simplificar" as const,
     validacion: {
       severidadIA: "Crítico" as const,
       severidadValidada: "Crítico" as const,
@@ -1705,6 +1824,7 @@ const BARRERAS_MUESTRA = [
     tipoRestriccion: "Capital mínimo desproporcionado",
     canalTransmision: "Capital/liquidez",
     afectacionMipyme: "Alta" as const,
+    accionCategoria: "Eliminar" as const,
     validacion: {
       severidadIA: "Crítico" as const,
       severidadValidada: "Alto" as const,
@@ -2288,10 +2408,22 @@ const ACCION_MEJORA_MUESTRA = scaleMuestraPorPais([
   { nombre: "Proporcionalizar", valor: 47 },
 ]);
 
+// Filas por nivel de afectación MIPYME (Alta/Media/Baja) -- ANTES mostraba
+// tamaño de empresa (Microempresa/Pequeña/Mediana), que no tiene forma de
+// mapearse al campo real barrera.afectacionMipyme ("Alta"/"Media"/"Baja",
+// agregado a ALL_BARRERAS en la tarea de Detalle de Barrera). Cambiado para
+// poder cablear el drill-down de "Barreras con afectación MIPYME" /
+// "Afectación MIPYME" a HallazgosFiltradosBarreras/Tramites.
+// Proporción base (62% Alta / 30% Media / 8% Baja) viene de contar
+// ALL_BARRERAS.afectacionMipyme sobre sus 17 registros reales (11 Alta / 5
+// Media / 1 Baja ≈ 65/29/6%, redondeado) — no se recalcula en vivo desde
+// ALL_BARRERAS para no depender de su orden de declaración en el archivo,
+// pero son los mismos números fuente. Mismo criterio usado para
+// canalTransmision/afectacionMipyme/tipoAfectacion de ALL_TRAMITES, más abajo.
 export const MIPYME_MUESTRA = conTotalTodos(scaleMuestraPorPais([
-  { nombre: "Microempresa",    valor: 92 },
-  { nombre: "Pequeña empresa", valor: 78 },
-  { nombre: "Mediana empresa", valor: 71 },
+  { nombre: "Alta",  valor: 156 },
+  { nombre: "Media", valor: 71 },
+  { nombre: "Baja",  valor: 14 },
 ]));
 
 // % no estructurado por nivel N2–N6 usado en el Panel País de Barreras —
@@ -3064,7 +3196,7 @@ function CountryDashboard({ country, onCountryChange, onNavigate }: { country: s
       <EvolucionInstrumentosPanel
         anios={buildEvolucion(instrumentos)}
         className="mb-6"
-        onVerTodo={() => onNavigate({ screen: "indice" })}
+        onVerTodo={() => onNavigate({ screen: "hallazgos-filtrados", filtros: {} })}
         onSegmentClick={(anio, jerarquia) => onNavigate({ screen: "hallazgos-filtrados", filtros: { anioDesde: String(anio), anioHasta: String(anio), jerarquia } })}
       />
 
@@ -3116,10 +3248,15 @@ function CountryDashboard({ country, onCountryChange, onNavigate }: { country: s
       <DocumentosEstructuraPanel
         filas={docEstructuraFilas}
         className="mb-6"
-        onVerTabla={() => onNavigate({ screen: "indice" })}
+        onVerTabla={() => onNavigate({ screen: "hallazgos-filtrados", filtros: {} })}
         onSegmentClick={(nivel, estructura) => onNavigate({ screen: "hallazgos-filtrados", filtros: { jerarquia: nivel, estructura } })}
       />
 
+      {/* "Fuentes y trazabilidad" es sobre FUENTES de scraping, no sobre
+          registros individuales de instrumentos/barreras/trámites -- no
+          calza con ninguno de los 3 HallazgosFiltrados*, se deja como
+          estaba (apunta a "indice", un placeholder genérico igual que
+          antes de este barrido). */}
       <FuentesTrazabilidadTable filas={fuentesTrazabilidad} onVerDetalle={() => onNavigate({ screen: "indice" })} />
 
       <SectionDivider label="Trámites y respaldo normativo" />
@@ -3144,7 +3281,7 @@ function CountryDashboard({ country, onCountryChange, onNavigate }: { country: s
         </div>
       </div>
 
-      <TablaExploratoria filas={tablaExploratoria} onVerTablaCompleta={() => onNavigate({ screen: "indice" })} />
+      <TablaExploratoria filas={tablaExploratoria} onVerTablaCompleta={() => onNavigate({ screen: "hallazgos-filtrados", filtros: {} })} />
     </div>
   );
 }
@@ -3680,11 +3817,17 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
 
             {/* TODO: confirmar con Franco si este panel pertenece a Barreras o
                 es exclusivo de Panorama Regulatorio -- hoy se muestra la misma
-                métrica (evolución de instrumentos por país) en dos pantallas. */}
+                métrica (evolución de instrumentos por país) en dos pantallas.
+                Mismo componente compartido que la instancia de Panorama País
+                (arriba) -- mismo destino (Instrumentos), mismo criterio: sin
+                `pais` en el filtro porque INSTRUMENTOS_MUESTRA no tiene ese
+                campo (catálogo a nivel regional). */}
             <EvolucionInstrumentosPanel
               anios={buildEvolucion(JERARQUIA_NORMATIVA_DATA.find(c => c.nombre === country)!.total)}
               label="Barreras en instrumentos por jerarquía normativa"
               className="mb-6"
+              onVerTodo={() => onNavigate({ screen: "hallazgos-filtrados", filtros: {} })}
+              onSegmentClick={(anio, jerarquia) => onNavigate({ screen: "hallazgos-filtrados", filtros: { anioDesde: String(anio), anioHasta: String(anio), jerarquia } })}
             />
 
             {/* KPIs */}
@@ -3710,6 +3853,8 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
               tipos={["Entrada", "Operación"]}
               datos={cd.clasificacion}
               className="h-full"
+              onRowClick={(clasificacion, subdimension) => onNavigate({ screen: "hallazgos-filtrados-barreras", filtros: { pais: country, clasificacion, subdimension } })}
+              onSegmentClick={(clasificacion, subdimension, severidad) => onNavigate({ screen: "hallazgos-filtrados-barreras", filtros: { pais: country, clasificacion, subdimension, severidad } })}
             />
             <MatrizRegional
               clasificacion={cd.clasificacion}
@@ -3735,12 +3880,10 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
                 </p>
               }
             />
-            {/* TODO: canal de transmisión económica es un concepto nuevo sin
-                metodología real todavía -- falta definir cómo se calcula a
-                partir de barreras individuales cuando exista ese detalle. */}
             <ComposicionSimplePanel
               label="Canales de transmisión económica"
               filas={CANALES_TRANSMISION_MUESTRA[country as Exclude<Country, "Todos">] ?? CANALES_TRANSMISION_MUESTRA["Bolivia"]}
+              onRowClick={(canalTransmision) => onNavigate({ screen: "hallazgos-filtrados-barreras", filtros: { pais: country, canalTransmision } })}
             />
           </div>
         );
@@ -3750,26 +3893,40 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6" style={{ alignItems: "stretch" }}>
         {/* TODO: acción de mejora sugerida a nivel agregado es un concepto
             nuevo sin metodología real -- falta definir cómo se calcula a
-            partir de barreras individuales cuando exista ese detalle. */}
+            partir de barreras individuales cuando exista ese detalle.
+            barrera.accionCategoria (corta, ver ALL_BARRERAS) es la que
+            filtra acá -- barrera.accionSugerida.accion sigue siendo la
+            descripción larga que ya usan las tablas, sin tocar. */}
         <ComposicionSimplePanel
           label="Barreras por acción de mejora sugerida"
           filas={ACCION_MEJORA_MUESTRA[country as Exclude<Country, "Todos">] ?? ACCION_MEJORA_MUESTRA["Bolivia"]}
+          onRowClick={(accionCategoria) => onNavigate({ screen: "hallazgos-filtrados-barreras", filtros: { pais: country, accionCategoria } })}
         />
-        {/* TODO: afectación MIPYME es un concepto nuevo sin metodología real
-            -- falta definir cómo se calcula a partir de barreras individuales
-            cuando exista ese detalle. */}
         <ComposicionSimplePanel
           label="Barreras con afectación MIPYME"
           filas={MIPYME_MUESTRA[country as Exclude<Country, "Todos">] ?? MIPYME_MUESTRA["Bolivia"]}
           actionLabel="Ver tabla completa"
-          onAction={() => console.log("Ver tabla completa — Barreras con afectación MIPYME")}
+          onAction={() => onNavigate({ screen: "hallazgos-filtrados-barreras", filtros: { pais: country } })}
+          onRowClick={(afectacionMipyme) => onNavigate({ screen: "hallazgos-filtrados-barreras", filtros: { pais: country, afectacionMipyme } })}
         />
       </div>
 
+      {/* Corrección: sus filas usan las etiquetas N2–N6 de INSTRUMENTOS
+          (JERARQUIA_N2N6_LABELS), solo con un % propio de Barreras (DOC_
+          ESTRUCTURA_PCT_BARRERAS_MUESTRA) como flavor -- es el mismo dato
+          que la instancia de Panorama Regulatorio (estructura documental de
+          instrumentos por nivel N2–N6), no algo propio de Barreras. Por eso
+          apunta a HallazgosFiltradosInstrumentos igual que esa instancia, no
+          a HallazgosFiltradosBarreras (ahí sí "N2 Legislativo" no existe
+          como valor real, porque barrera.jerarquia usa otra escala). Sin
+          `pais` en el filtro: Instrumento no tiene ese campo (INSTRUMENTOS_
+          MUESTRA es un catálogo a nivel regional, mismo criterio ya
+          documentado en el resto de gráficas de Instrumentos). */}
       <DocumentosEstructuraPanel
         filas={JERARQUIA_N2N6_LABELS.map((nombre, i) => ({ nombre, pctNoEstructurado: DOC_ESTRUCTURA_PCT_BARRERAS_MUESTRA[i] }))}
         className="mb-6"
-        onVerTabla={() => onNavigate({ screen: "indice" })}
+        onVerTabla={() => onNavigate({ screen: "hallazgos-filtrados", filtros: {} })}
+        onSegmentClick={(nivel, estructura) => onNavigate({ screen: "hallazgos-filtrados", filtros: { jerarquia: nivel, estructura } })}
       />
 
       {/* Top 3 barreras según IRR */}
@@ -4207,6 +4364,7 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
           onVerBarreras={() => onCountryChange?.(pais)}
           buttonLabel="Ver trámites por país →"
           showEntradaSelect={false}
+          onEntradaClick={(subdimension) => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: { pais, tipoCarga: "Accesibilidad", subdimension } })}
         />
       );
     };
@@ -4333,7 +4491,7 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
             <div className="px-5 py-4 mt-2 flex items-center justify-between" style={{ borderTop: `1px solid ${C.border}` }}>
               <span className="uppercase" style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 10.5, color: C.textMuted }}>Cobertura 91%</span>
               <button
-                onClick={() => console.log("Ver tabla completa — Trámites por entidad")}
+                onClick={() => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: {} })}
                 style={{ backgroundColor: C.text, color: "white", border: "none", borderRadius: 999, padding: "6px 14px", fontFamily: "Space Grotesk, sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
               >
                 Ver tabla completa
@@ -4527,10 +4685,18 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
           sueltas de Bolivia (PANEL_CARGA_TIPO_DATA / TOP_ENTIDADES_BOLIVIA)
           sin importar el país; ahora usan td.cargaPorTipo / td.topEntidades */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        {/* Sin onSegmentClick (a diferencia de "IDR por clasificación" en
+            Barreras): los segmentos de la barra son Crítico/Alto/Mediano/Bajo,
+            pero ALL_TRAMITES.severidad solo tiene "Crítica"/"Alta" (2
+            niveles, forma femenina) -- ningún segmento clickeado matchearía
+            un valor real, mismo criterio de no forzar una dimensión que no
+            existe en el dataset. onRowClick sí queda (tipoCarga+subdimension,
+            que sí existen). */}
         <PanelTipoSubdimension
           label="CARGA POR EJE"
           tipos={["Accesibilidad", "Certidumbre", "Cumplimiento", "Proporcionalidad"]}
           datos={td.cargaPorTipo}
+          onRowClick={(tipoCarga, subdimension) => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: { pais: country, tipoCarga, subdimension } })}
         />
         <div className="rounded-lg p-6" style={{ backgroundColor: C.card }}>
           <p className="text-[11px] uppercase tracking-widest mb-4 font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Top 10 entidades por número de trámites</p>
@@ -4538,7 +4704,12 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
             {(() => {
               const maxEntidad = Math.max(...td.topEntidades.map(e => e.value), 1);
               return td.topEntidades.map(item => (
-                <div key={item.name} className="flex items-center gap-3">
+                <div
+                  key={item.name}
+                  className="flex items-center gap-3"
+                  onClick={() => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: { pais: country, entidad: item.name } })}
+                  style={{ cursor: "pointer" }}
+                >
                   <span className="text-[11px] flex-shrink-0 leading-tight" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text, width: 188 }}>{item.name}</span>
                   <div className="flex-1 rounded-full overflow-hidden h-[8px]" style={{ backgroundColor: "#E6ECF3" }}>
                     <div className="h-full rounded-full" style={{ width: `${(item.value / maxEntidad) * 100}%`, backgroundColor: C.steel2 }} />
@@ -4560,17 +4731,15 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
             label="Etapa del ciclo empresarial"
             filas={ETAPA_CICLO_MUESTRA[country as Exclude<Country, "Todos">] ?? ETAPA_CICLO_MUESTRA["Bolivia"]}
             actionLabel="Ver tabla completa"
-            onAction={() => console.log("Ver tabla completa — Etapa del ciclo empresarial")}
+            onAction={() => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: { pais: country } })}
             onRowClick={(etapaCiclo) => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: { pais: country, etapaCiclo } })}
           />
-          {/* TODO: afectación MIPYME es un concepto nuevo sin metodología
-              real -- falta agregar un campo real a ALL_TRAMITES antes de
-              poder filtrar por esto (ver aviso al usuario). */}
           <ComposicionSimplePanel
             label="Afectación MIPYME"
             filas={MIPYME_MUESTRA[country as Exclude<Country, "Todos">] ?? MIPYME_MUESTRA["Bolivia"]}
             actionLabel="Ver tabla completa"
-            onAction={() => console.log("Ver tabla completa — Afectación MIPYME")}
+            onAction={() => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: { pais: country } })}
+            onRowClick={(afectacionMipyme) => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: { pais: country, afectacionMipyme } })}
           />
         </div>
         <ComposicionSimplePanel
@@ -4581,7 +4750,7 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
             { nombre: "Mixto", valor: td.tipoUsuario.mixto },
           ]}
           actionLabel="Ver tabla completa"
-          onAction={() => console.log("Ver tabla completa — Tipo de usuario")}
+          onAction={() => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: { pais: country } })}
           onRowClick={(tipoUsuario) => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: { pais: country, tipoUsuario } })}
         />
       </div>
@@ -4589,17 +4758,22 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
       {/* Acciones de mejora en trámites · Afectaciones — series independientes
           (antes esta segunda sección repetía los números de la primera) */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6" style={{ alignItems: "stretch" }}>
+        {/* tramite.accionCategoria (corta, ver ALL_TRAMITES) es la que filtra
+            acá -- tramite.accionSugerida sigue siendo la descripción larga
+            que ya usan las tablas, sin tocar. */}
         <ComposicionSimplePanel
           label="Acciones de mejora en trámites"
           filas={TRAMITES_ACCION_MEJORA_MUESTRA[country as Exclude<Country, "Todos">] ?? TRAMITES_ACCION_MEJORA_MUESTRA["Bolivia"]}
           actionLabel="Ver más"
-          onAction={() => console.log("Ver más — Acciones de mejora en trámites")}
+          onAction={() => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: { pais: country } })}
+          onRowClick={(accionCategoria) => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: { pais: country, accionCategoria } })}
         />
         <ComposicionSimplePanel
           label="Afectaciones"
           filas={TRAMITES_AFECTACIONES_MUESTRA[country as Exclude<Country, "Todos">] ?? TRAMITES_AFECTACIONES_MUESTRA["Bolivia"]}
           actionLabel="Ver más"
-          onAction={() => console.log("Ver más — Afectaciones")}
+          onAction={() => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: { pais: country } })}
+          onRowClick={(tipoAfectacion) => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: { pais: country, tipoAfectacion } })}
         />
       </div>
 
@@ -7575,8 +7749,10 @@ export default function App() {
       case "hallazgos-filtrados-barreras": {
         // Label legible por cada key de filtro soportada -- llegan de un clic
         // en gráfica de Barreras (BarrerasPorPaisCard/MatrizRegional/
-        // BarrerasPorJerarquiaCard, Regional y por país) o de la barra de
-        // filtros de esta pantalla (ver HallazgosFiltradosBarreras.tsx).
+        // BarrerasPorJerarquiaCard/"Canales de transmisión económica"/
+        // "Barreras con afectación MIPYME", Regional y por país -- estas 2
+        // últimas solo existen en la vista por país hoy, no en Regional) o de
+        // la barra de filtros de esta pantalla (ver HallazgosFiltradosBarreras.tsx).
         // TODO: ALL_BARRERAS es un catálogo de 17 registros de muestra, muy
         // chico frente a los totales agregados que muestran esas gráficas
         // (COUNTRY_BARRERAS_DATA) -- el filtro resultante puede traer muchos
@@ -7591,6 +7767,9 @@ export default function App() {
           subdimension: "Subdimensión",
           jerarquia: "Jerarquía",
           severidad: "Severidad",
+          canalTransmision: "Canal de transmisión",
+          afectacionMipyme: "Afectación MIPYME",
+          accionCategoria: "Categoría de acción sugerida",
         };
         const filtrosObj = view.filtros;
         const filtrosArr = Object.entries(filtrosObj).map(([key, value]) => ({ key, value, label: FILTRO_LABELS[key] ?? key }));
@@ -7620,14 +7799,14 @@ export default function App() {
       }
       case "hallazgos-filtrados-tramites": {
         // Label legible por cada key de filtro soportada -- "entidad",
-        // "tipoUsuario" y "etapaCiclo" llegan de un clic en gráfica de
-        // Trámites (Regional y por país); "pais"/"sector"/"severidad" desde
+        // "tipoUsuario", "etapaCiclo", "canalTransmision", "afectacionMipyme",
+        // "tipoAfectacion", "tipoCarga", "subdimension" y "accionCategoria"
+        // llegan de un clic en gráfica de Trámites (Regional y por país),
+        // Índice/IDR o Impacto Económico; "pais"/"sector"/"severidad" desde
         // la barra de filtros de esta pantalla (ver
-        // HallazgosFiltradosTramites.tsx). "tipoCarga", "subdimension" (de
-        // trámites) y "accionSugerida" NO están cableadas todavía -- son
-        // categorías agregadas (PANEL_CARGA_TIPO_DATA / TRAMITES_ACCION_
-        // MEJORA_MUESTRA) que no existen como campo individual comparable en
-        // ALL_TRAMITES (ver aviso al usuario).
+        // HallazgosFiltradosTramites.tsx). "accionCategoria" es la categoría
+        // corta (Simplificar/Digitalizar/...) -- distinta de
+        // tramite.accionSugerida, la descripción larga que ya usan las tablas.
         const FILTRO_LABELS: Record<string, string> = {
           pais: "País",
           sector: "Sector",
@@ -7635,6 +7814,12 @@ export default function App() {
           severidad: "Severidad",
           tipoUsuario: "Tipo de usuario",
           etapaCiclo: "Etapa del ciclo",
+          canalTransmision: "Canal de transmisión",
+          afectacionMipyme: "Afectación MIPYME",
+          tipoAfectacion: "Tipo de afectación",
+          tipoCarga: "Tipo de carga",
+          subdimension: "Subdimensión",
+          accionCategoria: "Categoría de acción sugerida",
         };
         const filtrosObj = view.filtros;
         const filtrosArr = Object.entries(filtrosObj).map(([key, value]) => ({ key, value, label: FILTRO_LABELS[key] ?? key }));
