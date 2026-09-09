@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from "react";
+import { useState, useEffect, useRef, lazy, Suspense } from "react";
 // Cargados con React.lazy (no import estático): estos módulos importan { C, Header }
 // de vuelta desde este archivo (ciclo App.tsx <-> revision/*.tsx) y usan C en el
 // top-level de su módulo (ej. fieldStyle, ANALISTAS, SEV_COLOR). Un import estático
@@ -29,6 +29,12 @@ import { FuentesTrazabilidadTable } from "./components/ui/FuentesTrazabilidadTab
 import { TablaExploratoria } from "./components/ui/TablaExploratoria";
 import { BarrerasPorPaisCard } from "./components/ui/BarrerasPorPaisCard";
 import { MatrizRegional } from "./components/ui/MatrizRegional";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "./components/ui/dropdown-menu";
 // C y los HDR_BTN_* viven en ./theme, que no importa nada de este archivo, y
 // no en App.tsx -- ver comentario junto a `export { C }` más abajo para el
 // porqué (el resumen: PanelRegional.tsx e ImpactoEconomico.tsx se importan
@@ -79,6 +85,7 @@ import {
   Bell,
   Download,
   FileText,
+  FileSpreadsheet,
   AlertTriangle,
   ChevronUp,
   ArrowRight,
@@ -1878,7 +1885,278 @@ const BARRERAS_MUESTRA = [
   },
 ];
 
-export const ALL_BARRERAS = [...BARRERAS_CAFE, ...BARRERAS_TEXTIL, ...BARRERAS_MUESTRA];
+// impactoEstimado -- dato de muestra NUEVO, sin metodología real de costeo
+// por barrera individual todavía (solo el agregado por país en
+// COUNTRY_DATA[pais].costo / ImpactoEconomico.tsx). Se reparte
+// proporcionalmente ese agregado entre las barreras del mismo país,
+// ponderando por severidad, afectación MIPYME y canal de transmisión -- las
+// 3 variables reales ya existentes en cada registro que más se asocian a
+// magnitud económica -- más un desempate determinístico por id (±10%) para
+// que dos barreras del mismo país nunca queden con el mismo valor mostrado
+// aunque coincidan en las 3 categorías (pasa con 2 de Bolivia). Todas las
+// barreras hoy son
+// severidad "Crítico" (no hay variación real de severidad todavía), así que
+// en la práctica la variación viene de MIPYME + canal + el desempate.
+const IMPACTO_SEVERIDAD_PESO: Record<string, number> = { "Crítico": 1.5, "Alto": 1.15, "Mediano": 0.85, "Bajo": 0.6 };
+const IMPACTO_MIPYME_PESO: Record<string, number> = { "Alta": 1.3, "Media": 1.0, "Baja": 0.7 };
+const IMPACTO_CANAL_PESO: Record<string, number> = {
+  "Capital/liquidez": 1.3, "Modelo de negocio": 1.25, "Capacidad técnica": 1.15,
+  "Incumbentes/competencia": 1.1, "Tiempo/incertidumbre": 1.0, "Costo administrativo": 0.85,
+};
+function parseCostoUSD(costo: string): number {
+  return parseFloat(costo.replace(/[^\d.]/g, "")) * 1_000_000;
+}
+function tieBreakPorId(id: string): number {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) % 201;
+  return 0.9 + (h / 201) * 0.2; // [0.90, 1.10] -- ±3% no bastaba para separar el
+  // dígito mostrado en dos barrerras de Bolivia con severidad/MIPYME/canal
+  // idénticos; verificado con las 17 barreras reales que ±10% sí alcanza.
+}
+function attachImpactoEstimado<T extends { id: string; pais: Country; severidad: string; afectacionMipyme: string; canalTransmision: string }>(barreras: T[]): (T & { impactoEstimado: string })[] {
+  const porPais = new Map<Country, T[]>();
+  for (const b of barreras) {
+    if (!porPais.has(b.pais)) porPais.set(b.pais, []);
+    porPais.get(b.pais)!.push(b);
+  }
+  const pesoPorBarrera = new Map<T, number>();
+  for (const b of barreras) {
+    pesoPorBarrera.set(b,
+      IMPACTO_SEVERIDAD_PESO[b.severidad] * IMPACTO_MIPYME_PESO[b.afectacionMipyme] * IMPACTO_CANAL_PESO[b.canalTransmision] * tieBreakPorId(b.id)
+    );
+  }
+  return barreras.map(b => {
+    const grupo = porPais.get(b.pais)!;
+    const totalPais = parseCostoUSD(COUNTRY_DATA[b.pais].costo);
+    const sumaPesos = grupo.reduce((s, g) => s + pesoPorBarrera.get(g)!, 0);
+    const usd = totalPais * pesoPorBarrera.get(b)! / sumaPesos;
+    return { ...b, impactoEstimado: `USD ${(usd / 1_000_000).toFixed(1)}M/año` };
+  });
+}
+
+export const ALL_BARRERAS = attachImpactoEstimado([...BARRERAS_CAFE, ...BARRERAS_TEXTIL, ...BARRERAS_MUESTRA]);
+
+// ─── Filtros compartidos de hallazgos (Reportes / Reporte PDF) ────────────────
+// Único lugar donde vive la lógica de filtrado de ALL_BARRERAS/ALL_TRAMITES
+// para reportes -- ReportesScreen() (vista previa) y ReportePDFScreen() (ficha
+// final) usan EXACTAMENTE esta misma función, para que las dos pantallas nunca
+// puedan desalinearse entre sí (antes ReportePDFScreen ignoraba los filtros y
+// mostraba fichas de muestra fijas sin relación con lo filtrado en Reportes).
+export type FiltrosHallazgos = {
+  pais: Country;
+  sectores: string[];
+  severidades: string[];
+  estadoHitl: string[];
+  fuentes: string[];
+  tipoTramite: string; // solo aplica a trámites; "" = todos
+  coberturaMin: number;
+  idrMin: number;
+};
+
+export const FILTROS_HALLAZGOS_DEFAULT: FiltrosHallazgos = {
+  pais: "Todos", sectores: [], severidades: [], estadoHitl: [], fuentes: [], tipoTramite: "", coberturaMin: 0, idrMin: 0,
+};
+
+function paisesIncluidosPorMinimos(pais: Country, coberturaMin: number, idrMin: number): Exclude<Country, "Todos">[] | null {
+  if (pais !== "Todos") return null;
+  return COUNTRIES.filter(c =>
+    COBERTURA_MUESTRA[c as Exclude<Country, "Todos">] >= coberturaMin &&
+    IRR_GENERAL_MUESTRA[c as Exclude<Country, "Todos">] >= idrMin
+  ) as Exclude<Country, "Todos">[];
+}
+
+export function filtrarBarreras(f: FiltrosHallazgos) {
+  const paisesIncluidos = paisesIncluidosPorMinimos(f.pais, f.coberturaMin, f.idrMin);
+  return ALL_BARRERAS.filter(b => {
+    if (f.pais !== "Todos" && b.pais !== f.pais) return false;
+    if (f.sectores.length > 0 && !f.sectores.includes(b.sector)) return false;
+    if (f.severidades.length > 0 && !f.severidades.includes(b.severidad)) return false;
+    if (f.estadoHitl.length > 0 && !f.estadoHitl.includes(b.validacion?.estadoHitl ?? "")) return false;
+    if (f.fuentes.length > 0 && !f.fuentes.includes(b.fuente)) return false;
+    if (paisesIncluidos && !paisesIncluidos.includes(b.pais as Exclude<Country, "Todos">)) return false;
+    return true;
+  });
+}
+
+export function filtrarTramites(f: FiltrosHallazgos) {
+  const paisesIncluidos = paisesIncluidosPorMinimos(f.pais, f.coberturaMin, f.idrMin);
+  return ALL_TRAMITES.filter(t => {
+    if (f.pais !== "Todos" && t.pais !== f.pais) return false;
+    if (f.sectores.length > 0 && !f.sectores.includes(t.sector)) return false;
+    if (f.tipoTramite && t.tipo !== f.tipoTramite) return false;
+    if (f.estadoHitl.length > 0 && !f.estadoHitl.includes(t.estadoHitl ?? "")) return false;
+    if (f.fuentes.length > 0 && !f.fuentes.includes(t.fuente)) return false;
+    if (paisesIncluidos && !paisesIncluidos.includes(t.pais as Exclude<Country, "Todos">)) return false;
+    return true;
+  });
+}
+
+// ─── Exportación de reportes (PDF / Excel) ─────────────────────────────────────
+// Usado por ReportesScreen() (Excel, sobre previewBarreras/previewTramites) y
+// ReportePDFScreen() (Excel + PDF, sobre los mismos hallazgosBarreras/
+// hallazgosTramites ya filtrados con filtrarBarreras/filtrarTramites) -- nunca
+// se recalcula el filtro acá, solo se recibe el array ya filtrado. Esto sigue
+// funcionando igual el día que haya datos reales: ALL_BARRERAS/ALL_TRAMITES
+// pueden pasar a venir de una API en vez de ser arrays en memoria y esta
+// exportación no cambia, porque solo depende de recibir el array ya filtrado.
+
+// Nombre de archivo seguro: sin acentos, espacios ni caracteres especiales.
+function slugArchivo(s: string): string {
+  return s
+    .normalize("NFD").replace(/[̀-ͯ]/g, "") // quita acentos
+    .replace(/[^a-zA-Z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "") || "todos";
+}
+function fechaSlugHoy(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+// Genera y descarga el .xlsx de hallazgos filtrados -- una hoja, columnas
+// distintas según tipoHallazgo (ver especificación en la tarea de export).
+export async function exportarHallazgosExcel(
+  tipoHallazgo: "distorsion" | "carga",
+  hallazgos: (typeof ALL_BARRERAS[number] | typeof ALL_TRAMITES[number])[],
+  paisLabel: string,
+) {
+  const XLSX = await import("xlsx");
+  const rows = tipoHallazgo === "distorsion"
+    ? (hallazgos as typeof ALL_BARRERAS).map(b => ({
+        "ID hallazgo": b.idHallazgo,
+        "Barrera": b.titulo,
+        "País": b.pais,
+        "Clasificación": b.clasificacion,
+        "Subdimensión": b.subdimension,
+        "Sector": b.sector,
+        "Severidad": b.severidad,
+        "Instrumento": b.instrumento,
+        "Fuente": b.fuente,
+        "Canal de transmisión": b.canalTransmision,
+        "Afectación MIPYME": b.afectacionMipyme,
+        "Acción de mejora (categoría)": b.accionCategoria,
+        "Estado HITL": b.validacion.estadoHitl,
+        "Impacto estimado": b.impactoEstimado,
+      }))
+    : (hallazgos as typeof ALL_TRAMITES).map(t => ({
+        "ID trámite": t.id,
+        "Trámite": t.nombre,
+        "País": t.pais,
+        "Entidad": t.entidad,
+        "Tipo de usuario": t.tipo,
+        "Sector": t.sector,
+        "Severidad": t.severidad,
+        "Fuente": t.fuente,
+        "Canal de transmisión": t.canalTransmision,
+        "Afectación MIPYME": t.afectacionMipyme,
+        "Acción de mejora (categoría)": t.accionCategoria,
+        "Estado HITL": t.estadoHitl,
+        "Costo estimado": t.costo.monetario,
+      }));
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, tipoHallazgo === "distorsion" ? "Distorsión" : "Carga");
+  XLSX.writeFile(wb, `RegLAC_datos_${tipoHallazgo}_${slugArchivo(paisLabel)}_${fechaSlugHoy()}.xlsx`);
+}
+
+// Captura `container` bloque por bloque (cada elemento con className
+// "pdf-block" -- portada, encabezado de instrumento, cada ficha individual)
+// y arma un PDF paginado, sin cortar ningún bloque a la mitad entre páginas
+// cuando cabe completo en una página. Cada ficha ya lleva
+// `pageBreakInside: "avoid"` en su estilo (ver FichaDistorsion/FichaCarga)
+// para que también se respete si algún día se imprime directo desde el
+// navegador en vez de por este camino.
+function hexToRgb(hex: string): [number, number, number] {
+  const clean = hex.replace("#", "");
+  return [parseInt(clean.slice(0, 2), 16), parseInt(clean.slice(2, 4), 16), parseInt(clean.slice(4, 6), 16)];
+}
+
+export async function exportarReportePdf(container: HTMLElement, nombreArchivo: string) {
+  const [html2canvasMod, jsPdfMod] = await Promise.all([import("html2canvas"), import("jspdf")]);
+  const html2canvas = html2canvasMod.default;
+  const { jsPDF } = jsPdfMod;
+
+  const bloques = Array.from(container.querySelectorAll<HTMLElement>(".pdf-block"));
+  const pdf = new jsPDF({ unit: "mm", format: "a4" });
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+
+  // Margen uniforme en las 4 direcciones -- antes se ubicaba cada imagen a
+  // ancho completo de página (0 margen). Mismo valor para portada y fichas.
+  const MARGIN = 15;
+  const contentWidth = pageWidth - MARGIN * 2;
+  const contentBottom = pageHeight - MARGIN;
+  // Espacio vertical entre dos fichas que comparten página (el margin-bottom
+  // que cada ficha tiene en pantalla no se captura -- getBoundingClientRect/
+  // html2canvas miden la caja del bloque sin su margen externo).
+  const GAP_ENTRE_BLOQUES = 5;
+
+  let cursorY = MARGIN;
+  let esPrimerBloque = true;
+
+  for (const bloque of bloques) {
+    const esPortada = esPrimerBloque;
+    const canvas = await html2canvas(bloque, { scale: 1.5, useCORS: true, backgroundColor: "#ffffff" });
+    // JPEG en vez de PNG -- un reporte de 17 fichas en PNG sin comprimir pesa
+    // ~170MB (impracticable para descargar); el contenido es texto/tarjetas
+    // sobre fondo blanco, no fotografía, así que JPEG calidad 0.85 reduce el
+    // peso a un rango normal sin pérdida visible de nitidez del texto.
+    const imgData = canvas.toDataURL("image/jpeg", 0.85);
+
+    let imgWidth = contentWidth;
+    let imgHeight = (canvas.height * imgWidth) / canvas.width;
+    let x = MARGIN;
+
+    if (esPortada) {
+      // Portada: es la tapa del documento, no una tarjeta dentro de la
+      // página -- el fondo (mismo color que la portada real, C.steel4) debe
+      // llegar a los 4 bordes de la hoja. Se pinta un rectángulo a página
+      // completa con ese color y la imagen capturada (que ya trae su propio
+      // padding interno: logo, título, filtros, pie) se apoya encima a
+      // ancho completo, sin el MARGIN que sí aplica a las fichas -- como
+      // ambos son exactamente el mismo azul, no se nota costura entre el
+      // relleno y la imagen aunque esta no llegue a cubrir el 100% del alto.
+      const [r, g, b] = hexToRgb(C.steel4);
+      pdf.setFillColor(r, g, b);
+      pdf.rect(0, 0, pageWidth, pageHeight, "F");
+      let pw = pageWidth;
+      let ph = (canvas.height * pw) / canvas.width;
+      let px = 0;
+      if (ph > pageHeight) {
+        const factor = pageHeight / ph;
+        ph = pageHeight;
+        pw = pw * factor;
+        px = (pageWidth - pw) / 2;
+      }
+      const py = (pageHeight - ph) / 2;
+      pdf.addImage(imgData, "JPEG", px, py, pw, ph);
+      pdf.addPage();
+      cursorY = MARGIN;
+      esPrimerBloque = false;
+      continue;
+    }
+
+    // Ficha (o encabezado de instrumento) más alta que el área con margen de
+    // una página entera: se reduce a escala para que quepa completa en una
+    // sola página en vez de cortarla -- "no cortar una ficha a la mitad" es
+    // la prioridad sobre mantener el ancho completo del margen.
+    const maxHeightUnaPagina = contentBottom - MARGIN;
+    if (imgHeight > maxHeightUnaPagina) {
+      const factor = maxHeightUnaPagina / imgHeight;
+      imgHeight = maxHeightUnaPagina;
+      imgWidth = imgWidth * factor;
+      x = MARGIN + (contentWidth - imgWidth) / 2;
+    }
+
+    if (!esPrimerBloque && cursorY + imgHeight > contentBottom) {
+      pdf.addPage();
+      cursorY = MARGIN;
+    }
+    pdf.addImage(imgData, "JPEG", x, cursorY, imgWidth, imgHeight);
+    cursorY += imgHeight + GAP_ENTRE_BLOQUES;
+    esPrimerBloque = false;
+  }
+
+  pdf.save(`${nombreArchivo}.pdf`);
+}
 
 // ─── Distorsiones de carga ─────────────────────────────────────────────────────
 const IRR_LABELS: Record<number, string> = { 4: "Crítico", 3: "Alto", 2: "Mediano", 1: "Bajo" };
@@ -6370,12 +6648,9 @@ function ReportesScreen({ prefill, onNavigate }: { prefill?: ReportesPrefill; on
       ))
     : FUENTES_TRAZABILIDAD_MUESTRA[pais as Exclude<Country, "Todos">].map(f => f.fuente);
 
-  // Países que cumplen los mínimos de cobertura/IDR — solo aplica exclusión
-  // cuando pais === "Todos"; con un país específico seleccionado, no se
-  // excluye (se avisa en su lugar, ver coberturaPaisOk/idrPaisOk).
-  const paisesIncluidos: Exclude<Country, "Todos">[] | null = pais !== "Todos" ? null :
-    (COUNTRIES.filter((c): c is Exclude<Country, "Todos"> => c !== "Todos"))
-      .filter(c => COBERTURA_MUESTRA[c] >= coberturaMin && IRR_GENERAL_MUESTRA[c] >= idrMin);
+  // Advertencia (no exclusión) cuando hay un país específico seleccionado y
+  // no alcanza el mínimo de cobertura/IDR — la exclusión por país sólo
+  // aplica con pais === "Todos" y vive dentro de filtrarBarreras/filtrarTramites.
   const coberturaPaisOk = pais === "Todos" || COBERTURA_MUESTRA[pais as Exclude<Country, "Todos">] >= coberturaMin;
   const idrPaisOk = pais === "Todos" || IRR_GENERAL_MUESTRA[pais as Exclude<Country, "Todos">] >= idrMin;
 
@@ -6409,22 +6684,15 @@ function ReportesScreen({ prefill, onNavigate }: { prefill?: ReportesPrefill; on
   ];
   const scopeSummary = scopeParts.join(" · ");
 
-  const previewBarreras = ALL_BARRERAS.filter(b => {
-    if (selectedSectors.length > 0 && !selectedSectors.includes(b.sector)) return false;
-    if (selectedSeveridades.length > 0 && !selectedSeveridades.includes(b.severidad)) return false;
-    if (selectedEstadoHitl.length > 0 && !selectedEstadoHitl.includes(b.validacion?.estadoHitl ?? "")) return false;
-    if (selectedFuentes.length > 0 && !selectedFuentes.includes(b.fuente)) return false;
-    if (paisesIncluidos && !paisesIncluidos.includes(b.pais as Exclude<Country, "Todos">)) return false;
-    return true;
-  });
-  const previewTramites = ALL_TRAMITES.filter(t => {
-    if (selectedSectors.length > 0 && !selectedSectors.includes(t.sector)) return false;
-    if (tipoTramite && t.tipo !== tipoTramite) return false;
-    if (selectedEstadoHitl.length > 0 && !selectedEstadoHitl.includes(t.estadoHitl ?? "")) return false;
-    if (selectedFuentes.length > 0 && !selectedFuentes.includes(t.fuente)) return false;
-    if (paisesIncluidos && !paisesIncluidos.includes(t.pais as Exclude<Country, "Todos">)) return false;
-    return true;
-  });
+  // Único punto de armado de filtros -- lo mismo que se manda por `context`
+  // a ReportePDFScreen (ver botón "Generar reporte" más abajo), para que la
+  // vista previa de acá y la ficha final nunca puedan desalinearse.
+  const filtrosActivos: FiltrosHallazgos = {
+    pais, sectores: selectedSectors, severidades: selectedSeveridades,
+    estadoHitl: selectedEstadoHitl, fuentes: selectedFuentes, tipoTramite, coberturaMin, idrMin,
+  };
+  const previewBarreras = filtrarBarreras(filtrosActivos);
+  const previewTramites = filtrarTramites(filtrosActivos);
   const previewItems = tipoHallazgo === "distorsion" ? previewBarreras : previewTramites;
 
   // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -6786,12 +7054,45 @@ function ReportesScreen({ prefill, onNavigate }: { prefill?: ReportesPrefill; on
               <p className="text-[12px] leading-snug" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text }}>{scopeSummary}</p>
             </div>
 
+            {/* Descargar -- Excel (.xlsx) con los mismos previewBarreras/
+               previewTramites ya filtrados de arriba. No incluye PDF acá: el
+               PDF paginado requiere las fichas ya renderizadas de
+               ReportePDFScreen, no la vista previa de esta pantalla. */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className="w-full py-2.5 mb-2 rounded-lg text-[12px] font-medium tracking-wide uppercase flex items-center justify-center gap-2"
+                  style={{ backgroundColor: C.canvas, color: previewItems.length > 0 ? C.text : C.textMuted, border: `1.5px solid ${C.border}`, fontFamily: "Space Grotesk, sans-serif", cursor: previewItems.length > 0 ? "pointer" : "not-allowed", opacity: previewItems.length > 0 ? 1 : 0.55 }}
+                  disabled={previewItems.length === 0}>
+                  <Download size={14} /> Descargar <ChevronDown size={12} />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="center" className="min-w-[190px]">
+                <DropdownMenuItem
+                  className="flex items-center gap-2 text-[12px] cursor-pointer"
+                  onSelect={() => exportarHallazgosExcel(tipoHallazgo, previewItems, paisLabel)}>
+                  <FileSpreadsheet size={14} /> Excel (.xlsx)
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
             <button
               className="w-full py-3 rounded-lg text-[13px] font-semibold tracking-wide uppercase transition-opacity flex items-center justify-center gap-2"
               style={{ backgroundColor: (previewItems.length > 0 && (periodoTipo !== "personalizado" || customRangeOk)) ? C.steel4 : C.border, color: (previewItems.length > 0 && (periodoTipo !== "personalizado" || customRangeOk)) ? "white" : C.textMuted, fontFamily: "Space Grotesk, sans-serif", border: "none" }}
               disabled={previewItems.length === 0 || (periodoTipo === "personalizado" && !customRangeOk)}
               onClick={() => {
-                const ctx = JSON.stringify({ pais: paisLabel, sectores: sectoresLabel, entidad: entidadLabel, periodo: periodoLabel, tipo: tipoHallazgo, fecha: new Date().toLocaleString("es-BO") });
+                const ctx = JSON.stringify({
+                  tipo: tipoHallazgo,
+                  // Objeto de filtros REAL, exactamente el mismo que ya calculó
+                  // previewBarreras/previewTramites acá arriba -- ReportePDFScreen
+                  // lo vuelve a pasar por filtrarBarreras/filtrarTramites tal cual,
+                  // sin reconstruir la lógica de filtrado por su lado.
+                  filtrosActivos,
+                  // Campos solo de presentación (portada / chips), no se usan para filtrar.
+                  paisLabel, sectoresLabel, entidad: entidadLabel, periodo: periodoLabel,
+                  filtros: scopeParts.slice(1),
+                  fecha: new Date().toLocaleString("es-BO"),
+                });
                 onNavigate({ screen: "reporte-pdf", context: ctx });
               }}>
               <Download size={15} />
@@ -6814,7 +7115,7 @@ function ReporteEstrategicoScreen({ pais: rawPais, onNavigate }: {
   const isRegional = !VALID.includes(rawPais as Country);
   const paisLabel = isRegional ? "Regional (5 países)" : pais;
   const paisCode  = isRegional ? "REG" : pais.slice(0, 3).toUpperCase();
-  const codigo    = `ALEPH-${paisCode}-EST-2026-001`;
+  const codigo    = `RegLAC-${paisCode}-EST-2026-001`;
 
   const cd      = COUNTRY_BARRERAS_DATA[pais] ?? COUNTRY_BARRERAS_DATA["Bolivia"];
   const cargaCd = COUNTRY_CARGA[pais] ?? { total: 397, criticas: 52 };
@@ -6957,13 +7258,7 @@ function ReporteEstrategicoScreen({ pais: rawPais, onNavigate }: {
         {/* ── PORTADA ── */}
         <div className="px-10 md:px-16 py-14 md:py-16 flex flex-col" style={{ backgroundColor: C.steel4, minHeight: 520 }}>
           <div className="flex items-center gap-4 mb-auto">
-            <svg width="34" height="34" viewBox="0 0 48 48" fill="none">
-              <circle cx="24" cy="24" r="22" stroke={C.steel1} strokeWidth="2"/>
-              <circle cx="24" cy="24" r="14" stroke={C.steel2} strokeWidth="1.5"/>
-              <circle cx="24" cy="24" r="6"  stroke="#FAFBFC"  strokeWidth="1"/>
-              <circle cx="24" cy="24" r="3"  fill={C.steel1}/>
-            </svg>
-            <span className="text-[22px] tracking-[4px]" style={{ fontFamily: "Space Grotesk, sans-serif", fontWeight: 500, color: "white" }}>ALEPH</span>
+            <span className="text-[22px] tracking-[4px]" style={{ fontFamily: "Space Grotesk, sans-serif", fontWeight: 500, color: "white" }}>RegLAC</span>
           </div>
 
           <div className="mt-16">
@@ -6988,7 +7283,7 @@ function ReporteEstrategicoScreen({ pais: rawPais, onNavigate }: {
             </div>
             <div className="pt-6" style={{ borderTop: "1px solid rgba(255,255,255,0.1)" }}>
               <p className="text-[11px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: "rgba(255,255,255,0.3)" }}>
-                Banco Interamericano de Desarrollo · Plataforma ALEPH · © 2026
+                Banco Interamericano de Desarrollo · Plataforma RegLAC · © 2026
               </p>
             </div>
           </div>
@@ -7188,7 +7483,7 @@ function ReporteEstrategicoScreen({ pais: rawPais, onNavigate }: {
           {/* Footer */}
           <div className="mt-12 pt-6 text-center" style={{ borderTop: `1px solid ${C.border}` }}>
             <p className="text-[10px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>
-              Banco Interamericano de Desarrollo · Plataforma ALEPH · Datos simulados · © 2026
+              Banco Interamericano de Desarrollo · Plataforma RegLAC · Datos simulados · © 2026
             </p>
           </div>
         </div>
@@ -7199,6 +7494,23 @@ function ReporteEstrategicoScreen({ pais: rawPais, onNavigate }: {
 
 // ─── Reporte PDF ───────────────────────────────────────────────────────────────
 function ReportePDFScreen({ context, onNavigate }: { context?: string; onNavigate: (v: View) => void }) {
+  // ── Notas manuales del revisor (Comentarios / Uso permitido) ────────────────
+  // Declarado ANTES del early return de abajo (regla de los Hooks: mismo
+  // orden de llamada en todos los renders, incluso si este screen alterna
+  // entre "estrategico" y un reporte operativo sin desmontarse). Estado local
+  // del componente -- no persiste al cerrar el reporte (punto 3, no
+  // obligatorio para esta tarea; ver aviso pendiente).
+  const [notas, setNotas] = useState<Record<string, { comentario: string; usoPermitido: string }>>({});
+  const getNota = (id: string) => notas[id] ?? { comentario: "", usoPermitido: "" };
+  const setNotaCampo = (id: string, campo: "comentario" | "usoPermitido", valor: string) =>
+    setNotas(prev => ({ ...prev, [id]: { ...getNota(id), [campo]: valor } }));
+
+  // Ref al contenedor "Paper" (portada + fichas) para exportarReportePdf(), y
+  // estado de "descargando" para feedback en el botón mientras html2canvas/
+  // jsPDF procesan (misma razón que notas: antes del early return).
+  const paperRef = useRef<HTMLDivElement>(null);
+  const [descargando, setDescargando] = useState<"pdf" | "excel" | null>(null);
+
   // Detect strategic report type from JSON context (Panorama → Exportar PDF)
   const ctx = (() => { try { return JSON.parse(context ?? "{}"); } catch { return {}; } })();
   if (ctx.tipo === "estrategico") {
@@ -7206,84 +7518,47 @@ function ReportePDFScreen({ context, onNavigate }: { context?: string; onNavigat
   }
 
   // ── Context parsing ──────────────────────────────────────────────────────────
+  // filtrosActivos viene de ReportesScreen() tal cual -- ver su botón
+  // "Generar reporte" -- y se vuelve a pasar por filtrarBarreras/filtrarTramites
+  // (el mismo filtro compartido, no una copia). Entradas legacy que no mandan
+  // JSON (context: tramite.sector / d.tipoCarga / exportCtx desde otras
+  // pantallas) caen al fallback: país Bolivia, sin más filtros -- mismo
+  // comportamiento que tenían antes de esta tarea.
   const tipoHallazgo: "distorsion" | "carga" = ctx.tipo === "carga" ? "carga" : "distorsion";
-  const paisRaw: string = ctx.pais ?? "Bolivia";
-  const pais: Country = (["Argentina","Bolivia","Chile","Ecuador","Perú"].includes(paisRaw)) ? paisRaw as Country : "Bolivia";
-  const sectorActivo: string = ctx.sectores ?? ctx.sector ?? (tipoHallazgo === "carga" ? "Todos los sectores" : "Agroindustria Cafetalera");
-  const filtros: string[] = Array.isArray(ctx.filtros) ? ctx.filtros.filter((f: string) => !!f) : [];
+  const filtrosActivos: FiltrosHallazgos = (ctx.filtrosActivos && typeof ctx.filtrosActivos === "object")
+    ? { ...FILTROS_HALLAZGOS_DEFAULT, ...ctx.filtrosActivos }
+    : { ...FILTROS_HALLAZGOS_DEFAULT, pais: (["Argentina", "Bolivia", "Chile", "Ecuador", "Perú"].includes(ctx.pais) ? ctx.pais : "Bolivia") as Country };
+  const pais: Country = filtrosActivos.pais;
+  const paisLabel: string = ctx.paisLabel ?? (pais === "Todos" ? "Todos los países" : pais);
+  const sectorActivo: string = ctx.sectoresLabel ?? ctx.sector ?? "Todos los sectores";
+  const filtrosChips: string[] = Array.isArray(ctx.filtros) ? ctx.filtros.filter((f: string) => !!f) : [];
   const periodo: string = ctx.periodo ?? "enero 2015 – marzo 2026";
   const fechaCtx: string = typeof ctx.fecha === "string" ? ctx.fecha.split(",")[0] : "Marzo 2026";
-  const paisCode = pais.slice(0, 3).toUpperCase();
-  const codigo = `ALEPH-${paisCode}-OP-2026-001`;
+  const paisCode = pais === "Todos" ? "REG" : pais.slice(0, 3).toUpperCase();
+  const codigo = `RegLAC-${paisCode}-OP-2026-001`;
 
-  // ── Hallazgos de muestra ─────────────────────────────────────────────────────
-  // Valid eje→subdim: Entrada→Comercio|Competencia|Inversión; Operación→Competencia|Innovación|Inversión
-  // Valid tipoCarga→subdim per SUBDIMS_BY_TIPO_CARGA catalog
-  const DIST = [
-    {
-      id: "BARRE-2026-001", titulo: "Restricción de Operadores de Maquila",
-      sector: "Agroindustria Cafetalera", eje: "Entrada", subdimension: "Comercio",
-      entidad: "SENAVEX", instrumento: "Decreto PCM-027-2022, Art. 8",
-      textoNormativo: "Solo podrán operar como operadores de maquila en exportación cafetalera las empresas debidamente registradas con un mínimo de cinco años de operación continua y capital suscrito no inferior al monto establecido por resolución ministerial vigente.",
-      pasaje: "un mínimo de cinco años de operación continua",
-      tipoRestriccion: "Licencia", sujetos: "Empresas exportadoras · Cooperativas cafetaleras",
-      descripcion: "La norma restringe el acceso al mercado de maquila a operadores con antigüedad mínima de cinco años, excluyendo efectivamente a nuevas empresas y cooperativas. Dicha exigencia carece de sustento técnico demostrable y no tiene equivalente en marcos regulatorios regionales comparables.",
-      impacto: "USD 4.1M/año", canal: "Barrera de entrada a PYMEs",
-      accion: "Eliminar", descripcionAccion: "Suprimir el requisito de antigüedad mínima de cinco años y reemplazarlo por un sistema de habilitación basado en capacidad técnica verificable y cumplimiento de estándares fitosanitarios vigentes.",
-      severidad: "Crítico",
-    },
-    {
-      id: "BARRE-2026-002", titulo: "Capital Mínimo Desproporcionado para Intermediación Financiera",
-      sector: "Servicios Financieros y de Seguros", eje: "Entrada", subdimension: "Inversión",
-      entidad: "ASFI", instrumento: "Ley del Sistema Financiero, Art. 12",
-      textoNormativo: "Las entidades de intermediación financiera no bancaria deberán acreditar un capital mínimo integrado no inferior a cuatro millones de bolivianos antes de iniciar operaciones, debidamente certificado por auditor externo inscrito en el registro de la ASFI.",
-      pasaje: "cuatro millones de bolivianos antes de iniciar operaciones",
-      tipoRestriccion: "Capital mínimo", sujetos: "Cooperativas financieras · Entidades microfinancistas · Nuevos entrantes fintech",
-      descripcion: "El umbral de capital mínimo cuadruplica el promedio regional para entidades de intermediación no bancaria equivalentes, favoreciendo a operadores establecidos en detrimento de nuevos modelos de negocio y cooperativas de menor escala.",
-      impacto: "USD 3.5M/año", canal: "Capital productivo paralizado",
-      accion: "Proporcionalizar", descripcionAccion: "Establecer una escala de capital mínimo diferenciada por tipo y volumen de operación, alineada con el promedio regional, con revisión bienal por parte de ASFI.",
-      severidad: "Crítico",
-    },
-    {
-      id: "BARRE-2026-003", titulo: "Registros Superpuestos entre Entidades Supervisoras",
-      sector: "Servicios Financieros y de Seguros", eje: "Operación", subdimension: "Competencia",
-      entidad: "ASFI", instrumento: "Res. IICA 2021-88, Art. 4",
-      textoNormativo: "Toda entidad financiada con recursos externos cuyo monto supere el equivalente de cincuenta mil dólares deberá obtener registro independiente ante cada entidad fiscalizadora competente, sin que el registro en una de ellas exonere de la obligación ante las demás.",
-      pasaje: "sin que el registro en una de ellas exonere de la obligación ante las demás",
-      tipoRestriccion: "Autorización previa", sujetos: "Entidades financieras · Cooperativas con fondos externos",
-      descripcion: "La ausencia de reconocimiento mutuo entre organismos supervisores obliga a mantener expedientes paralelos ante cada fiscalizador, duplicando costos administrativos y generando inconsistencias que elevan el riesgo regulatorio percibido.",
-      impacto: "USD 3.2M/año", canal: "Costo de oportunidad",
-      accion: "Armonizar", descripcionAccion: "Establecer un protocolo de intercambio de información entre ASFI, BCB y entidades supervisoras para reconocimiento mutuo automático de registros, sin reducir el alcance de la supervisión.",
-      severidad: "Crítico",
-    },
-  ] as const;
+  // ── Hallazgos reales, filtrados con la MISMA función que usa la vista
+  // previa de ReportesScreen (filtrarBarreras/filtrarTramites) ────────────────
+  const hallazgosBarreras = filtrarBarreras(filtrosActivos);
+  const hallazgosTramites = filtrarTramites(filtrosActivos);
+  const hallazgos = tipoHallazgo === "carga" ? hallazgosTramites : hallazgosBarreras;
+  // Vocabulario de severidad distinto por tipo: barreras usa "Crítico"
+  // (masc., escala de 4 niveles), trámites usa "Crítica" (fem., escala de 2
+  // niveles) -- mismo criterio ya establecido en TramiteSeveridadBadge/
+  // TRAMITE_SEVERIDAD_COLOR más arriba, no una inconsistencia nueva.
+  const criticos = hallazgos.filter(h => h.severidad === (tipoHallazgo === "carga" ? "Crítica" : "Crítico")).length;
+  const hallazgosLabel = ctx.registros ?? `${hallazgos.length} hallazgo${hallazgos.length !== 1 ? "s" : ""} · ${criticos} crítico${criticos !== 1 ? "s" : ""}`;
 
-  const CARGA = [
-    {
-      id: "CARGA-2026-001", titulo: "Licencia de Operación con Requisitos Físicos Duplicados",
-      sector: "Agroindustria Cafetalera", tipoCarga: "Accesibilidad", subdimension: "Digitalización y accesibilidad",
-      entidad: "SENAVEX", fuente: "Res. Min. Comercio 2022-14", tipoTramite: "Licencia", usuarioAfectado: "Empresarial",
-      requisitos: ["Formulario físico en original y copia", "Certificado de registro mercantil vigente", "Declaración jurada notariada", "Visita de inspección presencial", "Pago de tasa municipal en efectivo"],
-      descripcion: "El trámite exige presencia física en tres dependencias distintas con documentos originales en cada visita. No existe interoperabilidad entre los sistemas de SENAVEX, la alcaldía y el registro mercantil, obligando al operador a presentar los mismos documentos de forma independiente ante cada entidad.",
-      costoEstimado: "USD 4.2M/año",
-      accion: "Digitalizar", descripcionAccion: "Implementar ventanilla única digital que integre los sistemas de SENAVEX, alcaldía y registro mercantil con validación cruzada automática, eliminando la obligatoriedad de presencia física en cada dependencia.",
-      severidad: "Crítico",
-    },
-    {
-      id: "CARGA-2026-002", titulo: "Declaración Semanal con Información Redundante",
-      sector: "Textil y Confección", tipoCarga: "Certidumbre", subdimension: "Discrecionalidad administrativa",
-      entidad: "Min. de Desarrollo Productivo", fuente: "Res. MEM-0012-2021, Art. 5", tipoTramite: "Declaración", usuarioAfectado: "Empresarial",
-      requisitos: ["Declaración jurada semanal en formulario físico", "Firma notarial de representante legal", "Comprobante de pago de aportes del período", "Copia de contratos de trabajo vigentes"],
-      descripcion: "La norma exige una declaración semanal cuyo contenido replica en un 90% la información ya reportada mensualmente mediante facturación electrónica. La decisión sobre equivalencia de documentos queda a discreción del inspector sin criterios objetivos publicados.",
-      costoEstimado: "USD 2.1M/año",
-      accion: "Simplificar", descripcionAccion: "Sustituir la declaración semanal por una referencia automática al sistema de facturación electrónica, con criterios objetivos de cumplimiento auditables que eliminen la discrecionalidad del inspector.",
-      severidad: "Alto",
-    },
-  ] as const;
-
-  const hallazgos = tipoHallazgo === "carga" ? CARGA : DIST;
-  const criticos = hallazgos.filter(h => h.severidad === "Crítico").length;
-  const hallazgosLabel = ctx.registros ?? `${hallazgos.length} hallazgos · ${criticos} crítico${criticos !== 1 ? "s" : ""} del sector`;
+  // Agrupación por instrumento regulatorio (punto 4) -- solo aplica a
+  // distorsión: ALL_TRAMITES no tiene un campo `instrumento` equivalente, así
+  // que las fichas de carga se listan siempre planas, sin agrupar.
+  const gruposInstrumento: [string, typeof hallazgosBarreras][] | null = tipoHallazgo === "distorsion"
+    ? Array.from(hallazgosBarreras.reduce((map, b) => {
+        if (!map.has(b.instrumento)) map.set(b.instrumento, []);
+        map.get(b.instrumento)!.push(b);
+        return map;
+      }, new Map<string, typeof hallazgosBarreras>()))
+    : null;
 
   // ── Sub-components ───────────────────────────────────────────────────────────
   const SevBadge = ({ nivel }: { nivel: string }) => {
@@ -7332,6 +7607,9 @@ function ReportePDFScreen({ context, onNavigate }: { context?: string; onNavigat
     );
   };
 
+  // Impacto económico estimado -- solo barreras (impactoEstimado, ver
+  // attachImpactoEstimado más arriba en el archivo); los trámites ya tienen
+  // su propio costo real por trámite (h.costo) mostrado aparte en FichaCarga.
   const ImpactBox = ({ monto, canal }: { monto: string; canal: string }) => (
     <div className="rounded-lg p-4" style={{ backgroundColor: C.critico + "07", border: `1px solid ${C.critico}22` }}>
       <div className="flex items-start justify-between gap-2 mb-1">
@@ -7342,7 +7620,7 @@ function ReportePDFScreen({ context, onNavigate }: { context?: string; onNavigat
         </span>
       </div>
       <p className="text-[22px] font-semibold" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.steel4 }}>{monto}</p>
-      <p className="text-[10px] mt-0.5" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>simulado · modelo SCM</p>
+      <p className="text-[10px] mt-0.5" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>simulado · reparto proporcional del costo agregado del país</p>
     </div>
   );
 
@@ -7356,8 +7634,34 @@ function ReportePDFScreen({ context, onNavigate }: { context?: string; onNavigat
     </div>
   );
 
-  const FichaDistorsion = ({ h, num }: { h: typeof DIST[number]; num: number }) => (
-    <div className="mb-10">
+  // Comentarios / Uso permitido -- nota manual del revisor, no datos (punto 3).
+  const NotasBox = ({ id }: { id: string }) => {
+    const nota = getNota(id);
+    return (
+      <div className="rounded-lg p-4" style={{ backgroundColor: C.canvas, border: `1px dashed ${C.border}` }}>
+        <p className="text-[10px] uppercase tracking-widest font-semibold mb-3" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Notas del revisor</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <p className="text-[10px] uppercase tracking-wide mb-1" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Comentarios</p>
+            <textarea value={nota.comentario} onChange={e => setNotaCampo(id, "comentario", e.target.value)}
+              placeholder="Agregar comentario…" rows={3}
+              className="w-full rounded-lg px-3 py-2 text-[12px] outline-none resize-none"
+              style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text, backgroundColor: "white", border: `1px solid ${C.border}` }} />
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-wide mb-1" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Uso permitido</p>
+            <textarea value={nota.usoPermitido} onChange={e => setNotaCampo(id, "usoPermitido", e.target.value)}
+              placeholder="Especificar uso permitido…" rows={3}
+              className="w-full rounded-lg px-3 py-2 text-[12px] outline-none resize-none"
+              style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text, backgroundColor: "white", border: `1px solid ${C.border}` }} />
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const FichaDistorsion = ({ h, num }: { h: typeof ALL_BARRERAS[number]; num: number }) => (
+    <div className="pdf-block mb-10" style={{ pageBreakInside: "avoid" }}>
       <p className="text-[10px] font-bold uppercase tracking-[2px] mb-0.5" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Ficha {num} · Distorsión</p>
       <h3 className="text-[16px] font-semibold leading-tight mb-3" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>{h.titulo}</h3>
       <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${C.border}` }}>
@@ -7369,20 +7673,22 @@ function ReportePDFScreen({ context, onNavigate }: { context?: string; onNavigat
         </div>
         <div className="p-5 md:p-6 flex flex-col gap-5" style={{ backgroundColor: "white" }}>
           <Field2Col fields={[
-            { label: "ID hallazgo",          val: h.id },
-            { label: "Norma",                val: h.instrumento },
-            { label: "País",                 val: pais },
-            { label: "Tipo de hallazgo",     val: "Distorsión regulatoria" },
-            { label: "Sector",               val: h.sector },
-            { label: "Eje",                  val: h.eje },
-            { label: "Entidad que emite",    val: h.entidad },
-            { label: "Subdimensión",         val: h.subdimension },
+            { label: "ID hallazgo",            val: h.idHallazgo },
+            { label: "Fuente",                 val: h.fuente },
+            { label: "País",                   val: h.pais },
+            { label: "Norma",                  val: h.instrumento },
+            { label: "Sector",                 val: h.sector },
+            { label: "Clasificación",          val: `${h.clasificacion} · ${h.subdimension}` },
+            { label: "Entidad que emite",      val: h.entidad },
+            { label: "Canal de transmisión",   val: h.canalTransmision },
+            { label: "Afectación MIPYME",      val: h.afectacionMipyme },
+            { label: "Proporcionalidad",       val: h.accionSugerida.objetivoLegitimo },
+            { label: "Estado HITL",            val: h.validacion.estadoHitl },
           ]} />
-          <CiteBox text={h.textoNormativo} pasaje={h.pasaje} fuente={h.instrumento} />
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <CiteBox text={h.textNormativo} pasaje={h.pasajeResaltado} fuente={h.instrumento} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {[
               { label: "Tipo de restricción",      val: <>{h.tipoRestriccion}</> },
-              { label: "Sujeto(s) afectado(s)",    val: <>{h.sujetos}</> },
               { label: "Descripción del hallazgo", val: <>{h.descripcion}</> },
             ].map(({ label, val }) => (
               <div key={label}>
@@ -7391,58 +7697,65 @@ function ReportePDFScreen({ context, onNavigate }: { context?: string; onNavigat
               </div>
             ))}
           </div>
-          <ImpactBox monto={h.impacto} canal={h.canal} />
-          <AMRBox accion={h.accion} desc={h.descripcionAccion} />
+          <ImpactBox monto={h.impactoEstimado} canal={h.canalTransmision} />
+          <AMRBox accion={h.accionCategoria} desc={h.accionSugerida.accion} />
+          <NotasBox id={h.id} />
         </div>
       </div>
     </div>
   );
 
-  const FichaCarga = ({ h, num }: { h: typeof CARGA[number]; num: number }) => (
-    <div className="mb-10">
+  const FichaCarga = ({ h, num }: { h: typeof ALL_TRAMITES[number]; num: number }) => (
+    <div className="pdf-block mb-10" style={{ pageBreakInside: "avoid" }}>
       <p className="text-[10px] font-bold uppercase tracking-[2px] mb-0.5" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Ficha {num} · Carga</p>
-      <h3 className="text-[16px] font-semibold leading-tight mb-3" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>{h.titulo}</h3>
+      <h3 className="text-[16px] font-semibold leading-tight mb-3" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>{h.nombre}</h3>
       <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${C.border}` }}>
         {/* Top stripe */}
         <div className="px-5 py-3 flex items-center justify-between gap-3" style={{ backgroundColor: C.steel3 }}>
           <span className="text-[11px] font-medium text-white flex-shrink-0" style={{ fontFamily: "Space Grotesk, sans-serif" }}>Carga regulatoria</span>
-          <SevBadge nivel={h.severidad} />
+          <TramiteSeveridadBadge level={h.severidad} />
           <span className="text-[11px] flex-shrink-0 text-right" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: "rgba(255,255,255,0.65)" }}>{h.entidad}</span>
         </div>
         <div className="p-5 md:p-6 flex flex-col gap-5" style={{ backgroundColor: "white" }}>
           <Field2Col fields={[
-            { label: "ID hallazgo",                val: h.id },
-            { label: "Fuente oficial",             val: <span style={{ color: C.steel3, textDecoration: "underline", cursor: "pointer" }}>Ver trámite ↗</span> },
-            { label: "País",                       val: pais },
-            { label: "Tipo de trámite",            val: h.tipoTramite },
-            { label: "Sector",                     val: h.sector },
-            { label: "Usuario afectado",           val: h.usuarioAfectado },
-            { label: "Entidad que gestiona",       val: h.entidad },
-            { label: "Clasificación del hallazgo", val: `${h.tipoCarga} · ${h.subdimension}` },
+            { label: "ID hallazgo",              val: h.id },
+            { label: "Fuente",                   val: h.fuente },
+            { label: "País",                     val: h.pais },
+            { label: "Etapa",                    val: h.etapa },
+            { label: "Sector",                   val: h.sector },
+            { label: "Usuario afectado",         val: h.tipo },
+            { label: "Entidad que gestiona",     val: h.entidad },
+            { label: "Clasificación",            val: `${h.tipoCarga} · ${h.subdimension}` },
+            { label: "Canal de transmisión",     val: h.canalTransmision },
+            { label: "Afectación MIPYME",        val: h.afectacionMipyme },
+            { label: "Cita",                     val: "—" },
+            { label: "Proporcionalidad",         val: "—" },
+            { label: "Estado HITL",              val: h.estadoHitl },
           ]} />
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
-              <p className="text-[10px] uppercase tracking-widest mb-2 font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Requisitos principales</p>
+              <p className="text-[10px] uppercase tracking-widest mb-2 font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Pasos del trámite</p>
               <ul className="flex flex-col gap-1.5">
-                {h.requisitos.map((r, i) => (
-                  <li key={i} className="flex items-start gap-2 text-[11px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text }}>
-                    <span className="flex-shrink-0 w-1 h-1 rounded-full mt-1.5" style={{ backgroundColor: C.steel3, marginTop: 7 }} />
-                    {r}
+                {h.pasos.map((p) => (
+                  <li key={p.id} className="flex items-start gap-2 text-[11px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: p.friccion ? C.critico : C.text }}>
+                    <span className="flex-shrink-0 w-1 h-1 rounded-full mt-1.5" style={{ backgroundColor: p.friccion ? C.critico : C.steel3, marginTop: 7 }} />
+                    <span>{p.nombre} <span style={{ color: C.textMuted }}>· {p.tiempo} · {p.costo}</span></span>
                   </li>
                 ))}
               </ul>
             </div>
             <div>
               <p className="text-[10px] uppercase tracking-widest mb-1 font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Descripción del hallazgo</p>
-              <p className="text-[12px] leading-snug" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text }}>{h.descripcion}</p>
+              <p className="text-[12px] leading-snug" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text }}>{h.diagnostico}</p>
             </div>
             <div>
               <p className="text-[10px] uppercase tracking-widest mb-1 font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Costo monetario estimado (SCM)</p>
-              <p className="text-[20px] font-semibold leading-none mb-1" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.steel4 }}>{h.costoEstimado}</p>
-              <p className="text-[10px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>simulado · modelo SCM</p>
+              <p className="text-[20px] font-semibold leading-none mb-1" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.steel4 }}>{h.costo.monetario}</p>
+              <p className="text-[10px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{h.costo.cargaTotal} · simulado · modelo SCM</p>
             </div>
           </div>
-          <AMRBox accion={h.accion} desc={h.descripcionAccion} />
+          <AMRBox accion={h.accionCategoria} desc={h.accionSugerida} />
+          <NotasBox id={h.id} />
         </div>
       </div>
     </div>
@@ -7460,26 +7773,52 @@ function ReportePDFScreen({ context, onNavigate }: { context?: string; onNavigat
         </button>
         <div className="flex items-center gap-3">
           <span className="text-[11px] hidden sm:inline" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>Reporte Operativo · Datos simulados</span>
-          <button className="flex items-center gap-2 px-4 py-2 rounded-lg text-[12px] font-semibold"
-            style={{ backgroundColor: C.steel4, color: "white", fontFamily: "Space Grotesk, sans-serif", border: "none", cursor: "pointer" }}>
-            <Download size={13} /> Descargar PDF
-          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="flex items-center gap-2 px-4 py-2 rounded-lg text-[12px] font-semibold"
+                disabled={hallazgos.length === 0 || descargando !== null}
+                style={{ backgroundColor: C.steel4, color: "white", fontFamily: "Space Grotesk, sans-serif", border: "none", cursor: (hallazgos.length === 0 || descargando !== null) ? "not-allowed" : "pointer", opacity: (hallazgos.length === 0 || descargando !== null) ? 0.6 : 1 }}>
+                <Download size={13} /> {descargando ? "Generando…" : "Descargar"} <ChevronDown size={12} />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-[190px]">
+              <DropdownMenuItem
+                className="flex items-center gap-2 text-[12px] cursor-pointer"
+                onSelect={async () => {
+                  if (!paperRef.current) return;
+                  setDescargando("pdf");
+                  try {
+                    await exportarReportePdf(paperRef.current, `RegLAC_reporte_operativo_${slugArchivo(paisLabel)}_${fechaSlugHoy()}`);
+                  } finally {
+                    setDescargando(null);
+                  }
+                }}>
+                <FileText size={14} /> PDF
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="flex items-center gap-2 text-[12px] cursor-pointer"
+                onSelect={async () => {
+                  setDescargando("excel");
+                  try {
+                    await exportarHallazgosExcel(tipoHallazgo, hallazgos, paisLabel);
+                  } finally {
+                    setDescargando(null);
+                  }
+                }}>
+                <FileSpreadsheet size={14} /> Excel (.xlsx)
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
       {/* Paper */}
-      <div className="max-w-[820px] mx-auto my-4 md:my-8 shadow-xl rounded-xl overflow-hidden">
+      <div ref={paperRef} className="max-w-[820px] mx-auto my-4 md:my-8 shadow-xl rounded-xl overflow-hidden">
 
         {/* ── PORTADA ── */}
-        <div className="px-10 md:px-16 py-14 md:py-16 flex flex-col" style={{ backgroundColor: C.steel4, minHeight: 460 }}>
+        <div className="pdf-block px-10 md:px-16 py-14 md:py-16 flex flex-col" style={{ backgroundColor: C.steel4, minHeight: 460, pageBreakInside: "avoid" }}>
           <div className="flex items-center gap-4 mb-auto">
-            <svg width="34" height="34" viewBox="0 0 48 48" fill="none">
-              <circle cx="24" cy="24" r="22" stroke={C.steel1} strokeWidth="2"/>
-              <circle cx="24" cy="24" r="14" stroke={C.steel2} strokeWidth="1.5"/>
-              <circle cx="24" cy="24" r="6"  stroke="#FAFBFC"  strokeWidth="1"/>
-              <circle cx="24" cy="24" r="3"  fill={C.steel1}/>
-            </svg>
-            <span className="text-[22px] tracking-[4px]" style={{ fontFamily: "Space Grotesk, sans-serif", fontWeight: 500, color: "white" }}>ALEPH</span>
+            <span className="text-[22px] tracking-[4px]" style={{ fontFamily: "Space Grotesk, sans-serif", fontWeight: 500, color: "white" }}>RegLAC</span>
           </div>
 
           <div className="mt-14">
@@ -7507,12 +7846,12 @@ function ReportePDFScreen({ context, onNavigate }: { context?: string; onNavigat
               ))}
             </div>
 
-            {filtros.length > 0 && (
+            {filtrosChips.length > 0 && (
               <div className="mb-6">
                 <p className="text-[10px] uppercase tracking-wider mb-2" style={{ fontFamily: "Space Grotesk, sans-serif", color: "rgba(255,255,255,0.36)" }}>Filtros aplicados</p>
                 <div className="flex flex-wrap gap-2">
-                  {filtros.map((f, i) => (
-                    <span key={i} className="px-3 py-1 rounded-full text-[11px] font-medium"
+                  {filtrosChips.map((f, i) => (
+                    <span key={i} className="inline-flex items-center px-3 py-1 rounded-full text-[11px] font-medium"
                       style={{ backgroundColor: "rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.85)", fontFamily: "IBM Plex Sans, sans-serif", border: "1px solid rgba(255,255,255,0.2)" }}>
                       {f}
                     </span>
@@ -7523,7 +7862,7 @@ function ReportePDFScreen({ context, onNavigate }: { context?: string; onNavigat
 
             <div className="pt-6" style={{ borderTop: "1px solid rgba(255,255,255,0.1)" }}>
               <p className="text-[11px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: "rgba(255,255,255,0.3)" }}>
-                Banco Interamericano de Desarrollo · Plataforma ALEPH · © 2026
+                Banco Interamericano de Desarrollo · Plataforma RegLAC · © 2026
               </p>
             </div>
           </div>
@@ -7531,10 +7870,39 @@ function ReportePDFScreen({ context, onNavigate }: { context?: string; onNavigat
 
         {/* ── FICHAS ── */}
         <div className="px-8 md:px-12 py-10" style={{ backgroundColor: "white" }}>
-          {tipoHallazgo === "distorsion"
-            ? DIST.map((h, i) => <FichaDistorsion key={h.id} h={h} num={i + 1} />)
-            : CARGA.map((h, i) => <FichaCarga key={h.id} h={h} num={i + 1} />)
-          }
+          {hallazgos.length === 0 ? (
+            <div className="py-16 text-center">
+              <p className="text-[14px] font-medium mb-1" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>
+                No hay hallazgos que coincidan con los filtros seleccionados
+              </p>
+              <p className="text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>
+                Ajusta los filtros en la pantalla de Reportes y vuelve a generar el informe.
+              </p>
+            </div>
+          ) : tipoHallazgo === "distorsion" ? (
+            (() => {
+              let num = 0;
+              return gruposInstrumento!.map(([instrumento, items]) => (
+                <div key={instrumento} className="mb-4">
+                  {items.length > 1 && (
+                    <div className="pdf-block mb-4 pb-2" style={{ borderBottom: `2px solid ${C.steel4}`, pageBreakInside: "avoid" }}>
+                      <p className="text-[11px] uppercase tracking-widest font-semibold" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.steel4 }}>
+                        Instrumento: {instrumento}
+                      </p>
+                      <p className="text-[11px] mt-0.5" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>
+                        {items[0].jerarquia} · {items[0].entidad} · {items.length} hallazgos
+                      </p>
+                    </div>
+                  )}
+                  <div className={items.length > 1 ? "pl-4" : ""} style={items.length > 1 ? { borderLeft: `2px solid ${C.border}` } : undefined}>
+                    {items.map(h => { num++; return <FichaDistorsion key={h.id} h={h} num={num} />; })}
+                  </div>
+                </div>
+              ));
+            })()
+          ) : (
+            hallazgosTramites.map((h, i) => <FichaCarga key={h.id} h={h} num={i + 1} />)
+          )}
         </div>
       </div>
     </div>
