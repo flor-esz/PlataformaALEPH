@@ -19,6 +19,7 @@ const RevisionNotificaciones = lazy(() => import("./revision/RevisionNotificacio
 const RevisionIndicadores = lazy(() => import("./revision/RevisionIndicadores"));
 // store.tsx no importa nada de este archivo (ver comentario ahí) -> import estático seguro.
 import { RevisionProvider, useRevision, type Notificacion, type NotifKind, type LogErrorEntry } from "./revision/store";
+import { viewToUrl, urlToView } from "./routing";
 import { PanelTipoSubdimension } from "./components/ui/PanelTipoSubdimension";
 import type { TipoDato } from "./components/ui/PanelTipoSubdimension";
 import { BarrasComposicion } from "./components/ui/BarrasComposicion";
@@ -204,7 +205,7 @@ export type View =
   | { screen: "hallazgos-filtrados-tramites"; filtros: Record<string, string> };
 type AuthView = "login" | "recover" | "recover-sent" | "recover-new" | "recover-confirmed" | "recover-expired";
 
-type ReportesPrefill = {
+export type ReportesPrefill = {
   tipoHallazgo?: "distorsion" | "carga";
   pais?: Country;
   sectores?: string[];
@@ -8934,6 +8935,20 @@ export default function App() {
   );
 }
 
+// Prefijo de deploy de GitHub Pages (ver `base` en vite.config.ts) -- sin "/"
+// final, para concatenar directo con el pathname "relativo a la app" que
+// devuelve viewToUrl()/espera urlToView() (ver routing.ts). `import.meta.env.
+// BASE_URL` ya trae ese valor en dev/build/preview, no hace falta hardcodearlo.
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+// Inverso de BASE al leer window.location.pathname -- si por algún motivo el
+// pathname no arranca con BASE (no debería pasar sirviendo desde ese prefijo,
+// pero por las dudas) se usa tal cual, para no romper el parseo.
+function currentAppPath(): string {
+  const p = window.location.pathname;
+  return p.startsWith(BASE) ? (p.slice(BASE.length) || "/") : p;
+}
+const DEFAULT_VIEW: View = { screen: "panel-regional" };
+
 function AppInner() {
   const isMobile = useIsMobile();
   const [loggedIn, setLoggedIn] = useState(false);
@@ -8948,7 +8963,7 @@ function AppInner() {
   // TODO: shared country state is temporary — replace when the advisor-per-country flow is built
   const [activeCountry, setActiveCountry] = useState<Country>("Todos");
   const [activeSection, setActiveSection] = useState<Section>("dashboard");
-  const [view, setView] = useState<View>({ screen: "panel-regional" });
+  const [view, setView] = useState<View>(DEFAULT_VIEW);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [authView, setAuthView] = useState<AuthView>("login");
   const [recoveryEmail, setRecoveryEmail] = useState("ana.mejia@iadb.org");
@@ -8984,21 +8999,11 @@ function AppInner() {
     }
   }
 
-  // "Salir": cierra la sesión y vuelve al login -- limpia la navegación para
-  // que el próximo login (con cualquiera de los 5 roles) arranque en el
-  // dashboard, no en la pantalla de Revisión donde se haya quedado la sesión
-  // anterior. Deliberadamente NO toca el estado de src/app/revision/store.tsx:
-  // cerrar sesión no borra datos, igual que en un backend real.
-  const handleLogout = () => {
-    setLoggedIn(false);
-    setAuthView("login");
-    setView({ screen: "country-dashboard", country: "Bolivia" });
-    setActiveSection("dashboard");
-  };
-
-  const navigate = (v: View) => {
-    setView(v);
-    setDrawerOpen(false);
+  // Deriva `activeSection`/`activeCountry` de un View -- separado de
+  // `navigate` (abajo) para poder aplicarlo también al resolver la URL en el
+  // montaje y en el listener de popstate, donde NO corresponde tocar el
+  // historial (el navegador ya está en esa URL, o ya lo movió él mismo).
+  const applyViewSideEffects = (v: View) => {
     if (v.screen === "panel-regional") setActiveSection("dashboard");
     if (v.screen === "impacto-economico") setActiveSection("impacto-economico");
     if (v.screen === "country-dashboard") { setActiveSection("dashboard"); setActiveCountry(v.country as Country); }
@@ -9013,6 +9018,84 @@ function AppInner() {
       setActiveSection(label === "Comparativa" ? "comparativa" : label === "Impacto económico" ? "impacto-economico" : "repositorio");
     }
   };
+
+  // Único lugar que sincroniza `view` con la URL real (window.history) --
+  // ver routing.ts para el mapeo View↔URL en sí. `BASE` es el prefijo de
+  // deploy de GitHub Pages (import.meta.env.BASE_URL, ver vite.config.ts);
+  // viewToUrl()/urlToView() no lo conocen a propósito, para quedar puras.
+  //
+  // `replace: true` usa replaceState en vez de pushState -- pensado para
+  // cambios de FILTROS dentro de la misma pantalla (Hallazgos filtrados),
+  // que no deberían llenar el historial de "atrás" con una entrada por cada
+  // clic en un <select>. Toda navegación real entre pantallas usa el default
+  // (pushState).
+  // `activeCountry` se pasa siempre a viewToUrl() -- lo ignora salvo para
+  // "barreras"/"tramites" (ver routing.ts), así que es seguro pasarlo acá sin
+  // importar a qué screen se esté navegando.
+  const navigate = (v: View, opts?: { replace?: boolean }) => {
+    setView(v);
+    setDrawerOpen(false);
+    applyViewSideEffects(v);
+    const url = BASE + viewToUrl(v, activeCountry);
+    if (opts?.replace) window.history.replaceState(null, "", url);
+    else window.history.pushState(null, "", url);
+  };
+
+  // "Salir": cierra la sesión y vuelve al login -- limpia la navegación para
+  // que el próximo login (con cualquiera de los 5 roles) arranque en el
+  // dashboard, no en la pantalla de Revisión donde se haya quedado la sesión
+  // anterior. Deliberadamente NO toca el estado de src/app/revision/store.tsx:
+  // cerrar sesión no borra datos, igual que en un backend real. Pasa por
+  // `navigate(..., { replace: true })` -- no `setView` directo -- para que la
+  // URL no se quede apuntando a la pantalla de la que se salió (replace, no
+  // push: cerrar sesión no es "avanzar" a una pantalla nueva).
+  const handleLogout = () => {
+    setLoggedIn(false);
+    setAuthView("login");
+    navigate({ screen: "country-dashboard", country: "Bolivia" }, { replace: true });
+  };
+
+  // Al montar: si la URL actual (deep link, o un F5 sobre cualquier pantalla)
+  // resuelve a un View real, arrancar ahí en vez del default (panel-regional)
+  // -- y normalizar la URL con replaceState (no push: no es una navegación
+  // nueva). Si no resuelve (ruta desconocida), se mantiene el `view` default
+  // ya seteado en el useState de arriba y se corrige la URL para que quede
+  // consistente con lo que realmente se está mostrando.
+  //
+  // `urlToView` devuelve `{ view, country? }`, no solo `View` -- `activeCountry`
+  // (Barreras/Trámites) no es parte de ningún View, así que viaja aparte (ver
+  // routing.ts). Cuando `resolved.country` viene poblado (URL con /pais/:x)
+  // se usa DIRECTO para armar la URL normalizada de abajo -- `activeCountry`
+  // (el state) todavía no se actualizó a esta altura del mismo efecto,
+  // `setActiveCountry` es async, así que leerlo acá daría el valor viejo.
+  useEffect(() => {
+    const resolved = urlToView(currentAppPath(), window.location.search);
+    if (resolved) {
+      setView(resolved.view);
+      applyViewSideEffects(resolved.view);
+      if (resolved.country) setActiveCountry(resolved.country as Country);
+      window.history.replaceState(null, "", BASE + viewToUrl(resolved.view, resolved.country ?? "Todos"));
+    } else {
+      window.history.replaceState(null, "", BASE + viewToUrl(view, activeCountry));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo al montar
+  }, []);
+
+  // Atrás/adelante del navegador: el historial ya se movió solo, así que acá
+  // NUNCA se llama pushState/replaceState -- solo se refleja en `view` (y en
+  // `activeCountry` cuando la URL traía /pais/:x en Barreras/Trámites). Si no
+  // resuelve, cae al default panel-regional, igual que un deep link roto.
+  useEffect(() => {
+    const onPopState = () => {
+      const resolved = urlToView(currentAppPath(), window.location.search);
+      const v = resolved?.view ?? DEFAULT_VIEW;
+      setView(v);
+      applyViewSideEffects(v);
+      if (resolved?.country) setActiveCountry(resolved.country as Country);
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
 
   // Puente entre los screens de src/app/revision/* (que no conocen el tipo `View`
   // completo de este archivo) y `navigate`. Los screens todavía no construidos
@@ -9058,9 +9141,9 @@ function AppInner() {
       case "panel-regional": return <PanelRegional onNavigate={navigate} />;
       case "impacto-economico": return <ImpactoEconomico country={activeCountry} onCountryChange={c => setActiveCountry(c)} onNavigate={navigate} />;
       case "country-dashboard": return <CountryDashboard country={view.country} onCountryChange={c => { setActiveCountry(c); navigate({ screen: "country-dashboard", country: c === "Todos" ? "Bolivia" : c }); }} onNavigate={navigate} />;
-      case "barreras": return <BarrerasScreen initialSector={view.sector} country={activeCountry} onCountryChange={c => setActiveCountry(c)} onNavigate={navigate} />;
+      case "barreras": return <BarrerasScreen initialSector={view.sector} country={activeCountry} onCountryChange={c => { setActiveCountry(c); window.history.replaceState(null, "", BASE + viewToUrl(view, c)); }} onNavigate={navigate} />;
       case "barrera-detail": return <BarreraDetail id={view.id} onNavigate={navigate} userRole={userRole} retroGobiernoOverrides={retroGobiernoOverrides} onGuardarRetroGobierno={guardarRetroGobierno} />;
-      case "tramites": return <TramitesScreen country={activeCountry} onCountryChange={c => setActiveCountry(c)} onNavigate={navigate} />;
+      case "tramites": return <TramitesScreen country={activeCountry} onCountryChange={c => { setActiveCountry(c); window.history.replaceState(null, "", BASE + viewToUrl(view, c)); }} onNavigate={navigate} />;
       case "tramite-detail": return <TramiteDetail id={view.id} onNavigate={navigate} userRole={userRole} retroGobiernoOverrides={retroGobiernoOverrides} onGuardarRetroGobierno={guardarRetroGobierno} />;
       case "distorsion-detail": return <DistorsionDetail id={view.id} onNavigate={navigate} />;
       case "indice": return <IndiceIDR country={activeCountry} onCountryChange={c => setActiveCountry(c)} onNavigate={navigate} />;
@@ -9100,10 +9183,10 @@ function AppInner() {
           if (!value) {
             const next = { ...filtrosObj };
             delete next[key];
-            navigate({ screen: "hallazgos-filtrados", filtros: next });
+            navigate({ screen: "hallazgos-filtrados", filtros: next }, { replace: true });
             return;
           }
-          navigate({ screen: "hallazgos-filtrados", filtros: { ...filtrosObj, [key]: value } });
+          navigate({ screen: "hallazgos-filtrados", filtros: { ...filtrosObj, [key]: value } }, { replace: true });
         };
         return (
           <HallazgosFiltrados
@@ -9111,7 +9194,7 @@ function AppInner() {
             resultados={resultados}
             onSetFiltro={setFiltro}
             onQuitarFiltro={(key) => setFiltro(key, "")}
-            onLimpiarTodos={() => navigate({ screen: "hallazgos-filtrados", filtros: {} })}
+            onLimpiarTodos={() => navigate({ screen: "hallazgos-filtrados", filtros: {} }, { replace: true })}
             onNavigate={navigate}
           />
         );
@@ -9151,10 +9234,10 @@ function AppInner() {
           if (!value) {
             const next = { ...filtrosObj };
             delete next[key];
-            navigate({ screen: "hallazgos-filtrados-barreras", filtros: next });
+            navigate({ screen: "hallazgos-filtrados-barreras", filtros: next }, { replace: true });
             return;
           }
-          navigate({ screen: "hallazgos-filtrados-barreras", filtros: { ...filtrosObj, [key]: value } });
+          navigate({ screen: "hallazgos-filtrados-barreras", filtros: { ...filtrosObj, [key]: value } }, { replace: true });
         };
         return (
           <HallazgosFiltradosBarreras
@@ -9162,7 +9245,7 @@ function AppInner() {
             resultados={resultados}
             onSetFiltro={setFiltro}
             onQuitarFiltro={(key) => setFiltro(key, "")}
-            onLimpiarTodos={() => navigate({ screen: "hallazgos-filtrados-barreras", filtros: {} })}
+            onLimpiarTodos={() => navigate({ screen: "hallazgos-filtrados-barreras", filtros: {} }, { replace: true })}
             onNavigate={navigate}
           />
         );
@@ -9207,10 +9290,10 @@ function AppInner() {
           if (!value) {
             const next = { ...filtrosObj };
             delete next[key];
-            navigate({ screen: "hallazgos-filtrados-tramites", filtros: next });
+            navigate({ screen: "hallazgos-filtrados-tramites", filtros: next }, { replace: true });
             return;
           }
-          navigate({ screen: "hallazgos-filtrados-tramites", filtros: { ...filtrosObj, [key]: value } });
+          navigate({ screen: "hallazgos-filtrados-tramites", filtros: { ...filtrosObj, [key]: value } }, { replace: true });
         };
         return (
           <HallazgosFiltradosTramites
@@ -9218,7 +9301,7 @@ function AppInner() {
             resultados={resultados}
             onSetFiltro={setFiltro}
             onQuitarFiltro={(key) => setFiltro(key, "")}
-            onLimpiarTodos={() => navigate({ screen: "hallazgos-filtrados-tramites", filtros: {} })}
+            onLimpiarTodos={() => navigate({ screen: "hallazgos-filtrados-tramites", filtros: {} }, { replace: true })}
             onNavigate={navigate}
           />
         );
