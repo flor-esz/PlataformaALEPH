@@ -12,7 +12,7 @@ import { ModalAsignarAnalista } from "./RevisionTriageModales";
 // propias versiones no-interactivas de los mismos componentes -- así ninguna
 // pantalla de trabajo corre riesgo de que un cambio acá la rompa, y viceversa.
 
-const PAISES = ["Argentina", "Brasil", "Chile", "Colombia", "Ecuador", "México", "Perú", "Uruguay"];
+const PAISES = ["Argentina", "Bolivia", "Chile", "Ecuador", "Perú"];
 const TIPOS = ["Barrera regulatoria", "Trámite", "Regulación"];
 const CLASIFICACIONES = ["Entrada", "Operación", "Salida"];
 

@@ -1,10 +1,10 @@
 import React, { useState } from "react";
 import { Eye, Check, Users, X, Pencil, Scale, Inbox } from "lucide-react";
-import { C, Header } from "../App";
+import { C, Header, CATALOGOS } from "../App";
 import type { UserRole } from "../App";
 import { StageChip } from "./shared/StageChip";
 import { IconActionButton } from "./shared/IconActionButton";
-import { useRevision, type Hallazgo } from "./store";
+import { useRevision, STAGE_LABEL, type Hallazgo } from "./store";
 import { ModalPublicarDirecto, ModalRechazarTriage, ModalAsignarAnalista } from "./RevisionTriageModales";
 
 // ─── Visibilidad por rol (ver "Matriz de visibilidad" en
@@ -16,8 +16,24 @@ function isVisibleForRole(h: Hallazgo, userRole: UserRole, userId: string): bool
   return false; // usuario-bid: la sección Revisión ni siquiera aparece en el sidebar para este rol.
 }
 
-const PAISES = ["Todos los países", "Argentina", "Bolivia", "Brasil", "Chile", "Colombia", "Ecuador", "México", "Perú", "Uruguay"];
+// Severidad no es un campo plano de Hallazgo -- vive en camposEtapa1 (Etapa 1,
+// todavía sin pasar por el Analista) o en camposChecklist (Etapa 2+, donde
+// "severidad_field" ya es parte del checklist). Mismo criterio que el resto
+// del store: nunca inventar un campo nuevo, leer de donde ya vive el dato.
+function getSeveridad(h: Hallazgo): string | null {
+  if (h.camposEtapa1) return h.camposEtapa1.severidad.value;
+  return h.camposChecklist.find(c => c.id === "severidad_field")?.actual ?? null;
+}
+
+const PAISES = ["Todos los países", "Argentina", "Bolivia", "Chile", "Ecuador", "Perú"];
 const TIPOS = ["Todos los tipos", "Barrera regulatoria", "Trámite", "Regulación"];
+// CATALOGOS.sectores -- el catálogo de sectores económicos ya corregido en
+// Administración, no el de zonas geográficas (sectoresGeo, que ya no existe).
+const SECTORES = ["Todos los sectores", ...CATALOGOS.sectores];
+const SEVERIDADES = ["Todas las severidades", "Crítico", "Alto", "Mediano", "Bajo"];
+// STAGE_LABEL ya existente en el store (Object.values conserva el orden 1→4
+// porque las claves son enteros pequeños).
+const ESTADOS = ["Todos los estados", ...Object.values(STAGE_LABEL)];
 
 // ─── Input / Select style (matches Administración modal) ──────────────────────
 
@@ -150,8 +166,18 @@ export default function RevisionRepositorio({ userRole, userId, onNavigate }: Re
   const { hallazgos, publicarDirecto, rechazarTriage, asignarAnalista } = useRevision();
   const [pais, setPais] = useState("Todos los países");
   const [tipo, setTipo] = useState("Todos los tipos");
+  const [rol, setRol] = useState("Todos los roles");
+  const [sector, setSector] = useState("Todos los sectores");
+  const [severidad, setSeveridad] = useState("Todas las severidades");
+  const [estado, setEstado] = useState("Todos los estados");
   const [buscar, setBuscar] = useState("");
   const [modal, setModal] = useState<ModalState>(null);
+
+  // Roles ya usados en el store -- no un set inventado. Derivado en vivo del
+  // propio `hallazgos` para no desalinearse si el store cambia (hoy: "—",
+  // "Analista BID", "Especialista externo" -- "Asesor"/"Validador" no
+  // aparecen como valor de `rol` en ningún hallazgo semilla).
+  const ROLES = ["Todos los roles", ...Array.from(new Set(hallazgos.map(h => h.rol)))];
 
   // Asesor y Analista solo ven "lo suyo" -> filtrar por país no tiene sentido para ellos.
   const showPaisFilter = userRole === "administrador" || userRole === "validador";
@@ -164,6 +190,10 @@ export default function RevisionRepositorio({ userRole, userId, onNavigate }: Re
   const filtradas = visibles.filter(h =>
     (!showPaisFilter || pais === "Todos los países" || h.pais === pais) &&
     (tipo === "Todos los tipos" || h.tipo === tipo) &&
+    (rol === "Todos los roles" || h.rol === rol) &&
+    (sector === "Todos los sectores" || h.sector === sector) &&
+    (severidad === "Todas las severidades" || getSeveridad(h) === severidad) &&
+    (estado === "Todos los estados" || h.stageLabel === estado) &&
     (buscar.trim() === "" || h.nombre.toLowerCase().includes(buscar.trim().toLowerCase()))
   );
 
@@ -207,6 +237,22 @@ export default function RevisionRepositorio({ userRole, userId, onNavigate }: Re
 
         <select value={tipo} onChange={e => setTipo(e.target.value)} style={fieldStyle}>
           {TIPOS.map(t => <option key={t}>{t}</option>)}
+        </select>
+
+        <select value={rol} onChange={e => setRol(e.target.value)} style={fieldStyle}>
+          {ROLES.map(r => <option key={r}>{r}</option>)}
+        </select>
+
+        <select value={sector} onChange={e => setSector(e.target.value)} style={fieldStyle}>
+          {SECTORES.map(s => <option key={s}>{s}</option>)}
+        </select>
+
+        <select value={severidad} onChange={e => setSeveridad(e.target.value)} style={fieldStyle}>
+          {SEVERIDADES.map(s => <option key={s}>{s}</option>)}
+        </select>
+
+        <select value={estado} onChange={e => setEstado(e.target.value)} style={fieldStyle}>
+          {ESTADOS.map(e => <option key={e}>{e}</option>)}
         </select>
 
         <input
@@ -302,6 +348,23 @@ export default function RevisionRepositorio({ userRole, userId, onNavigate }: Re
                         }}
                       >
                         Devuelto por Validador
+                      </span>
+                    )}
+                    {row.estado === "hipotesis" && (
+                      <span
+                        className="inline-block mt-1"
+                        title={row.notaHipotesis ?? undefined}
+                        style={{
+                          fontFamily: "Space Grotesk, sans-serif",
+                          fontSize: 10,
+                          fontWeight: 600,
+                          backgroundColor: C.ambar2,
+                          color: C.ambarTexto,
+                          borderRadius: 9999,
+                          padding: "2px 8px",
+                        }}
+                      >
+                        Hipótesis
                       </span>
                     )}
                   </td>

@@ -16,8 +16,9 @@ const RevisionDevolverAnalista = lazy(() => import("./revision/RevisionDevolverA
 const RevisionVerHallazgo = lazy(() => import("./revision/RevisionVerHallazgo"));
 const RevisionLogErrores = lazy(() => import("./revision/RevisionLogErrores"));
 const RevisionNotificaciones = lazy(() => import("./revision/RevisionNotificaciones"));
+const RevisionIndicadores = lazy(() => import("./revision/RevisionIndicadores"));
 // store.tsx no importa nada de este archivo (ver comentario ahí) -> import estático seguro.
-import { RevisionProvider, useRevision, type Notificacion, type NotifKind } from "./revision/store";
+import { RevisionProvider, useRevision, type Notificacion, type NotifKind, type LogErrorEntry } from "./revision/store";
 import { PanelTipoSubdimension } from "./components/ui/PanelTipoSubdimension";
 import type { TipoDato } from "./components/ui/PanelTipoSubdimension";
 import { BarrasComposicion } from "./components/ui/BarrasComposicion";
@@ -110,6 +111,7 @@ import {
   Ban,
   FilterX,
   Edit3,
+  Gauge,
 } from "lucide-react";
 
 // ─── Mobile hook ──────────────────────────────────────────────────────────────
@@ -126,14 +128,50 @@ export function useIsMobile() {
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type Country = "Todos" | "Argentina" | "Bolivia" | "Chile" | "Ecuador" | "Perú";
 type Section = "dashboard" | "barreras" | "tramites" | "comparativa" | "repositorio" | "impacto-economico" | "administracion" | "reportes" | "documentacion" | "revision"  | "indice";
-export type UserRole = "administrador" | "usuario-bid" | "asesor" | "analista" | "validador";
+export type UserRole = "administrador" | "usuario-bid" | "asesor" | "analista" | "validador" | "gobierno";
 const ROLE_LABEL: Record<UserRole, string> = {
   administrador: "Administrador",
   "usuario-bid": "Usuario BID",
   asesor: "Asesor (ESZ)",
   analista: "Analista jurídico-económico",
   validador: "Validador BID",
+  gobierno: "Usuario Gobierno",
 };
+
+// ─── Retroalimentación de gobierno ─────────────────────────────────────────────
+// Campo opcional en cada barrera/trámite (null por defecto). Solo el rol
+// "gobierno" puede crearlo/editarlo (ver formulario en BarreraDetail/
+// TramiteDetail); el resto de los roles lo ven en modo lectura dentro del
+// panel "Validación". No es severidad -- colores neutros, ver
+// ESTADO_RETRO_GOBIERNO_META más abajo.
+export type EstadoRetroalimentacionGobierno =
+  | "Confirmación"
+  | "Ajuste"
+  | "No confirmado"
+  | "Problema de implementación"
+  | "Reforma en curso"
+  | "Evidencia pendiente";
+export type RetroalimentacionGobierno = {
+  estado: EstadoRetroalimentacionGobierno;
+  comentario: string;
+  fecha: string;
+  usuario: string;
+} | null;
+export const ESTADOS_RETRO_GOBIERNO: EstadoRetroalimentacionGobierno[] = [
+  "Confirmación", "Ajuste", "No confirmado", "Problema de implementación", "Reforma en curso", "Evidencia pendiente",
+];
+export const ESTADO_RETRO_GOBIERNO_META: Record<EstadoRetroalimentacionGobierno, { bg: string; color: string }> = {
+  "Confirmación":                { bg: C.verde2, color: C.verde1 },
+  "Ajuste":                      { bg: "#E8F0FA", color: C.steel4 },
+  "Reforma en curso":            { bg: "#E8F0FA", color: C.steel4 },
+  "No confirmado":               { bg: C.ambar2, color: C.ambarTexto },
+  "Problema de implementación":  { bg: C.ambar2, color: C.ambarTexto },
+  "Evidencia pendiente":         { bg: C.border, color: C.textMuted },
+};
+function formatFechaRetroGobierno(d: Date): string {
+  const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+  return `${String(d.getDate()).padStart(2, "0")} ${MESES[d.getMonth()]} ${d.getFullYear()}`;
+}
 export type View =
   | { screen: "panel-regional" }
   | { screen: "impacto-economico" }
@@ -158,6 +196,7 @@ export type View =
   | { screen: "revision-ver-hallazgo"; id: string }
   | { screen: "revision-log-errores" }
   | { screen: "revision-log-errores-detalle"; id: string }
+  | { screen: "revision-indicadores" }
   | { screen: "revision-notificaciones" }
   | { screen: "indice" }
   | { screen: "hallazgos-filtrados"; filtros: Record<string, string> }
@@ -580,6 +619,14 @@ const BARRERAS_CAFE = [
       comentarioConsultor: "Recomendamos declaración jurada digital con verificación ex-post para no interrumpir cadenas de exportación.",
       comentarioGobierno: "ARSA evalúa la propuesta; pendiente de aprobación por Directorio.",
     },
+    // dato de muestra -- retroalimentación de gobierno ya cargada, para ver
+    // el modo lectura del panel "Validación" sin iniciar sesión como Gobierno.
+    retroalimentacionGobierno: {
+      estado: "Confirmación" as const,
+      comentario: "Confirmamos que el reglamento aplica como se describe. La propuesta de sustituir el registro sanitario vigente por una declaración jurada digital con verificación ex-post ya fue elevada al Directorio de ARSA.",
+      fecha: "14 mar 2025",
+      usuario: "Mariana Rojas, ARSA",
+    },
     accionSugerida: {
       accion: "Sustituir por declaración jurada con verificación posterior",
       prioridad: "Alta" as const,
@@ -624,6 +671,13 @@ const BARRERAS_CAFE = [
       comentarioBID: "Impacto significativo en modelos de maquila; validar alcance real de casos afectados.",
       comentarioConsultor: "Sugerimos permitir maquila certificada como alternativa formal a la planta propia.",
       comentarioGobierno: "En revisión por el Ministerio de Desarrollo Productivo.",
+    },
+    // dato de muestra -- retroalimentación de gobierno ya cargada.
+    retroalimentacionGobierno: {
+      estado: "Ajuste" as const,
+      comentario: "Coincidimos con el diagnóstico, pero la maquila certificada debería limitarse a plantas con certificación SENASA vigente, no a cualquier arrendamiento de capacidad instalada de terceros.",
+      fecha: "02 jun 2025",
+      usuario: "Fernando Quispe, Ministerio de Desarrollo Productivo",
     },
     accionSugerida: {
       accion: "Reconocer convenios de maquila certificada como alternativa a la planta propia",
@@ -672,6 +726,13 @@ const BARRERAS_TEXTIL = [
       comentarioBID: "Carga administrativa duplicada confirmada; evaluar digitalización.",
       comentarioConsultor: "Proponemos transmisión electrónica vía portal SEFIN-Digital.",
       comentarioGobierno: "Pendiente de asignación a analista para revisión técnica.",
+    },
+    // dato de muestra -- retroalimentación de gobierno ya cargada.
+    retroalimentacionGobierno: {
+      estado: "Problema de implementación" as const,
+      comentario: "El portal SEFIN-Digital todavía no soporta la carga de inventarios de materia prima; la digitalización plena del reporte semestral depende de esa actualización técnica, prevista para 2026.",
+      fecha: "20 ago 2025",
+      usuario: "Lucía Fernández, Secretaría de Finanzas",
     },
     accionSugerida: {
       accion: "Digitalizar el reporte semestral vía portal SEFIN-Digital",
@@ -1293,6 +1354,9 @@ export const ALL_TRAMITES = [...TRAMITES_CAFE, ...TRAMITES_TEXTIL, ...TRAMITES_M
   afectacionMipyme: AFECTACION_MIPYME_TRAMITES_POR_INDICE[i],
   tipoAfectacion: TIPO_AFECTACION_POR_INDICE[i],
   accionCategoria: ACCION_CATEGORIA_TRAMITES_POR_INDICE[i],
+  // Sin muestra pre-cargada para trámites -- solo se pidió para ALL_BARRERAS.
+  // Editable en vivo por el rol "gobierno" desde TramiteDetail().
+  retroalimentacionGobierno: null as RetroalimentacionGobierno,
 }));
 
 // Registros completos de muestra para las filas de TOP_BARRERAS_POR_PAIS_MUESTRA
@@ -2002,8 +2066,14 @@ function attachImpactoEstimado<T extends { id: string; pais: Country; severidad:
     return { ...b, impactoEstimado: `USD ${(usd / 1_000_000).toFixed(1)}M/año` };
   });
 }
+// Campo opcional retroalimentacionGobierno -- null salvo en 2-3 barreras de
+// muestra que ya lo traen cargado (ver BARRERAS_CAFE/BARRERAS_TEXTIL más
+// arriba), para poder ver el modo lectura sin iniciar sesión como Gobierno.
+function attachRetroalimentacionGobierno<T extends { retroalimentacionGobierno?: RetroalimentacionGobierno }>(items: T[]): (T & { retroalimentacionGobierno: RetroalimentacionGobierno })[] {
+  return items.map(b => ({ ...b, retroalimentacionGobierno: b.retroalimentacionGobierno ?? null }));
+}
 
-export const ALL_BARRERAS = attachImpactoEstimado([...BARRERAS_CAFE, ...BARRERAS_TEXTIL, ...BARRERAS_MUESTRA]);
+export const ALL_BARRERAS = attachRetroalimentacionGobierno(attachImpactoEstimado([...BARRERAS_CAFE, ...BARRERAS_TEXTIL, ...BARRERAS_MUESTRA]));
 
 // ─── Filtros compartidos de hallazgos (Reportes / Reporte PDF) ────────────────
 // Único lugar donde vive la lógica de filtrado de ALL_BARRERAS/ALL_TRAMITES
@@ -2124,6 +2194,29 @@ export async function exportarHallazgosExcel(
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, tipoHallazgo === "distorsion" ? "Distorsión" : "Carga");
   XLSX.writeFile(wb, `RegLAC_datos_${tipoHallazgo}_${slugArchivo(paisLabel)}_${fechaSlugHoy()}.xlsx`);
+}
+
+// Adaptación de exportarHallazgosExcel de arriba para log_errores (pantalla
+// "Indicadores" · "Retroalimentación al sistema") -- mismo patrón (import
+// dinámico de "xlsx", una hoja, mismo nombre de archivo con slug+fecha),
+// columnas completas de LogErrorEntry incluyendo el nuevo tipoError.
+export async function exportarLogErroresExcel(logErrores: LogErrorEntry[]) {
+  const XLSX = await import("xlsx");
+  const rows = logErrores.map(e => ({
+    "ID": e.id,
+    "Hallazgo": e.hallazgoNombre,
+    "ID hallazgo": e.hallazgoId,
+    "País": e.pais,
+    "Tipo": e.tipo,
+    "Origen": e.origen,
+    "Tipo de error": e.tipoError,
+    "Motivo": e.motivo,
+    "Fecha": e.fecha,
+  }));
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Log de errores");
+  XLSX.writeFile(wb, `RegLAC_log_errores_${fechaSlugHoy()}.xlsx`);
 }
 
 // Captura `container` bloque por bloque (cada elemento con className
@@ -3216,12 +3309,15 @@ function Sidebar({
         {navItem("Documentación", "documentacion", <BookOpen size={18} />, () => nav(() => onNavigate({ screen: "documentacion" })))}
         {navItem("Índice / IDR", "indice", <ChartBar size={18} />, () => nav(() => { onNavigate({ screen: "indice" });}))}
         {/* Revisión — visible para asesor, analista, validador y administrador,
-            SIEMPRE expandible con los mismos 2 sub-ítems para los 4 roles:
+            SIEMPRE expandible con los mismos 3 sub-ítems para los 4 roles:
             "Hallazgos" (Repositorio -- Etapa 1 del Asesor ahora vive ahí como
-            una fila más, con su propia matriz de visibilidad por rol/etapa) y
-            "Log de errores". Antes el Asesor entraba directo a un hallazgo fijo
-            porque el Repositorio nunca incluía Etapa 1 en su matriz -- eso ya
-            se corrigió, así que todos los roles navegan igual. */}
+            una fila más, con su propia matriz de visibilidad por rol/etapa),
+            "Log de errores" e "Indicadores" (reporte interno de calidad +
+            retroalimentación al sistema, mismo criterio de visibilidad que
+            los otros dos -- no se expone a usuario-bid ni a gobierno). Antes
+            el Asesor entraba directo a un hallazgo fijo porque el Repositorio
+            nunca incluía Etapa 1 en su matriz -- eso ya se corrigió, así que
+            todos los roles navegan igual. */}
         {(userRole === "asesor" || userRole === "analista" || userRole === "validador" || userRole === "administrador") && (
           <>
             <button
@@ -3237,6 +3333,7 @@ function Sidebar({
               <div className="ml-4 border-l pl-2" style={{ borderColor: "#2A3A4A" }}>
                 {navItem("Hallazgos", "revision", <ClipboardList size={16} />, () => nav(() => onNavigate({ screen: "revision-repositorio" })), activeView.screen === "revision-repositorio")}
                 {navItem("Log de errores", "revision", <FileText size={16} />, () => nav(() => onNavigate({ screen: "revision-log-errores" })), activeView.screen === "revision-log-errores")}
+                {navItem("Indicadores", "revision", <Gauge size={16} />, () => nav(() => onNavigate({ screen: "revision-indicadores" })), activeView.screen === "revision-indicadores")}
               </div>
             )}
           </>
@@ -4412,7 +4509,7 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
 // Reutilizado por los 3 paneles de la Ficha lateral de BarreraDetail
 // (Identificación / Clasificación / Validación) — mismo patrón visual que ya
 // usaba el panel único "Ficha".
-function FichaPanel({ title, rows }: { title: string; rows: [string, React.ReactNode][] }) {
+function FichaPanel({ title, rows, children }: { title: string; rows: [string, React.ReactNode][]; children?: React.ReactNode }) {
   return (
     <div className="rounded-lg p-5" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
       <p className="text-[11px] uppercase tracking-widest font-medium mb-3" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>{title}</p>
@@ -4422,13 +4519,87 @@ function FichaPanel({ title, rows }: { title: string; rows: [string, React.React
           <span className="text-[12px] font-medium text-right" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text, maxWidth: "60%" }}>{v}</span>
         </div>
       ))}
+      {children}
     </div>
   );
 }
 
-function BarreraDetail({ id, onNavigate }: { id: string; onNavigate: (v: View) => void }) {
+// Sub-sección "Retroalimentación de gobierno" al final del panel "Validación"
+// (BarreraDetail y TramiteDetail). Visible en modo lectura para cualquier rol;
+// el formulario editable de abajo SOLO aparece si userRole === "gobierno" --
+// el resto de los roles nunca lo ve, solo el resultado ya guardado.
+function RetroalimentacionGobiernoSection({
+  value, userRole, onGuardar,
+}: {
+  value: RetroalimentacionGobierno;
+  userRole: UserRole;
+  onGuardar: (data: RetroalimentacionGobierno) => void;
+}) {
+  const [estado, setEstado] = useState<EstadoRetroalimentacionGobierno>(value?.estado ?? "Confirmación");
+  const [comentario, setComentario] = useState(value?.comentario ?? "");
+
+  const fieldStyle: React.CSSProperties = { fontFamily: "IBM Plex Sans, sans-serif", color: C.text, backgroundColor: C.canvas, border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 12px", fontSize: 13, outline: "none", width: "100%" };
+
+  const handleGuardar = () => {
+    if (!comentario.trim()) return;
+    onGuardar({ estado, comentario: comentario.trim(), fecha: formatFechaRetroGobierno(new Date()), usuario: ROLE_LABEL.gobierno });
+  };
+
+  return (
+    <div className="pt-3 mt-1 border-t" style={{ borderColor: C.border }}>
+      <p className="text-[11px] uppercase tracking-widest font-medium mb-2" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Retroalimentación de gobierno</p>
+      {value ? (
+        <div className="flex flex-col gap-1.5">
+          <span className="inline-flex items-center self-start px-2.5 py-1 rounded-full text-[11px] font-medium"
+            style={{ backgroundColor: ESTADO_RETRO_GOBIERNO_META[value.estado].bg, color: ESTADO_RETRO_GOBIERNO_META[value.estado].color, fontFamily: "IBM Plex Sans, sans-serif" }}>
+            {value.estado}
+          </span>
+          <p className="text-[12px] leading-snug" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text }}>{value.comentario}</p>
+          <p className="text-[11px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>— {value.usuario}, {value.fecha}</p>
+        </div>
+      ) : (
+        <p className="text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>Sin retroalimentación de gobierno</p>
+      )}
+
+      {userRole === "gobierno" && (
+        <div className="flex flex-col gap-2 mt-3 pt-3 border-t" style={{ borderColor: C.border }}>
+          <p className="text-[11px] font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>
+            {value ? "Actualizar retroalimentación" : "Dejar retroalimentación"}
+          </p>
+          <select value={estado} onChange={e => setEstado(e.target.value as EstadoRetroalimentacionGobierno)} style={fieldStyle}>
+            {ESTADOS_RETRO_GOBIERNO.map(o => <option key={o} value={o}>{o}</option>)}
+          </select>
+          <textarea
+            value={comentario}
+            onChange={e => setComentario(e.target.value)}
+            rows={3}
+            placeholder="Comentario..."
+            style={{ ...fieldStyle, resize: "vertical" }}
+          />
+          <button
+            className="self-start px-3 py-2 rounded-lg text-[12px] font-medium"
+            style={{ backgroundColor: C.steel4, color: "white", fontFamily: "Space Grotesk, sans-serif", border: "none", cursor: comentario.trim() ? "pointer" : "not-allowed", opacity: comentario.trim() ? 1 : 0.5 }}
+            disabled={!comentario.trim()}
+            onClick={handleGuardar}
+          >
+            Guardar retroalimentación
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BarreraDetail({ id, onNavigate, userRole, retroGobiernoOverrides, onGuardarRetroGobierno }: {
+  id: string;
+  onNavigate: (v: View) => void;
+  userRole: UserRole;
+  retroGobiernoOverrides: Record<string, RetroalimentacionGobierno>;
+  onGuardarRetroGobierno: (id: string, data: RetroalimentacionGobierno) => void;
+}) {
   const barrera = ALL_BARRERAS.find(b => b.id === id);
   if (!barrera) return null;
+  const retroGobierno = retroGobiernoOverrides[id] ?? barrera.retroalimentacionGobierno;
 
   const affectedTramites = ALL_TRAMITES.filter(t => barrera.tramitesAfectados.includes(t.id));
 
@@ -4588,7 +4759,13 @@ function BarreraDetail({ id, onNavigate }: { id: string; onNavigate: (v: View) =
         <div className="flex flex-col gap-4">
           <FichaPanel title="Identificación" rows={identificacionRows} />
           <FichaPanel title="Clasificación" rows={clasificacionRows} />
-          <FichaPanel title="Validación" rows={validacionRows} />
+          <FichaPanel title="Validación" rows={validacionRows}>
+            <RetroalimentacionGobiernoSection
+              value={retroGobierno}
+              userRole={userRole}
+              onGuardar={data => onGuardarRetroGobierno(barrera.id, data)}
+            />
+          </FichaPanel>
 
           {/* Bridge to tramites */}
           <div className="rounded-lg p-5 hidden" style={{ backgroundColor: C.card, border: `1px solid ${C.steel2}44` }}>
@@ -5252,9 +5429,16 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
 }
 
 // ─── Screen 6 — Trámite Detail ────────────────────────────────────────────────
-function TramiteDetail({ id, onNavigate }: { id: string; onNavigate: (v: View) => void }) {
+function TramiteDetail({ id, onNavigate, userRole, retroGobiernoOverrides, onGuardarRetroGobierno }: {
+  id: string;
+  onNavigate: (v: View) => void;
+  userRole: UserRole;
+  retroGobiernoOverrides: Record<string, RetroalimentacionGobierno>;
+  onGuardarRetroGobierno: (id: string, data: RetroalimentacionGobierno) => void;
+}) {
   const tramite = ALL_TRAMITES.find(t => t.id === id);
   if (!tramite) return null;
+  const retroGobierno = retroGobiernoOverrides[id] ?? tramite.retroalimentacionGobierno;
 
   const linkedDistorsiones = ALL_DISTORSIONES.filter(d => d.tramiteId === id);
 
@@ -5421,6 +5605,18 @@ function TramiteDetail({ id, onNavigate }: { id: string; onNavigate: (v: View) =
               </div>
             )}
           </div>
+
+          {/* A diferencia de BarreraDetail, los trámites todavía no tienen
+              severidad IA / estado HITL / comentarios BID-Consultor-Gobierno
+              propios -- este panel "Validación" es nuevo acá, con la única
+              sub-sección que sí aplica a trámites por ahora. */}
+          <FichaPanel title="Validación" rows={[]}>
+            <RetroalimentacionGobiernoSection
+              value={retroGobierno}
+              userRole={userRole}
+              onGuardar={data => onGuardarRetroGobierno(tramite.id, data)}
+            />
+          </FichaPanel>
         </div>
       </div>
     </div>
@@ -5905,6 +6101,7 @@ function LoginScreen({ onLogin, onNavigate }: { onLogin: (role: UserRole) => voi
                 { value: "asesor" as UserRole, label: "Asesor (ESZ)", sub: "Etapa 1 · Revisión" },
                 { value: "analista" as UserRole, label: "Analista jurídico-económico", sub: "Etapa 3 · Revisión" },
                 { value: "validador" as UserRole, label: "Validador BID", sub: "Etapas 2 y 4 · Revisión" },
+                { value: "gobierno" as UserRole, label: "Usuario Gobierno", sub: "Solo lectura + retroalimentación" },
               ]).map(opt => (
                 <button
                   key={opt.value}
@@ -6163,9 +6360,14 @@ const SAMPLE_USERS = [
   { nombre: "Rosa Quispe", correo: "r.quispe@mef.gob.pe", rol: "Usuario Gobierno", activo: true, acceso: "Hoy, 08:55" },
 ];
 
-const CATALOGOS = {
+export const CATALOGOS = {
   paises: ["Argentina", "Bolivia", "Chile", "Ecuador", "Perú"],
-  sectores: ["Agropecuario", "Agroindustria", "Manufactura", "Servicios Financieros", "Construcción", "Textil y Confección", "Energías Renovables", "Servicios Digitales"],
+  // Salud, Comercio Exterior y Telecomunicaciones agregados para cubrir
+  // hallazgos de SEED_HALLAZGOS (revision/store.tsx) que no tenían ningún
+  // equivalente razonable entre los 8 sectores originales -- no había un
+  // mapeo semánticamente honesto posible, así que se sumaron como sectores
+  // reales en vez de forzar uno que no correspondía.
+  sectores: ["Agropecuario", "Agroindustria", "Manufactura", "Servicios Financieros", "Construcción", "Textil y Confección", "Energías Renovables", "Servicios Digitales", "Salud", "Comercio Exterior", "Telecomunicaciones"],
   tiposBarrera: ["Entrada", "Operación"],
   tiposTramite: ["Apertura", "Operación", "Inspección", "Cierre", "Certificación"],
   // Entidades emisoras -- dato de muestra, tomado de nombres ya usados en
@@ -8716,6 +8918,7 @@ const REVISION_DEMO_USER_ID: Record<UserRole, string> = {
   asesor: "demo-asesor",
   analista: "demo-analista",
   validador: "demo-validador",
+  gobierno: "demo-gobierno",
 };
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
@@ -8735,6 +8938,13 @@ function AppInner() {
   const isMobile = useIsMobile();
   const [loggedIn, setLoggedIn] = useState(false);
   const [userRole, setUserRole] = useState<UserRole>("administrador");
+  // Overrides de retroalimentacionGobierno guardados en la sesión actual
+  // (rol "gobierno"), por id de barrera/trámite -- ver RetroalimentacionGobiernoSection.
+  // No toca ALL_BARRERAS/ALL_TRAMITES (son datos de muestra estáticos): un id
+  // presente acá pisa el valor de muestra del registro; si no está, se usa ese.
+  const [retroGobiernoOverrides, setRetroGobiernoOverrides] = useState<Record<string, RetroalimentacionGobierno>>({});
+  const guardarRetroGobierno = (id: string, data: RetroalimentacionGobierno) =>
+    setRetroGobiernoOverrides(prev => ({ ...prev, [id]: data }));
   // TODO: shared country state is temporary — replace when the advisor-per-country flow is built
   const [activeCountry, setActiveCountry] = useState<Country>("Todos");
   const [activeSection, setActiveSection] = useState<Section>("dashboard");
@@ -8849,9 +9059,9 @@ function AppInner() {
       case "impacto-economico": return <ImpactoEconomico country={activeCountry} onCountryChange={c => setActiveCountry(c)} onNavigate={navigate} />;
       case "country-dashboard": return <CountryDashboard country={view.country} onCountryChange={c => { setActiveCountry(c); navigate({ screen: "country-dashboard", country: c === "Todos" ? "Bolivia" : c }); }} onNavigate={navigate} />;
       case "barreras": return <BarrerasScreen initialSector={view.sector} country={activeCountry} onCountryChange={c => setActiveCountry(c)} onNavigate={navigate} />;
-      case "barrera-detail": return <BarreraDetail id={view.id} onNavigate={navigate} />;
+      case "barrera-detail": return <BarreraDetail id={view.id} onNavigate={navigate} userRole={userRole} retroGobiernoOverrides={retroGobiernoOverrides} onGuardarRetroGobierno={guardarRetroGobierno} />;
       case "tramites": return <TramitesScreen country={activeCountry} onCountryChange={c => setActiveCountry(c)} onNavigate={navigate} />;
-      case "tramite-detail": return <TramiteDetail id={view.id} onNavigate={navigate} />;
+      case "tramite-detail": return <TramiteDetail id={view.id} onNavigate={navigate} userRole={userRole} retroGobiernoOverrides={retroGobiernoOverrides} onGuardarRetroGobierno={guardarRetroGobierno} />;
       case "distorsion-detail": return <DistorsionDetail id={view.id} onNavigate={navigate} />;
       case "indice": return <IndiceIDR country={activeCountry} onCountryChange={c => setActiveCountry(c)} onNavigate={navigate} />;
       case "hallazgos-filtrados": {
@@ -9102,6 +9312,8 @@ function AppInner() {
         );
       case "revision-log-errores":
         return <Suspense fallback={<RevisionLoadingFallback />}><RevisionLogErrores /></Suspense>;
+      case "revision-indicadores":
+        return <Suspense fallback={<RevisionLoadingFallback />}><RevisionIndicadores /></Suspense>;
       case "revision-notificaciones":
         return (
           <Suspense fallback={<RevisionLoadingFallback />}>

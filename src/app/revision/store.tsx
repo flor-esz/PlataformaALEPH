@@ -17,8 +17,12 @@ export type Assignment = "asignado" | "sin asignar" | null;
 export type Prioridad = "Normal" | "Alta" | "Urgente";
 /** "publicado" es terminal: publicarDirecto/aceptarYPublicar lo setean y el hallazgo
  *  deja de aparecer en el Repositorio activo, pero se conserva en el store (antes se
- *  descartaba del array por completo -- cerrado en el Lote 6). */
-export type EstadoHallazgo = "en_proceso" | "publicado";
+ *  descartaba del array por completo -- cerrado en el Lote 6).
+ *  "hipotesis": Etapa 4 -> marcarHipotesis. NO es terminal como "publicado" -- el
+ *  hallazgo se queda visible en el Repositorio activo (no se filtra por estado ahí,
+ *  solo "publicado" sale de esa vista), con un badge ámbar distinto. Tampoco es un
+ *  descarte como "No usar" (eso sigue moviendo el hallazgo a log_errores). */
+export type EstadoHallazgo = "en_proceso" | "publicado" | "hipotesis";
 
 // ─── Checklist de Etapa 3 (Lote 4/5) ───────────────────────────────────────
 // Antes vivían como estado local de muestra en RevisionAnalistaChecklist y
@@ -200,6 +204,9 @@ export interface Hallazgo {
   devueltoPorValidador: boolean;
   /** motivo que el Validador escribió al devolver (Lote 5); null si nunca fue devuelto. */
   motivoDevolucion: string | null;
+  /** qué falta confirmar, escrito por el Validador al marcar "Hipótesis" en Decisión
+   *  Final; null si el hallazgo nunca pasó por ese estado. */
+  notaHipotesis: string | null;
   /** dictamen del Analista, adjuntado al enviar a Etapa 4 (Lote 4) y leído en Decisión Final (Lote 5). */
   dictamen: string | null;
   criteriosJuridicos: Criterion[];
@@ -214,6 +221,11 @@ export interface Hallazgo {
 }
 
 export type LogOrigen = "Sistema" | "Asesor" | "Validador-triage" | "Analista" | "Validador-decision";
+// Categoría del motivo en sí -- independiente de `origen` (dónde/quién lo
+// detectó). Dos entradas del mismo `origen` pueden tener `tipoError`
+// distinto (ver LOG-VT01 "Clasificación" vs LOG-VT02 "Interpretación
+// jurídica", ambas Validador-triage).
+export type TipoError = "Severidad" | "Interpretación jurídica" | "Contexto" | "Clasificación";
 
 export interface LogErrorEntry {
   id: string;
@@ -225,6 +237,7 @@ export interface LogErrorEntry {
   tipo: string;
   origen: LogOrigen;
   motivo: string;
+  tipoError: TipoError;
   fecha: string;
 }
 
@@ -281,16 +294,26 @@ export interface Notificacion {
 // ellos -- antes `logErrores` arrancaba en `[]` y las 5 categorías se veían
 // vacías hasta generar algo en vivo durante una sesión.
 const SEED_LOG_ERRORES: LogErrorEntry[] = [
-  { id: "LOG-S01", hallazgoId: "seed-sistema-1", hallazgoNombre: "Permiso de operación duplicado en el sistema de registro", pais: "Colombia", tipo: "Barrera regulatoria", origen: "Sistema", motivo: "Ya existe un hallazgo con el mismo título en el repositorio.", fecha: "hace 6 horas" },
-  { id: "LOG-S02", hallazgoId: "seed-sistema-2", hallazgoNombre: "Renovación", pais: "México", tipo: "Trámite", origen: "Sistema", motivo: "Título demasiado corto para ser un hallazgo verificable (mínimo 12 caracteres).", fecha: "hace 1 día" },
-  { id: "LOG-A01", hallazgoId: "seed-asesor-1", hallazgoNombre: "Retraso en la emisión de licencias de importación temporal", pais: "Argentina", tipo: "Trámite", origen: "Asesor", motivo: "El texto normativo citado no corresponde al pasaje resaltado -- inconsistencia detectada antes de enviar.", fecha: "hace 2 días" },
-  { id: "LOG-A02", hallazgoId: "seed-asesor-2", hallazgoNombre: "Prohibición de publicidad comparativa en el sector financiero", pais: "Chile", tipo: "Barrera regulatoria", origen: "Asesor", motivo: "Diagnóstico económico insuficiente para sustentar la severidad asignada.", fecha: "hace 4 días" },
-  { id: "LOG-VT01", hallazgoId: "seed-triage-1", hallazgoNombre: "Formulario de registro sanitario en papel membretado", pais: "Perú", tipo: "Trámite", origen: "Validador-triage", motivo: "No constituye una barrera -- es un requisito administrativo estándar sin impacto comercial significativo.", fecha: "hace 3 días" },
-  { id: "LOG-VT02", hallazgoId: "seed-triage-2", hallazgoNombre: "Restricción de horario comercial nocturno", pais: "Brasil", tipo: "Barrera regulatoria", origen: "Validador-triage", motivo: "Aplica por igual a empresas nacionales y extranjeras -- no es discriminatoria.", fecha: "hace 5 días" },
-  { id: "LOG-AN01", hallazgoId: "seed-analista-1", hallazgoNombre: "Doble certificación fitosanitaria para el mismo embarque", pais: "Uruguay", tipo: "Regulación", origen: "Analista", motivo: "No cumple los criterios mínimos de admisibilidad jurídica -- la norma citada fue derogada en 2021.", fecha: "hace 1 semana" },
-  { id: "LOG-AN02", hallazgoId: "seed-analista-2", hallazgoNombre: "Plazo indefinido para habilitación de depósito aduanero", pais: "Ecuador", tipo: "Trámite", origen: "Analista", motivo: "El diagnóstico económico no acredita causalidad directa entre la norma y el costo estimado.", fecha: "hace 1 semana" },
-  { id: "LOG-VD01", hallazgoId: "seed-decision-1", hallazgoNombre: "Arancel diferenciado para insumos de un solo país de origen", pais: "Colombia", tipo: "Barrera regulatoria", origen: "Validador-decision", motivo: "Evidencia insuficiente para publicar -- falta sustento documental del costo estimado.", fecha: "hace 2 semanas" },
-  { id: "LOG-VD02", hallazgoId: "seed-decision-2", hallazgoNombre: "Certificación redundante para maquinaria ya homologada", pais: "México", tipo: "Regulación", origen: "Validador-decision", motivo: "El dictamen del Analista no distingue esta norma de una ya publicada anteriormente.", fecha: "hace 2 semanas" },
+  // tipoError "Contexto" -- asignación de muestra (default): el motivo es
+  // una regla de integridad de datos (título duplicado), no calza claro en
+  // Severidad/Interpretación jurídica/Clasificación.
+  { id: "LOG-S01", hallazgoId: "seed-sistema-1", hallazgoNombre: "Permiso de operación duplicado en el sistema de registro", pais: "Bolivia", tipo: "Barrera regulatoria", origen: "Sistema", motivo: "Ya existe un hallazgo con el mismo título en el repositorio.", tipoError: "Contexto", fecha: "hace 6 horas" },
+  // tipoError "Contexto" -- asignación de muestra (default): validación
+  // técnica de formato (largo mínimo del título), sin calce claro.
+  { id: "LOG-S02", hallazgoId: "seed-sistema-2", hallazgoNombre: "Renovación", pais: "Bolivia", tipo: "Trámite", origen: "Sistema", motivo: "Título demasiado corto para ser un hallazgo verificable (mínimo 12 caracteres).", tipoError: "Contexto", fecha: "hace 1 día" },
+  { id: "LOG-A01", hallazgoId: "seed-asesor-1", hallazgoNombre: "Retraso en la emisión de licencias de importación temporal", pais: "Argentina", tipo: "Trámite", origen: "Asesor", motivo: "El texto normativo citado no corresponde al pasaje resaltado -- inconsistencia detectada antes de enviar.", tipoError: "Interpretación jurídica", fecha: "hace 2 días" },
+  { id: "LOG-A02", hallazgoId: "seed-asesor-2", hallazgoNombre: "Prohibición de publicidad comparativa en el sector financiero", pais: "Chile", tipo: "Barrera regulatoria", origen: "Asesor", motivo: "Diagnóstico económico insuficiente para sustentar la severidad asignada.", tipoError: "Severidad", fecha: "hace 4 días" },
+  { id: "LOG-VT01", hallazgoId: "seed-triage-1", hallazgoNombre: "Formulario de registro sanitario en papel membretado", pais: "Perú", tipo: "Trámite", origen: "Validador-triage", motivo: "No constituye una barrera -- es un requisito administrativo estándar sin impacto comercial significativo.", tipoError: "Clasificación", fecha: "hace 3 días" },
+  { id: "LOG-VT02", hallazgoId: "seed-triage-2", hallazgoNombre: "Restricción de horario comercial nocturno", pais: "Argentina", tipo: "Barrera regulatoria", origen: "Validador-triage", motivo: "Aplica por igual a empresas nacionales y extranjeras -- no es discriminatoria.", tipoError: "Interpretación jurídica", fecha: "hace 5 días" },
+  { id: "LOG-AN01", hallazgoId: "seed-analista-1", hallazgoNombre: "Doble certificación fitosanitaria para el mismo embarque", pais: "Chile", tipo: "Regulación", origen: "Analista", motivo: "No cumple los criterios mínimos de admisibilidad jurídica -- la norma citada fue derogada en 2021.", tipoError: "Interpretación jurídica", fecha: "hace 1 semana" },
+  // tipoError "Contexto" -- asignación de muestra (default): cuestiona la
+  // causalidad económica (norma -> costo estimado), no la severidad en sí,
+  // sin calce claro en las otras 3 categorías.
+  { id: "LOG-AN02", hallazgoId: "seed-analista-2", hallazgoNombre: "Plazo indefinido para habilitación de depósito aduanero", pais: "Ecuador", tipo: "Trámite", origen: "Analista", motivo: "El diagnóstico económico no acredita causalidad directa entre la norma y el costo estimado.", tipoError: "Contexto", fecha: "hace 1 semana" },
+  // tipoError "Contexto" -- asignación de muestra (default): falta de
+  // sustento documental/evidencia, sin calce claro en las otras 3 categorías.
+  { id: "LOG-VD01", hallazgoId: "seed-decision-1", hallazgoNombre: "Arancel diferenciado para insumos de un solo país de origen", pais: "Perú", tipo: "Barrera regulatoria", origen: "Validador-decision", motivo: "Evidencia insuficiente para publicar -- falta sustento documental del costo estimado.", tipoError: "Contexto", fecha: "hace 2 semanas" },
+  { id: "LOG-VD02", hallazgoId: "seed-decision-2", hallazgoNombre: "Certificación redundante para maquinaria ya homologada", pais: "Ecuador", tipo: "Regulación", origen: "Validador-decision", motivo: "El dictamen del Analista no distingue esta norma de una ya publicada anteriormente.", tipoError: "Clasificación", fecha: "hace 2 semanas" },
 ];
 
 const SEED_NOTIFICACIONES: Notificacion[] = [
@@ -299,7 +322,7 @@ const SEED_NOTIFICACIONES: Notificacion[] = [
   { id: "NOTIF-S3", destinatarioId: "demo-asesor", kind: "descartado-triage", titulo: "Tu hallazgo fue descartado en triage", subtitulo: "Exigencias de domicilio local para operar · «No es barrera» · hace 3 días", fecha: "hace 3 días", leida: true, accion: { label: "Ver motivo", screen: "revision-log-errores" } },
 ];
 
-const STAGE_LABEL: Record<Stage, string> = {
+export const STAGE_LABEL: Record<Stage, string> = {
   1: "Validación del Asesor",
   2: "Triage",
   3: "Revisión del Analista",
@@ -316,17 +339,17 @@ const SEED_HALLAZGOS: Hallazgo[] = [
   // "demo-asesor" (quien está logueado al elegir el rol Asesor); H-103 a
   // "demo-asesor-2" (otra persona), para poder probar que un Asesor NO ve el
   // borrador de otro Asesor en su propia lista.
-  { id: "H-101", nombre: "Restricción a Operadores Sin Planta Propia", pais: "Bolivia", tipo: "Barrera regulatoria", clasificacion: "Entrada", sector: "Agroindustria Cafetalera", rol: "—", hace: "hace 1 día", stage: 1, stageLabel: STAGE_LABEL[1], assignment: null, asesorId: "demo-asesor", asesorNombre: "Ana Mejía", analistaId: null, analistaNombre: null, prioridad: null, devueltoPorValidador: false, motivoDevolucion: null, dictamen: null, ...blankChecklist(), camposEtapa1: defaultCamposEtapa1() },
-  { id: "H-102", nombre: "Exigencia de traducción jurada para certificados sanitarios de exportación", pais: "Perú", tipo: "Trámite", clasificacion: "Salida", sector: "Agroindustria", rol: "—", hace: "hace 6 horas", stage: 1, stageLabel: STAGE_LABEL[1], assignment: null, asesorId: "demo-asesor", asesorNombre: "Ana Mejía", analistaId: null, analistaNombre: null, prioridad: null, devueltoPorValidador: false, motivoDevolucion: null, dictamen: null, ...blankChecklist(), camposEtapa1: camposEtapa1Tramite() },
-  { id: "H-103", nombre: "Cuota mínima de insumos nacionales para certificación de origen", pais: "Chile", tipo: "Barrera regulatoria", clasificacion: "Operación", sector: "Manufactura", rol: "—", hace: "hace 2 días", stage: 1, stageLabel: STAGE_LABEL[1], assignment: null, asesorId: "demo-asesor-2", asesorNombre: "Roberto Silva", analistaId: null, analistaNombre: null, prioridad: null, devueltoPorValidador: false, motivoDevolucion: null, dictamen: null, ...blankChecklist(), camposEtapa1: camposEtapa1Barrera() },
-  { id: "H-001", nombre: "Requisito de capital mínimo discriminatorio", pais: "Colombia", tipo: "Barrera regulatoria", clasificacion: "Entrada", sector: "Servicios Financieros", rol: "Analista BID", hace: "hace 2 horas", stage: 2, stageLabel: STAGE_LABEL[2], assignment: null, asesorId: "demo-asesor", asesorNombre: "Ana Mejía", analistaId: null, analistaNombre: null, prioridad: null, devueltoPorValidador: false, motivoDevolucion: null, dictamen: null, ...blankChecklist(), camposEtapa1: null },
-  { id: "H-002", nombre: "Licencia obligatoria de importación de insumos médicos", pais: "Perú", tipo: "Trámite", clasificacion: "Entrada", sector: "Salud", rol: "Analista BID", hace: "hace 5 horas", stage: 2, stageLabel: STAGE_LABEL[2], assignment: null, asesorId: "demo-asesor", asesorNombre: "Ana Mejía", analistaId: null, analistaNombre: null, prioridad: null, devueltoPorValidador: false, motivoDevolucion: null, dictamen: null, ...blankChecklist(), camposEtapa1: null },
-  { id: "H-003", nombre: "Tasa arancelaria preferencial no publicada", pais: "México", tipo: "Barrera regulatoria", clasificacion: "Entrada", sector: "Comercio Exterior", rol: "Especialista externo", hace: "hace 1 día", stage: 3, stageLabel: STAGE_LABEL[3], assignment: "asignado", asesorId: "demo-asesor-2", asesorNombre: "Roberto Silva", analistaId: "demo-analista", analistaNombre: "Ana Rodríguez", prioridad: "Alta", devueltoPorValidador: false, motivoDevolucion: null, dictamen: null, ...richChecklist(), camposEtapa1: null },
-  { id: "H-004", nombre: "Registro sanitario con plazos indefinidos", pais: "Argentina", tipo: "Trámite", clasificacion: "Operación", sector: "Salud", rol: "Analista BID", hace: "hace 1 día", stage: 3, stageLabel: STAGE_LABEL[3], assignment: "asignado", asesorId: "demo-asesor", asesorNombre: "Ana Mejía", analistaId: "otro-analista", analistaNombre: "Carlos Mendoza", prioridad: "Normal", devueltoPorValidador: false, motivoDevolucion: null, dictamen: null, ...richChecklist(), camposEtapa1: null },
-  { id: "H-005", nombre: "Restricción de participación extranjera en telecomunicaciones", pais: "Brasil", tipo: "Barrera regulatoria", clasificacion: "Operación", sector: "Telecomunicaciones", rol: "—", hace: "hace 2 días", stage: 3, stageLabel: STAGE_LABEL[3], assignment: "sin asignar", asesorId: "demo-asesor", asesorNombre: "Ana Mejía", analistaId: null, analistaNombre: null, prioridad: null, devueltoPorValidador: false, motivoDevolucion: null, dictamen: null, ...richChecklist(), camposEtapa1: null },
-  { id: "H-006", nombre: "Cuota de contenido local sin fundamento técnico", pais: "Chile", tipo: "Regulación", clasificacion: "Operación", sector: "Manufactura", rol: "—", hace: "hace 3 días", stage: 3, stageLabel: STAGE_LABEL[3], assignment: "sin asignar", asesorId: "demo-asesor-2", asesorNombre: "Roberto Silva", analistaId: null, analistaNombre: null, prioridad: null, devueltoPorValidador: false, motivoDevolucion: null, dictamen: null, ...richChecklist(), camposEtapa1: null },
-  { id: "H-007", nombre: "Doble tributación sobre servicios digitales transfronterizos", pais: "Ecuador", tipo: "Barrera regulatoria", clasificacion: "Salida", sector: "Servicios Digitales", rol: "Especialista externo", hace: "hace 4 días", stage: 4, stageLabel: STAGE_LABEL[4], assignment: null, asesorId: "demo-asesor", asesorNombre: "Ana Mejía", analistaId: "demo-analista", analistaNombre: "Ana Rodríguez", prioridad: null, devueltoPorValidador: false, motivoDevolucion: null, dictamen: "Se verificaron los 10 criterios; persiste incumplimiento en Cita normativa y Proporcionalidad, corregidos en los campos adjuntos.", ...richChecklist(), camposEtapa1: null },
-  { id: "H-008", nombre: "Norma técnica que impide interoperabilidad de pagos", pais: "Uruguay", tipo: "Regulación", clasificacion: "Operación", sector: "Servicios Financieros", rol: "Analista BID", hace: "hace 5 días", stage: 4, stageLabel: STAGE_LABEL[4], assignment: null, asesorId: "demo-asesor-2", asesorNombre: "Roberto Silva", analistaId: "otro-analista", analistaNombre: "Carlos Mendoza", prioridad: null, devueltoPorValidador: false, motivoDevolucion: null, dictamen: "Evaluación técnica completa; se ajustó el plazo legal y la entidad emisora citada.", ...richChecklist(), camposEtapa1: null },
+  { id: "H-101", nombre: "Restricción a Operadores Sin Planta Propia", pais: "Bolivia", tipo: "Barrera regulatoria", clasificacion: "Entrada", sector: "Agroindustria", rol: "—", hace: "hace 1 día", stage: 1, stageLabel: STAGE_LABEL[1], assignment: null, asesorId: "demo-asesor", asesorNombre: "Ana Mejía", analistaId: null, analistaNombre: null, prioridad: null, devueltoPorValidador: false, motivoDevolucion: null, notaHipotesis: null, dictamen: null, ...blankChecklist(), camposEtapa1: defaultCamposEtapa1() },
+  { id: "H-102", nombre: "Exigencia de traducción jurada para certificados sanitarios de exportación", pais: "Perú", tipo: "Trámite", clasificacion: "Salida", sector: "Agroindustria", rol: "—", hace: "hace 6 horas", stage: 1, stageLabel: STAGE_LABEL[1], assignment: null, asesorId: "demo-asesor", asesorNombre: "Ana Mejía", analistaId: null, analistaNombre: null, prioridad: null, devueltoPorValidador: false, motivoDevolucion: null, notaHipotesis: null, dictamen: null, ...blankChecklist(), camposEtapa1: camposEtapa1Tramite() },
+  { id: "H-103", nombre: "Cuota mínima de insumos nacionales para certificación de origen", pais: "Chile", tipo: "Barrera regulatoria", clasificacion: "Operación", sector: "Manufactura", rol: "—", hace: "hace 2 días", stage: 1, stageLabel: STAGE_LABEL[1], assignment: null, asesorId: "demo-asesor-2", asesorNombre: "Roberto Silva", analistaId: null, analistaNombre: null, prioridad: null, devueltoPorValidador: false, motivoDevolucion: null, notaHipotesis: null, dictamen: null, ...blankChecklist(), camposEtapa1: camposEtapa1Barrera() },
+  { id: "H-001", nombre: "Requisito de capital mínimo discriminatorio", pais: "Argentina", tipo: "Barrera regulatoria", clasificacion: "Entrada", sector: "Servicios Financieros", rol: "Analista BID", hace: "hace 2 horas", stage: 2, stageLabel: STAGE_LABEL[2], assignment: null, asesorId: "demo-asesor", asesorNombre: "Ana Mejía", analistaId: null, analistaNombre: null, prioridad: null, devueltoPorValidador: false, motivoDevolucion: null, notaHipotesis: null, dictamen: null, ...blankChecklist(), camposEtapa1: null },
+  { id: "H-002", nombre: "Licencia obligatoria de importación de insumos médicos", pais: "Perú", tipo: "Trámite", clasificacion: "Entrada", sector: "Salud", rol: "Analista BID", hace: "hace 5 horas", stage: 2, stageLabel: STAGE_LABEL[2], assignment: null, asesorId: "demo-asesor", asesorNombre: "Ana Mejía", analistaId: null, analistaNombre: null, prioridad: null, devueltoPorValidador: false, motivoDevolucion: null, notaHipotesis: null, dictamen: null, ...blankChecklist(), camposEtapa1: null },
+  { id: "H-003", nombre: "Tasa arancelaria preferencial no publicada", pais: "Bolivia", tipo: "Barrera regulatoria", clasificacion: "Entrada", sector: "Comercio Exterior", rol: "Especialista externo", hace: "hace 1 día", stage: 3, stageLabel: STAGE_LABEL[3], assignment: "asignado", asesorId: "demo-asesor-2", asesorNombre: "Roberto Silva", analistaId: "demo-analista", analistaNombre: "Ana Rodríguez", prioridad: "Alta", devueltoPorValidador: false, motivoDevolucion: null, notaHipotesis: null, dictamen: null, ...richChecklist(), camposEtapa1: null },
+  { id: "H-004", nombre: "Registro sanitario con plazos indefinidos", pais: "Argentina", tipo: "Trámite", clasificacion: "Operación", sector: "Salud", rol: "Analista BID", hace: "hace 1 día", stage: 3, stageLabel: STAGE_LABEL[3], assignment: "asignado", asesorId: "demo-asesor", asesorNombre: "Ana Mejía", analistaId: "otro-analista", analistaNombre: "Carlos Mendoza", prioridad: "Normal", devueltoPorValidador: false, motivoDevolucion: null, notaHipotesis: null, dictamen: null, ...richChecklist(), camposEtapa1: null },
+  { id: "H-005", nombre: "Restricción de participación extranjera en telecomunicaciones", pais: "Ecuador", tipo: "Barrera regulatoria", clasificacion: "Operación", sector: "Telecomunicaciones", rol: "—", hace: "hace 2 días", stage: 3, stageLabel: STAGE_LABEL[3], assignment: "sin asignar", asesorId: "demo-asesor", asesorNombre: "Ana Mejía", analistaId: null, analistaNombre: null, prioridad: null, devueltoPorValidador: false, motivoDevolucion: null, notaHipotesis: null, dictamen: null, ...richChecklist(), camposEtapa1: null },
+  { id: "H-006", nombre: "Cuota de contenido local sin fundamento técnico", pais: "Chile", tipo: "Regulación", clasificacion: "Operación", sector: "Manufactura", rol: "—", hace: "hace 3 días", stage: 3, stageLabel: STAGE_LABEL[3], assignment: "sin asignar", asesorId: "demo-asesor-2", asesorNombre: "Roberto Silva", analistaId: null, analistaNombre: null, prioridad: null, devueltoPorValidador: false, motivoDevolucion: null, notaHipotesis: null, dictamen: null, ...richChecklist(), camposEtapa1: null },
+  { id: "H-007", nombre: "Doble tributación sobre servicios digitales transfronterizos", pais: "Ecuador", tipo: "Barrera regulatoria", clasificacion: "Salida", sector: "Servicios Digitales", rol: "Especialista externo", hace: "hace 4 días", stage: 4, stageLabel: STAGE_LABEL[4], assignment: null, asesorId: "demo-asesor", asesorNombre: "Ana Mejía", analistaId: "demo-analista", analistaNombre: "Ana Rodríguez", prioridad: null, devueltoPorValidador: false, motivoDevolucion: null, notaHipotesis: null, dictamen: "Se verificaron los 10 criterios; persiste incumplimiento en Cita normativa y Proporcionalidad, corregidos en los campos adjuntos.", ...richChecklist(), camposEtapa1: null },
+  { id: "H-008", nombre: "Norma técnica que impide interoperabilidad de pagos", pais: "Perú", tipo: "Regulación", clasificacion: "Operación", sector: "Servicios Financieros", rol: "Analista BID", hace: "hace 5 días", stage: 4, stageLabel: STAGE_LABEL[4], assignment: null, asesorId: "demo-asesor-2", asesorNombre: "Roberto Silva", analistaId: "otro-analista", analistaNombre: "Carlos Mendoza", prioridad: null, devueltoPorValidador: false, motivoDevolucion: null, notaHipotesis: null, dictamen: "Evaluación técnica completa; se ajustó el plazo legal y la entidad emisora citada.", ...richChecklist(), camposEtapa1: null },
 ];
 
 interface RevisionContextValue {
@@ -359,6 +382,9 @@ interface RevisionContextValue {
   aceptarYPublicar: (id: string) => void;
   /** Etapa 4 -> Etapa 3, de vuelta al mismo Analista, con motivo visible en su checklist. */
   devolverAAnalista: (id: string, motivo: string) => void;
+  /** Etapa 4 -> estado "hipotesis" (NO cambia de stage, NO se retira del repositorio --
+   *  se queda visible con badge ámbar hasta que alguien la retome). */
+  marcarHipotesis: (id: string, nota: string) => void;
   notificaciones: Notificacion[];
   /** id de quien está viendo la sesión -- REVISION_DEMO_USER_ID[userRole] en App.tsx. */
   currentUserId: string;
@@ -418,6 +444,10 @@ export function RevisionProvider({ children, currentUserId, onNavigate }: Revisi
           tipo: found.tipo,
           origen: "Validador-triage",
           motivo,
+          // `motivo` es texto libre del modal de triage -- no hay forma
+          // confiable de clasificarlo en vivo, mismo default que en
+          // SEED_LOG_ERRORES para un motivo sin calce claro.
+          tipoError: "Contexto",
           fecha: nowLabel(),
         };
         setLogErrores(logs => [entry, ...logs]);
@@ -481,6 +511,10 @@ export function RevisionProvider({ children, currentUserId, onNavigate }: Revisi
         tipo: overrides.tipo,
         origen: "Sistema",
         motivo: check.motivos.join(" · "),
+        // Mismos 2 motivos posibles que LOG-S01/LOG-S02 en SEED_LOG_ERRORES
+        // (evaluarCandadosAutomaticos no tiene un tercero) -- ahí ya se
+        // clasificaron como "Contexto" por no calzar en las otras 3.
+        tipoError: "Contexto",
         fecha: nowLabel(),
       };
       setLogErrores(logs => [entry, ...logs]);
@@ -511,6 +545,9 @@ export function RevisionProvider({ children, currentUserId, onNavigate }: Revisi
           tipo: found.tipo,
           origen: "Asesor",
           motivo,
+          // `motivo` es texto libre del modal de rechazo -- mismo default
+          // que en SEED_LOG_ERRORES para un motivo sin calce claro.
+          tipoError: "Contexto",
           fecha: nowLabel(),
         };
         setLogErrores(logs => [entry, ...logs]);
@@ -536,6 +573,11 @@ export function RevisionProvider({ children, currentUserId, onNavigate }: Revisi
             camposChecklist: input.camposChecklist,
             devueltoPorValidador: false,
             motivoDevolucion: null,
+            // Si venía de "Hipótesis" (poco común -- implicaría que además se
+            // devolvió a Etapa 3 en algún momento) también se limpia acá,
+            // mismo criterio que motivoDevolucion: llega "fresco" a Etapa 4.
+            estado: "en_proceso" as EstadoHallazgo,
+            notaHipotesis: null,
           }
         : h
     )));
@@ -553,6 +595,9 @@ export function RevisionProvider({ children, currentUserId, onNavigate }: Revisi
           tipo: found.tipo,
           origen: "Validador-decision",
           motivo,
+          // `motivo` es texto libre del modal "No usar" -- mismo default que
+          // en SEED_LOG_ERRORES para un motivo sin calce claro.
+          tipoError: "Contexto",
           fecha: nowLabel(),
         };
         setLogErrores(logs => [entry, ...logs]);
@@ -615,6 +660,14 @@ export function RevisionProvider({ children, currentUserId, onNavigate }: Revisi
     });
   }, [notificar]);
 
+  const marcarHipotesis = useCallback((id: string, nota: string) => {
+    setHallazgos(prev => prev.map(h => (
+      h.id === id
+        ? { ...h, estado: "hipotesis" as EstadoHallazgo, notaHipotesis: nota }
+        : h
+    )));
+  }, []);
+
   const marcarLeida = useCallback((id: string) => {
     setNotificaciones(prev => prev.map(n => (n.id === id ? { ...n, leida: true } : n)));
   }, []);
@@ -637,12 +690,13 @@ export function RevisionProvider({ children, currentUserId, onNavigate }: Revisi
     noUsar,
     aceptarYPublicar,
     devolverAAnalista,
+    marcarHipotesis,
     notificaciones,
     currentUserId,
     onNavigate,
     marcarLeida,
     marcarTodasLeidas,
-  }), [hallazgos, logErrores, publicarDirecto, rechazarTriage, asignarAnalista, enviarAEtapa2, rechazarPorAsesor, actualizarChecklist, actualizarHallazgoBasico, enviarAValidador, noUsar, aceptarYPublicar, devolverAAnalista, notificaciones, currentUserId, onNavigate, marcarLeida, marcarTodasLeidas]);
+  }), [hallazgos, logErrores, publicarDirecto, rechazarTriage, asignarAnalista, enviarAEtapa2, rechazarPorAsesor, actualizarChecklist, actualizarHallazgoBasico, enviarAValidador, noUsar, aceptarYPublicar, devolverAAnalista, marcarHipotesis, notificaciones, currentUserId, onNavigate, marcarLeida, marcarTodasLeidas]);
 
   return <RevisionContext.Provider value={value}>{children}</RevisionContext.Provider>;
 }

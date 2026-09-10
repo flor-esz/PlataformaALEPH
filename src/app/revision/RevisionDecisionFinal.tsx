@@ -172,25 +172,73 @@ function ModalNoUsar({ onConfirm, onCancel }: { onConfirm: (motivo: string) => v
   );
 }
 
+// ─── Modal simple: nota de "Hipótesis" (mismo patrón que ModalNoUsar) ──────
+function ModalHipotesis({ onConfirm, onCancel }: { onConfirm: (nota: string) => void; onCancel: () => void }) {
+  const [nota, setNota] = useState("");
+  const canConfirm = nota.trim().length > 0;
+  return (
+    <div
+      style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 16px", backgroundColor: "rgba(20,22,26,0.5)" }}
+      onClick={onCancel}
+    >
+      <div
+        style={{ backgroundColor: C.card, borderRadius: 12, padding: "28px 32px", width: "100%", maxWidth: 440, boxShadow: "0 20px 60px rgba(0,0,0,0.18)" }}
+        onClick={e => e.stopPropagation()}
+      >
+        <h3 style={{ fontFamily: "Space Grotesk, sans-serif", fontSize: 18, fontWeight: 600, color: C.text, marginBottom: 8 }}>Marcar como "Hipótesis"</h3>
+        <p style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 13, color: C.textMuted, lineHeight: 1.6, marginBottom: 20 }}>
+          El hallazgo se queda en el <strong style={{ color: C.text }}>Repositorio</strong> como hipótesis a validar más adelante -- no se publica ni se descarta.
+        </p>
+        <label style={{ display: "block", fontFamily: "Space Grotesk, sans-serif", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", color: C.textMuted, marginBottom: 6 }}>
+          ¿Qué falta confirmar? *
+        </label>
+        <textarea
+          value={nota}
+          onChange={e => setNota(e.target.value)}
+          placeholder="Explica qué falta confirmar antes de decidir…"
+          style={{ width: "100%", fontFamily: "IBM Plex Sans, sans-serif", fontSize: 13, color: C.text, backgroundColor: C.canvas, border: `1px solid ${C.border}`, borderRadius: 8, padding: "10px 12px", resize: "vertical", outline: "none", minHeight: 80, boxSizing: "border-box", marginBottom: 20 }}
+        />
+        <div className="flex gap-2.5">
+          <button
+            onClick={canConfirm ? () => onConfirm(nota) : undefined}
+            style={{ flex: 1, padding: "10px 0", borderRadius: 8, fontFamily: "Space Grotesk, sans-serif", fontSize: 13, fontWeight: 500, backgroundColor: canConfirm ? C.ambar1 : `${C.ambar1}55`, color: "#ffffff", border: "none", cursor: canConfirm ? "pointer" : "not-allowed" }}
+          >
+            Confirmar
+          </button>
+          <button
+            onClick={onCancel}
+            style={{ flex: 1, padding: "10px 0", borderRadius: 8, fontFamily: "Space Grotesk, sans-serif", fontSize: 13, fontWeight: 500, backgroundColor: C.border, color: C.textMuted, border: "none", cursor: "pointer" }}
+          >
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main component ─────────────────────────────────────────────────────────
 
 interface RevisionDecisionFinalProps {
   id: string;
   onBack?: () => void;
-  /** Tras confirmar "No usar" / "Aceptar y publicar". */
+  /** Tras confirmar "No usar" / "Hipótesis" / "Aceptar y publicar". */
   onResuelto?: () => void;
   /** Bifurcación -> "Corregirlo yo mismo". */
   onAjustar?: () => void;
-  /** Bifurcación -> "Devolver al Analista". */
+  /** Bifurcación -> "Devolver al Analista". Se llega acá exclusivamente
+   *  desde "Ajustar" (el botón "Revisar" que también disparaba esto se quitó
+   *  por ser una decisión idéntica en el resultado -- ver store.tsx). */
   onDevolver?: () => void;
 }
 
 export default function RevisionDecisionFinal({ id, onBack, onResuelto, onAjustar, onDevolver }: RevisionDecisionFinalProps) {
-  const { hallazgos, noUsar, aceptarYPublicar } = useRevision();
+  const { hallazgos, noUsar, aceptarYPublicar, marcarHipotesis } = useRevision();
   const hallazgo = hallazgos.find(h => h.id === id) ?? null;
 
   const [bifurcacionOpen, setBifurcacionOpen] = useState(false);
   const [noUsarOpen, setNoUsarOpen] = useState(false);
+  const [hipotesisOpen, setHipotesisOpen] = useState(false);
 
   const diff = computeDiff(hallazgo);
   const todosCriterios = hallazgo ? [...hallazgo.criteriosJuridicos, ...hallazgo.criteriosEconomicos] : [];
@@ -308,6 +356,12 @@ export default function RevisionDecisionFinal({ id, onBack, onResuelto, onAjusta
           Ajustar
         </button>
         <button
+          onClick={() => setHipotesisOpen(true)}
+          style={{ fontFamily: "Space Grotesk, sans-serif", fontSize: 13, fontWeight: 500, padding: "9px 18px", borderRadius: 8, backgroundColor: "transparent", color: C.steel3, border: `1px solid ${C.steel3}55`, cursor: "pointer" }}
+        >
+          Hipótesis
+        </button>
+        <button
           onClick={() => { aceptarYPublicar(id); onResuelto?.(); }}
           style={{ fontFamily: "Space Grotesk, sans-serif", fontSize: 13, fontWeight: 600, padding: "9px 18px", borderRadius: 8, backgroundColor: C.verde1, color: "#ffffff", border: "none", cursor: "pointer" }}
         >
@@ -319,6 +373,12 @@ export default function RevisionDecisionFinal({ id, onBack, onResuelto, onAjusta
         <ModalNoUsar
           onConfirm={(motivo) => { noUsar(id, motivo); setNoUsarOpen(false); onResuelto?.(); }}
           onCancel={() => setNoUsarOpen(false)}
+        />
+      )}
+      {hipotesisOpen && (
+        <ModalHipotesis
+          onConfirm={(nota) => { marcarHipotesis(id, nota); setHipotesisOpen(false); onResuelto?.(); }}
+          onCancel={() => setHipotesisOpen(false)}
         />
       )}
       {bifurcacionOpen && (

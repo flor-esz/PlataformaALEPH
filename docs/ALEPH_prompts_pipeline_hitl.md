@@ -61,7 +61,7 @@ Etapa 4 (decisión final), único con visibilidad completa. Analista jurídico-e
 | 1 | Etapa 1 · Validación del Asesor | Asesor | corrige detalle menor o rechaza |
 | 2 | Etapa 2 · Triage del Validador | Validador | resolver directo (es/no es barrera) o enviar a Analista |
 | 3 | Etapa 3 · Revisión del Analista | Analista | 10 criterios jurídico-económicos |
-| 4 | Etapa 4 · Decisión final | Validador | Aceptar y publicar / Ajustar (yo mismo o devolver) / No usar |
+| 4 | Etapa 4 · Decisión final | Validador | Aceptar y publicar / Ajustar (yo mismo o devolver) / Hipótesis / No usar |
 
 **Matriz de visibilidad (repositorio):** Asesor solo su Etapa 1. Analista su Etapa 3 +
 lectura de lo suyo en Por decidir/Publicado/Rechazado. Validador ve todo. Candados
