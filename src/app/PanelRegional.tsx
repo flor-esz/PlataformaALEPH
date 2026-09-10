@@ -8,6 +8,9 @@ import {
   COUNTRY_DATA,
   COBERTURA_MUESTRA,
   JERARQUIA_NORMATIVA_DATA,
+  usePeriodoAnalisis,
+  periodoRegional,
+  formatearPeriodo,
 } from "./App";
 import type { View, Country } from "./App";
 import { BarrasComposicion } from "./components/ui/BarrasComposicion";
@@ -23,6 +26,11 @@ function PanelRegional({ onNavigate }: { onNavigate: (v: View) => void }) {
   // Reutilizada por el <select> de país y por el botón "Ver panorama del
   // país →" de cada tarjeta — un solo lugar para la navegación a Panel País.
   const irAPanoramaDePais = (pais: Country) => onNavigate({ screen: "country-dashboard", country: pais });
+
+  // Vista regional -- rango que cubre a los 5 países (mínimo de los
+  // "desde", máximo de los "hasta"), no el periodo de un país puntual.
+  const { periodosAnalisis } = usePeriodoAnalisis();
+  const periodoTexto = formatearPeriodo(periodoRegional(periodosAnalisis));
 
   // ── KPIs fila 1 — calculados a partir de datos reales existentes ───────────
   const instrumentosAnalizados = JERARQUIA_NORMATIVA_DATA.reduce((sum, c) => sum + c.total, 0);
@@ -90,7 +98,7 @@ function PanelRegional({ onNavigate }: { onNavigate: (v: View) => void }) {
         </select>
       </div>
 
-      <BandaCobertura text={`Cobertura regional: 86% de fuentes procesadas · Última actualización: 12 de marzo de 2026 · ${COUNTRIES.length} países activos`} />
+      <BandaCobertura text={`Periodo de análisis: ${periodoTexto} · Cobertura regional: 86% de fuentes procesadas · Última actualización: 12 de marzo de 2026 · ${COUNTRIES.length} países activos`} />
 
       {/* KPIs fila 1 — datos reales */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">

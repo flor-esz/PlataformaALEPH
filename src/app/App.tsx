@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, lazy, Suspense } from "react";
+import { useState, useEffect, useRef, useMemo, createContext, useContext, lazy, Suspense } from "react";
 // Cargados con React.lazy (no import estático): estos módulos importan { C, Header }
 // de vuelta desde este archivo (ciclo App.tsx <-> revision/*.tsx) y usan C en el
 // top-level de su módulo (ej. fieldStyle, ANALISTAS, SEV_COLOR). Un import estático
@@ -206,6 +206,75 @@ export const COUNTRY_DATA: Record<string, { barreras: number; criticas: number; 
 // Lista real de países activos (sin "Todos") — fuente única para Panel Regional
 // y cualquier otra pantalla que necesite iterar/contar países reales.
 export const COUNTRIES: Country[] = Object.keys(COUNTRY_DATA) as Country[];
+
+// ─── Periodo de análisis (compartido) ──────────────────────────────────────────
+// Antes esto era el texto fijo "enero 2015 – marzo 2026" repetido en cada
+// pantalla (BandaCobertura de Panel País, ReportesScreen/ReportePDFScreen,
+// las bandas informativas de Impacto Económico e Índice/IDR, etc.). Ahora es
+// un período POR PAÍS, editable desde Administración → Catálogos, expuesto
+// vía Context para que cualquier pantalla (dentro o fuera de App.tsx) lo lea
+// sin duplicar el estado ni pasarlo a mano por props en cada nivel.
+export type PeriodoAnalisis = { desde: string; hasta: string }; // "YYYY-MM"
+export type PeriodosAnalisisMap = Record<Exclude<Country, "Todos">, PeriodoAnalisis>;
+
+// Mismos valores ya hardcodeados en el resto de la plataforma -- a propósito,
+// para que nada cambie visualmente hasta que alguien edite un país puntual
+// desde Administración.
+const PERIODOS_ANALISIS_DEFAULT: PeriodosAnalisisMap = {
+  Argentina: { desde: "2015-01", hasta: "2026-03" },
+  Bolivia:   { desde: "2015-01", hasta: "2026-03" },
+  Chile:     { desde: "2015-01", hasta: "2026-03" },
+  Ecuador:   { desde: "2015-01", hasta: "2026-03" },
+  Perú:      { desde: "2015-01", hasta: "2026-03" },
+};
+
+const MESES_LARGOS_ES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+
+// "2015-01" -> "enero 2015"
+function formatearMesAnio(yyyyMm: string): string {
+  const [y, m] = yyyyMm.split("-").map(Number);
+  return `${MESES_LARGOS_ES[(m - 1 + 12) % 12]} ${y}`;
+}
+
+// { desde: "2015-01", hasta: "2026-03" } -> "enero 2015 – marzo 2026"
+export function formatearPeriodo(periodo: PeriodoAnalisis): string {
+  return `${formatearMesAnio(periodo.desde)} – ${formatearMesAnio(periodo.hasta)}`;
+}
+
+// Para vistas "Regional"/"Todos los países": el rango que cubre a los 5
+// países (mínimo de todos los "desde", máximo de todos los "hasta"). Las
+// cadenas "YYYY-MM" ordenan igual lexicográfica que cronológicamente, así
+// que un sort() alcanza, sin parsear fechas.
+export function periodoRegional(periodos: PeriodosAnalisisMap): PeriodoAnalisis {
+  const entradas = Object.values(periodos);
+  const desdes = entradas.map(e => e.desde).sort();
+  const hastas = entradas.map(e => e.hasta).sort();
+  return { desde: desdes[0], hasta: hastas[hastas.length - 1] };
+}
+
+type PeriodoAnalisisContextValue = {
+  periodosAnalisis: PeriodosAnalisisMap;
+  setPeriodoAnalisisPais: (pais: Exclude<Country, "Todos">, periodo: PeriodoAnalisis) => void;
+};
+
+const PeriodoAnalisisContext = createContext<PeriodoAnalisisContextValue | null>(null);
+
+export function PeriodoAnalisisProvider({ children }: { children: React.ReactNode }) {
+  const [periodosAnalisis, setPeriodosAnalisis] = useState<PeriodosAnalisisMap>(PERIODOS_ANALISIS_DEFAULT);
+  const setPeriodoAnalisisPais = (pais: Exclude<Country, "Todos">, periodo: PeriodoAnalisis) =>
+    setPeriodosAnalisis(prev => ({ ...prev, [pais]: periodo }));
+  const value = useMemo(() => ({ periodosAnalisis, setPeriodoAnalisisPais }), [periodosAnalisis]);
+  return <PeriodoAnalisisContext.Provider value={value}>{children}</PeriodoAnalisisContext.Provider>;
+}
+
+// Lee/edita el periodo de análisis compartido. Debe usarse dentro de
+// <PeriodoAnalisisProvider> (envuelve todo App(), ver más abajo) -- mismo
+// criterio que useRevision()/<RevisionProvider> en revision/store.tsx.
+export function usePeriodoAnalisis(): PeriodoAnalisisContextValue {
+  const ctx = useContext(PeriodoAnalisisContext);
+  if (!ctx) throw new Error("usePeriodoAnalisis() debe usarse dentro de <PeriodoAnalisisProvider>.");
+  return ctx;
+}
 
 // Cobertura % por país — dato de muestra, sin fuente real todavía.
 // TODO: reemplazar con dato real cuando exista un campo de cobertura en el modelo de datos.
@@ -3188,6 +3257,8 @@ function Sidebar({
               <div className="ml-4 border-l pl-2" style={{ borderColor: "#2A3A4A" }}>
                 {navItem("Usuarios", "administracion", <Settings size={16} />, () => nav(() => onNavigate({ screen: "administracion", tab: "usuarios" })), activeView.screen === "administracion" && (activeView as { screen: "administracion"; tab?: string }).tab === "usuarios")}
                 {navItem("Catálogos", "administracion", <Settings size={16} />, () => nav(() => onNavigate({ screen: "administracion", tab: "catalogos" })), activeView.screen === "administracion" && (activeView as { screen: "administracion"; tab?: string }).tab === "catalogos")}
+                {navItem("Fuentes", "administracion", <Settings size={16} />, () => nav(() => onNavigate({ screen: "administracion", tab: "fuentes" })), activeView.screen === "administracion" && (activeView as { screen: "administracion"; tab?: string }).tab === "fuentes")}
+                {navItem("Bitácora", "administracion", <Settings size={16} />, () => nav(() => onNavigate({ screen: "administracion", tab: "bitacora" })), activeView.screen === "administracion" && (activeView as { screen: "administracion"; tab?: string }).tab === "bitacora")}
               </div>
             )}
           </>
@@ -3417,6 +3488,9 @@ function SectionDivider({ label }: { label: string }) {
 // ─── Panorama Regulatorio (Country Dashboard) ─────────────────────────────────
 // Screen fusionado: siempre anclado a UN país (sin modo agregado "Todos").
 function CountryDashboard({ country, onCountryChange, onNavigate }: { country: string; onCountryChange?: (c: Country) => void; onNavigate: (v: View) => void }) {
+  // Antes del early return de abajo -- regla de los Hooks, mismo criterio
+  // que ya se aplicó en ReportePDFScreen().
+  const { periodosAnalisis } = usePeriodoAnalisis();
   const d = COUNTRY_DATA[country];
   if (!d) return null;
 
@@ -3491,7 +3565,7 @@ function CountryDashboard({ country, onCountryChange, onNavigate }: { country: s
         </div>
       )}
 
-      <BandaCobertura text={`Periodo de análisis: enero 2015 – marzo 2026 · última actualización 12 mar 2026 · cobertura ${COBERTURA_MUESTRA[paisKey] ?? COBERTURA_MUESTRA["Bolivia"]}%`} />
+      <BandaCobertura text={`Periodo de análisis: ${formatearPeriodo(periodosAnalisis[paisKey] ?? periodosAnalisis["Bolivia"])} · última actualización 12 mar 2026 · cobertura ${COBERTURA_MUESTRA[paisKey] ?? COBERTURA_MUESTRA["Bolivia"]}%`} />
 
       {/* onSegmentClick: INSTRUMENTOS_MUESTRA no tiene país (es un catálogo a
           nivel regional, mismo criterio ya aplicado al filtro "País" de
@@ -3856,6 +3930,13 @@ export function ComposicionSimplePanel({ label, filas, actionLabel, onAction, fo
 
 // ─── Screen 3 — Barreras ──────────────────────────────────────────────────────
 function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, onNavigate }: { initialSector?: string; country?: Country; onCountryChange?: (c: Country) => void; onNavigate: (v: View) => void }) {
+  // Regional (country === "Todos") usa el rango que cubre a los 5 países;
+  // por país usa el de ese país puntual -- ambas ramas de este componente
+  // (más abajo) lo necesitan.
+  const { periodosAnalisis } = usePeriodoAnalisis();
+  const periodoTextoBarreras = country === "Todos"
+    ? formatearPeriodo(periodoRegional(periodosAnalisis))
+    : formatearPeriodo(periodosAnalisis[country as Exclude<Country, "Todos">] ?? periodosAnalisis["Bolivia"]);
   const [sector, setSector] = useState(initialSector || "");
   const [entidad, setEntidad] = useState("");
   const [clasificacion, setClasificacion] = useState("");
@@ -3957,7 +4038,7 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
           }
         />
 
-        <BandaCobertura text={`Cobertura regional: 86% de fuentes procesadas · Última actualización: 12 de marzo de 2026 · ${COUNTRIES.length} países activos`} />
+        <BandaCobertura text={`Periodo de análisis: ${periodoTextoBarreras} · Cobertura regional: 86% de fuentes procesadas · Última actualización: 12 de marzo de 2026 · ${COUNTRIES.length} países activos`} />
 
         <BarraFiltrosBarreras
           country={country} setCountry={c => { onCountryChange?.(c); }}
@@ -4078,7 +4159,7 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
         if (subdimension) activeFilters.push(`Subdimensión: ${subdimension}`);
         if (jerarquia) activeFilters.push(`Jerarquía: ${jerarquia}`);
         if (severidadFil) activeFilters.push(`Severidad: ${severidadFil}`);
-        const exportCtx = JSON.stringify({ tipo: "distorsion", pais: countryLabel, sector: sector || "Todos los sectores", filtros: activeFilters, registros: `${filtered.length} de ${BARRERAS_NIVEL4_LIST.length} barreras`, fecha: new Date().toLocaleString("es-BO"), periodo: "enero 2015 – marzo 2026" });
+        const exportCtx = JSON.stringify({ tipo: "distorsion", pais: countryLabel, sector: sector || "Todos los sectores", filtros: activeFilters, registros: `${filtered.length} de ${BARRERAS_NIVEL4_LIST.length} barreras`, fecha: new Date().toLocaleString("es-BO"), periodo: periodoTextoBarreras });
         const cd = COUNTRY_BARRERAS_DATA[country] ?? COUNTRY_BARRERAS_DATA["Bolivia"];
         const reportesPrefill: ReportesPrefill = {
           tipoHallazgo: "distorsion",
@@ -4106,6 +4187,8 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
                 </>
               }
             />
+
+            <BandaCobertura text={`Periodo de análisis: ${periodoTextoBarreras} · cobertura ${COBERTURA_MUESTRA[country as Exclude<Country, "Todos">] ?? COBERTURA_MUESTRA["Bolivia"]}%`} />
 
             <BarraFiltrosBarreras
               country={country} setCountry={c => { onCountryChange?.(c); }}
@@ -4593,6 +4676,12 @@ function GraficoEscala1a4({ dimension, setDimension, data, total }: {
 
 // ─── Screen 5 — Trámites ──────────────────────────────────────────────────────
 function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { country?: Country; onCountryChange?: (c: Country) => void; onNavigate: (v: View) => void }) {
+  // Mismo criterio que BarrerasScreen: regional usa el rango de los 5
+  // países, por país usa el de ese país puntual.
+  const { periodosAnalisis } = usePeriodoAnalisis();
+  const periodoTextoTramites = country === "Todos"
+    ? formatearPeriodo(periodoRegional(periodosAnalisis))
+    : formatearPeriodo(periodosAnalisis[country as Exclude<Country, "Todos">] ?? periodosAnalisis["Bolivia"]);
   const [sector, setSector] = useState("");
   const [entidad, setEntidad] = useState("");
   const [tipoUsuario, setTipoUsuario] = useState("");
@@ -4708,6 +4797,8 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
             </>
           }
         />
+
+        <BandaCobertura text={`Periodo de análisis: ${periodoTextoTramites} · Cobertura regional: 86% de fuentes procesadas · ${COUNTRIES.length} países activos`} />
 
         {/* KPIs */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
@@ -4883,7 +4974,7 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
         if (etapaCiclo) activeFilters.push(`Etapa: ${etapaCiclo}`);
         if (tamano) activeFilters.push(`Tamaño: ${tamano}`);
         if (ano) activeFilters.push(`Año: ${ano}`);
-        const exportCtx = JSON.stringify({ tipo: "carga", pais: countryLabel, sector: sector || "Todos los sectores", filtros: activeFilters, registros: `${filtered.length} de ${TRAMITES_EXT.length} trámites`, fecha: new Date().toLocaleString("es-BO"), periodo: "enero 2015 – marzo 2026" });
+        const exportCtx = JSON.stringify({ tipo: "carga", pais: countryLabel, sector: sector || "Todos los sectores", filtros: activeFilters, registros: `${filtered.length} de ${TRAMITES_EXT.length} trámites`, fecha: new Date().toLocaleString("es-BO"), periodo: periodoTextoTramites });
         const reportesPrefill: ReportesPrefill = {
           tipoHallazgo: "carga",
           pais: country,
@@ -4911,6 +5002,8 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
           />
         );
       })()}
+
+      <BandaCobertura text={`Periodo de análisis: ${periodoTextoTramites} · cobertura ${COBERTURA_MUESTRA[country as Exclude<Country, "Todos">] ?? COBERTURA_MUESTRA["Bolivia"]}%`} />
 
       {/* Filter bar — wraps to multiple rows; order: País · Sector · Entidad · Tipo usuario · Tipo carga · Subdim · Etapa · Tamaño · Año */}
       <div className="flex flex-wrap gap-2 mb-5">
@@ -6064,6 +6157,10 @@ const SAMPLE_USERS = [
   { nombre: "Diego Paredes", correo: "d.paredes@iadb.org", rol: "Analista BID", activo: false, acceso: "15 jun 2025" },
   { nombre: "Sofía Ríos", correo: "s.rios@mec.gob.ar", rol: "Usuario Gobierno", activo: true, acceso: "Hoy, 07:30" },
   { nombre: "Marco Salinas", correo: "m.salinas@iadb.org", rol: "Solo lectura", activo: true, acceso: "Ayer, 11:20" },
+  // Usuario Gobierno de los 3 países que faltaban (antes solo Bolivia/Argentina) -- dato de muestra.
+  { nombre: "Javiera Contreras", correo: "j.contreras@minec.gob.cl", rol: "Usuario Gobierno", activo: true, acceso: "Hoy, 10:05" },
+  { nombre: "Andrés Villacís", correo: "a.villacis@produccion.gob.ec", rol: "Usuario Gobierno", activo: true, acceso: "Ayer, 09:40" },
+  { nombre: "Rosa Quispe", correo: "r.quispe@mef.gob.pe", rol: "Usuario Gobierno", activo: true, acceso: "Hoy, 08:55" },
 ];
 
 const CATALOGOS = {
@@ -6071,7 +6168,53 @@ const CATALOGOS = {
   sectores: ["Agropecuario", "Agroindustria", "Manufactura", "Servicios Financieros", "Construcción", "Textil y Confección", "Energías Renovables", "Servicios Digitales"],
   tiposBarrera: ["Entrada", "Operación"],
   tiposTramite: ["Apertura", "Operación", "Inspección", "Cierre", "Certificación"],
-  sectoresGeo: ["Andino", "Cono Sur", "Centroamérica", "Caribe", "Mesoamérica", "Atlántico Sur"],
+  // Entidades emisoras -- dato de muestra, tomado de nombres ya usados en
+  // ALL_BARRERAS/ALL_TRAMITES/FUENTES_TRAZABILIDAD_MUESTRA de los 5 países
+  // (deduplicado). Lista inicial, no exhaustiva. `pais` es el país real que
+  // cada entidad ya tenía en esas fuentes (verificado registro por
+  // registro, no asignado a ciegas).
+  entidades: [
+    { nombre: "AFIP", pais: "Argentina" },
+    { nombre: "Banco Central de la República Argentina", pais: "Argentina" },
+    { nombre: "Congreso de la Nación", pais: "Argentina" },
+    { nombre: "INPI", pais: "Argentina" },
+    { nombre: "Municipalidad de Buenos Aires", pais: "Argentina" },
+    { nombre: "ARSA — Agencia de Regulación Sanitaria", pais: "Bolivia" },
+    { nombre: "SENAVEX", pais: "Bolivia" },
+    { nombre: "SENAPI", pais: "Bolivia" },
+    { nombre: "Aduana Nacional de Bolivia", pais: "Bolivia" },
+    { nombre: "FUNDEMPRESA", pais: "Bolivia" },
+    { nombre: "Asamblea Legislativa Plurinacional", pais: "Bolivia" },
+    { nombre: "Min. de Economía y Finanzas Públicas", pais: "Bolivia" },
+    { nombre: "Servicio de Impuestos Internos (SII)", pais: "Chile" },
+    { nombre: "Superintendencia del Medio Ambiente", pais: "Chile" },
+    { nombre: "Dirección Nacional de Aduanas", pais: "Chile" },
+    { nombre: "Congreso Nacional", pais: "Chile" },
+    { nombre: "SENAE", pais: "Ecuador" },
+    { nombre: "Agrocalidad", pais: "Ecuador" },
+    { nombre: "ARCSA", pais: "Ecuador" },
+    { nombre: "Servicio de Rentas Internas (SRI)", pais: "Ecuador" },
+    { nombre: "Asamblea Nacional", pais: "Ecuador" },
+    { nombre: "SUNAT", pais: "Perú" },
+    { nombre: "Municipalidad de Lima", pais: "Perú" },
+    { nombre: "Ministerio de Economía y Finanzas", pais: "Perú" },
+    { nombre: "Congreso de la República", pais: "Perú" },
+  ] as { nombre: string; pais: Country }[],
+  // Escala de severidad de hallazgos (barreras) -- ver punto 6: todavía no es
+  // la fuente única, SEVERIDADES/SevBadge/etc. en el resto de la plataforma
+  // siguen con su propia lista hardcodeada en paralelo.
+  // TODO: conectar este catálogo como fuente única de las opciones que hoy
+  // están hardcodeadas en cada pantalla (badges de severidad, selects, etc.).
+  severidad: ["Crítico", "Alto", "Mediano", "Bajo"],
+  canales: ["Costo administrativo", "Capital/liquidez", "Tiempo/incertidumbre", "Capacidad técnica", "Modelo de negocio", "Incumbentes/competencia"],
+  // Unión sin duplicar de las categorías de barreras (Eliminar/Simplificar/
+  // Sustituir/Clarificar/Proporcionalizar) y trámites (Simplificar/
+  // Digitalizar/Interoperar/Clarificar/Proporcionalizar).
+  // TODO: confirmar con Franco/Juanjo si barreras y trámites deben seguir
+  // usando cada uno su propio subconjunto fijo, o si ahora cualquiera de las
+  // 7 categorías aplica a ambos tipos de hallazgo.
+  accionesMejora: ["Eliminar", "Simplificar", "Sustituir", "Clarificar", "Proporcionalizar", "Digitalizar", "Interoperar"],
+  estadosHitl: ["Publicado", "Por decidir", "Etapa 3"],
 };
 
 const CATALOGO_ROLES_DATA = [
@@ -6195,10 +6338,17 @@ function AdminCatalogosScreen() {
     { key: "tiposBarrera",label: "Tipo de barrera",   desc: "Clasificación de barreras regulatorias" },
     { key: "tiposTramite",label: "Tipo de trámite",   desc: "Clasificación de trámites" },
     { key: "roles",       label: "Roles",             desc: "Roles de usuario y sus permisos" },
-    { key: "sectoresGeo", label: "Sectores",          desc: "Sectores geográficos de operación" },
+    { key: "entidades",   label: "Entidad",           desc: "Entidades emisoras activas en el sistema" },
+    { key: "severidad",   label: "Severidad",         desc: "Escala de severidad de hallazgos" },
+    { key: "canales",     label: "Canal de transmisión económica", desc: "Canales usados en barreras y trámites" },
+    { key: "accionesMejora", label: "Acción de mejora", desc: "Categorías de acción de mejora regulatoria" },
+    { key: "estadosHitl", label: "Estado HITL",       desc: "Estados del pipeline de validación" },
   ] as const;
 
-  type GenericCatKey = keyof typeof CATALOGOS;
+  // "entidades" quedó afuera de GenericCatKey: es el único catálogo con
+  // forma { nombre, pais } en vez de string plano, así que addItem() (que
+  // asume string[]) no aplica ahí -- ver addEntidad/saveEntidadEdit más abajo.
+  type GenericCatKey = Exclude<keyof typeof CATALOGOS, "entidades">;
 
   const [view, setView] = useState<CatView>("list");
   const [selectedCat, setSelectedCat] = useState<string>("");
@@ -6208,10 +6358,33 @@ function AdminCatalogosScreen() {
   const [roles, setRoles] = useState(CATALOGO_ROLES_DATA);
   const [perms, setPerms] = useState(PERMISOS_MATRIX);
   const [addingItem, setAddingItem] = useState("");
+  const [addingItemPais, setAddingItemPais] = useState<Country>("Argentina");
+  const [showAddItem, setShowAddItem] = useState(false);
   const [addingRole, setAddingRole] = useState(false);
   const [newRole, setNewRole] = useState({ nombre: "", descripcion: "" });
   const [editingRole, setEditingRole] = useState<{ index: number; nombre: string; descripcion: string } | null>(null);
-  const [editingItem, setEditingItem] = useState<{ index: number; value: string } | null>(null);
+  // `pais` solo se usa para editar una entidad -- undefined para el resto de
+  // catálogos. `periodoDesde`/`periodoHasta` solo se usan para editar un
+  // país (caso especial igual que "entidades" con su campo país) --
+  // undefined para el resto.
+  const [editingItem, setEditingItem] = useState<{ index: number; value: string; pais?: Country; periodoDesde?: string; periodoHasta?: string } | null>(null);
+  // Filtro de país para la tabla de Entidades -- default el primer país.
+  const [filtroPaisEntidades, setFiltroPaisEntidades] = useState<Country>("Argentina");
+
+  // Periodo de análisis -- por país, compartido vía Context
+  // (usePeriodoAnalisis) con el resto de la plataforma. Ya NO tiene panel
+  // propio acá: el catálogo "País" lo edita como caso especial (mismo
+  // criterio que "Entidades" con su campo país), ver más abajo en la vista
+  // "items" -- editingItem.periodoDesde/periodoHasta.
+  // Ya conectado a: BandaCobertura de Panel País/Regional, Barreras
+  // (Regional y País), Trámites (Regional y País), Impacto Económico e
+  // Índice/IDR.
+  // TODO: ReportesScreen (CORPUS_MIN/CORPUS_MAX/CORPUS_LABEL, usados para
+  // acotar el filtro "Rango personalizado") y el fallback de periodo en
+  // ReportePDFScreen quedaron deliberadamente fuera de este alcance -- no
+  // estaban en la lista de pantallas de esta tarea, y conectarlos requiere
+  // decidir qué país aplica cuando el reporte es "Todos los países".
+  const { periodosAnalisis, setPeriodoAnalisisPais } = usePeriodoAnalisis();
 
   const isActive = (cat: string, item: string) => !(itemActive[cat]?.has(item));
   const toggleActive = (cat: string, item: string) => {
@@ -6228,6 +6401,36 @@ function AdminCatalogosScreen() {
     setCatData(d => ({ ...d, [catKey]: [...d[catKey], addingItem.trim()] }));
     setAddingItem("");
   };
+
+  // ── Entidades: mismo espíritu que isActive/toggleActive/addItem/editar de
+  // arriba, pero por registro { nombre, pais } en vez de por string plano
+  // (dos entidades de países distintos podrían compartir nombre algún día,
+  // por eso la clave de activo/inactivo es "pais::nombre", no solo nombre).
+  const entidadKey = (e: { nombre: string; pais: Country }) => `${e.pais}::${e.nombre}`;
+  const isEntidadActive = (e: { nombre: string; pais: Country }) => !(itemActive["entidades"]?.has(entidadKey(e)));
+  const toggleEntidadActive = (e: { nombre: string; pais: Country }) => {
+    const key = entidadKey(e);
+    setItemActive(prev => {
+      const next = { ...prev };
+      const s = new Set(next["entidades"] ?? []);
+      if (s.has(key)) s.delete(key); else s.add(key);
+      next["entidades"] = s;
+      return next;
+    });
+  };
+  const addEntidad = (nombre: string, pais: Country) => {
+    if (!nombre.trim()) return;
+    setCatData(d => ({ ...d, entidades: [...d.entidades, { nombre: nombre.trim(), pais }] }));
+    setAddingItem("");
+  };
+  const saveEntidadEdit = (index: number, nombre: string, pais: Country) => {
+    if (!nombre.trim()) return;
+    setCatData(d => {
+      const arr = [...d.entidades];
+      arr[index] = { nombre: nombre.trim(), pais };
+      return { ...d, entidades: arr };
+    });
+  };
   const togglePerm = (rol: string, accion: string) =>
     setPerms(p => {
       const current = p[rol] ?? {};
@@ -6235,12 +6438,15 @@ function AdminCatalogosScreen() {
     });
 
   const catLabel = CATALOG_LIST.find(c => c.key === selectedCat)?.label ?? "";
-  const selectedCatKey = selectedCat as GenericCatKey;
+  const selectedCatKey = selectedCat as keyof typeof CATALOGOS;
+  const isEntidadesCat = selectedCat === "entidades";
+  const isPaisesCat = selectedCat === "paises";
 
   // ── List view ──────────────────────────────────────────────────────────────
   if (view === "list") return (
     <div className="p-4 md:p-8 overflow-y-auto h-full">
       <Header breadcrumb="Administración — Catálogos" title="Catálogos" subtitle="Gestión del sistema · Rol: Administrador" />
+
       <div className="rounded-lg overflow-hidden" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
         {CATALOG_LIST.map((cat, i) => (
           <div key={cat.key} className="px-6 py-4 flex items-center justify-between"
@@ -6260,63 +6466,144 @@ function AdminCatalogosScreen() {
     </div>
   );
 
-  // ── Generic items view ─────────────────────────────────────────────────────
-  if (view === "items") return (
+  // ── Generic items view (con rama especial para "entidades") ────────────────
+  if (view === "items") {
+    const entidadesFiltradas = catData.entidades.filter(e => e.pais === filtroPaisEntidades);
+    const itemsGenericos = isEntidadesCat ? [] : (catData[selectedCatKey as GenericCatKey] ?? []);
+    const totalRegistros = isEntidadesCat ? entidadesFiltradas.length : itemsGenericos.length;
+    const paisSelStyle: React.CSSProperties = { fontFamily: "IBM Plex Sans, sans-serif", color: C.text, backgroundColor: C.canvas, border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 12px", fontSize: 13, outline: "none" };
+
+    return (
     <div className="p-4 md:p-8 overflow-y-auto h-full">
       <Header breadcrumb={`Administración — Catálogos — ${catLabel}`} title={catLabel} subtitle="Gestión del sistema · Rol: Administrador" />
       <div className="flex items-center gap-3 mb-4">
         <button className="text-[13px]" style={{ color: C.steel3, fontFamily: "IBM Plex Sans, sans-serif", background: "none", border: "none" }}
           onClick={() => setView("list")}>← Volver a Catálogos</button>
       </div>
+      {isEntidadesCat && (
+        <div className="mb-4">
+          <label className="block text-[10px] uppercase tracking-widest mb-1" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>País</label>
+          <select value={filtroPaisEntidades} onChange={e => setFiltroPaisEntidades(e.target.value as Country)} style={paisSelStyle}>
+            {CATALOGOS.paises.map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
+        </div>
+      )}
       <div className="rounded-lg overflow-hidden" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
         <div className="px-4 md:px-5 py-4 border-b flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3" style={{ borderColor: C.border }}>
-          <p className="text-[13px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{(catData[selectedCatKey] ?? []).length} registros</p>
-          <div className="flex gap-2 w-full sm:w-auto">
-            <input value={addingItem} onChange={e => setAddingItem(e.target.value)} placeholder="Nuevo registro..."
-              className="flex-1 sm:flex-none px-3 py-2 rounded-lg text-[12px] outline-none min-h-[40px]"
-              style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text, backgroundColor: C.canvas, border: `1px solid ${C.border}`, width: undefined }}
-              onKeyDown={e => e.key === "Enter" && addItem(selectedCatKey)} />
-            <button className="px-3 md:px-4 py-2 rounded-lg text-[12px] font-medium min-h-[40px]"
-              style={{ backgroundColor: C.steel4, color: "white", fontFamily: "Space Grotesk, sans-serif", border: "none" }}
-              onClick={() => addItem(selectedCatKey)}>+ Agregar</button>
-          </div>
+          <p className="text-[13px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{totalRegistros} registros</p>
+          <button className="px-3 md:px-4 py-2 rounded-lg text-[12px] font-medium min-h-[40px]"
+            style={{ backgroundColor: C.steel4, color: "white", fontFamily: "Space Grotesk, sans-serif", border: "none" }}
+            onClick={() => { setAddingItem(""); setAddingItemPais(filtroPaisEntidades); setShowAddItem(true); }}>
+            + Agregar registro
+          </button>
         </div>
         <div className="overflow-x-auto"><table className="w-full min-w-[400px]">
           <thead>
             <tr style={{ borderBottom: `1px solid ${C.border}` }}>
-              {["Nombre", "Estado", "Acciones"].map(h => (
+              {["Nombre", ...(isEntidadesCat ? ["País"] : []), "Estado", "Acciones"].map(h => (
                 <th key={h} className="px-5 py-3 text-left text-[11px] uppercase tracking-widest" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {(catData[selectedCatKey] ?? []).map((item, i) => {
-              const active = isActive(selectedCat, item);
-              return (
-                <tr key={i} style={{ borderBottom: `1px solid ${C.border}` }}>
-                  <td className="px-5 py-3 text-[13px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: active ? C.text : C.textMuted, textDecoration: active ? "none" : "line-through" }}>{item}</td>
-                  <td className="px-5 py-3">
-                    <span className="text-[11px] px-2.5 py-1 rounded-full font-medium"
-                      style={{ backgroundColor: active ? "#E6F4EA" : "#F5E6E6", color: active ? "#2D7A3A" : C.critico, fontFamily: "IBM Plex Sans, sans-serif" }}>
-                      {active ? "Activo" : "Inactivo"}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3">
-                    <div className="flex items-center gap-3">
-                      <button className="text-[12px]" style={{ color: C.steel3, fontFamily: "IBM Plex Sans, sans-serif", background: "none", border: "none" }}
-                        onClick={() => setEditingItem({ index: i, value: item })}>Editar</button>
-                      <button className="text-[12px]" style={{ color: active ? C.critico : "#2D7A3A", fontFamily: "IBM Plex Sans, sans-serif", background: "none", border: "none" }}
-                        onClick={() => toggleActive(selectedCat, item)}>
-                        {active ? "Desactivar" : "Activar"}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
+            {isEntidadesCat
+              ? entidadesFiltradas.map((e) => {
+                  const realIndex = catData.entidades.indexOf(e);
+                  const active = isEntidadActive(e);
+                  return (
+                    <tr key={realIndex} style={{ borderBottom: `1px solid ${C.border}` }}>
+                      <td className="px-5 py-3 text-[13px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: active ? C.text : C.textMuted, textDecoration: active ? "none" : "line-through" }}>{e.nombre}</td>
+                      <td className="px-5 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{e.pais}</td>
+                      <td className="px-5 py-3">
+                        <span className="text-[11px] px-2.5 py-1 rounded-full font-medium"
+                          style={{ backgroundColor: active ? "#E6F4EA" : "#F5E6E6", color: active ? "#2D7A3A" : C.critico, fontFamily: "IBM Plex Sans, sans-serif" }}>
+                          {active ? "Activo" : "Inactivo"}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3">
+                        <div className="flex items-center gap-3">
+                          <button className="text-[12px]" style={{ color: C.steel3, fontFamily: "IBM Plex Sans, sans-serif", background: "none", border: "none" }}
+                            onClick={() => setEditingItem({ index: realIndex, value: e.nombre, pais: e.pais })}>Editar</button>
+                          <button className="text-[12px]" style={{ color: active ? C.critico : "#2D7A3A", fontFamily: "IBM Plex Sans, sans-serif", background: "none", border: "none" }}
+                            onClick={() => toggleEntidadActive(e)}>
+                            {active ? "Desactivar" : "Activar"}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              : itemsGenericos.map((item, i) => {
+                  const active = isActive(selectedCat, item);
+                  return (
+                    <tr key={i} style={{ borderBottom: `1px solid ${C.border}` }}>
+                      <td className="px-5 py-3 text-[13px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: active ? C.text : C.textMuted, textDecoration: active ? "none" : "line-through" }}>{item}</td>
+                      <td className="px-5 py-3">
+                        <span className="text-[11px] px-2.5 py-1 rounded-full font-medium"
+                          style={{ backgroundColor: active ? "#E6F4EA" : "#F5E6E6", color: active ? "#2D7A3A" : C.critico, fontFamily: "IBM Plex Sans, sans-serif" }}>
+                          {active ? "Activo" : "Inactivo"}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3">
+                        <div className="flex items-center gap-3">
+                          <button className="text-[12px]" style={{ color: C.steel3, fontFamily: "IBM Plex Sans, sans-serif", background: "none", border: "none" }}
+                            onClick={() => setEditingItem(isPaisesCat
+                              ? { index: i, value: item, periodoDesde: periodosAnalisis[item as Exclude<Country, "Todos">]?.desde ?? "", periodoHasta: periodosAnalisis[item as Exclude<Country, "Todos">]?.hasta ?? "" }
+                              : { index: i, value: item })}>Editar</button>
+                          <button className="text-[12px]" style={{ color: active ? C.critico : "#2D7A3A", fontFamily: "IBM Plex Sans, sans-serif", background: "none", border: "none" }}
+                            onClick={() => toggleActive(selectedCat, item)}>
+                            {active ? "Desactivar" : "Activar"}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
           </tbody>
         </table></div>
       </div>
+      {showAddItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ backgroundColor: "rgba(20,22,26,0.5)" }}>
+          <div className="rounded-xl p-6 md:p-8 w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto" style={{ backgroundColor: C.card }}>
+            <h3 className="text-[18px] font-semibold mb-6" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>Agregar {catLabel}</h3>
+            <div className="flex flex-col gap-4">
+              <div>
+                <label className="block text-[11px] uppercase tracking-widest mb-1.5" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Nombre</label>
+                <input value={addingItem} onChange={e => setAddingItem(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key !== "Enter" || !addingItem.trim()) return;
+                    if (isEntidadesCat) addEntidad(addingItem, addingItemPais);
+                    else addItem(selectedCatKey as GenericCatKey);
+                    setShowAddItem(false);
+                  }}
+                  className="w-full px-4 py-2.5 rounded-lg text-[13px] outline-none"
+                  style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text, backgroundColor: C.canvas, border: `1px solid ${C.border}` }} />
+              </div>
+              {isEntidadesCat && (
+                <div>
+                  <label className="block text-[11px] uppercase tracking-widest mb-1.5" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>País</label>
+                  <select value={addingItemPais} onChange={e => setAddingItemPais(e.target.value as Country)} className="w-full" style={paisSelStyle}>
+                    {CATALOGOS.paises.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </div>
+              )}
+            </div>
+            <div className="flex gap-3 mt-8 justify-end">
+              <button className="px-5 py-2 rounded-lg text-[13px]"
+                style={{ backgroundColor: C.canvas, color: C.textMuted, fontFamily: "Space Grotesk, sans-serif", border: `1px solid ${C.border}` }}
+                onClick={() => setShowAddItem(false)}>Cancelar</button>
+              <button className="px-5 py-2 rounded-lg text-[13px] font-medium"
+                style={{ backgroundColor: C.steel4, color: "white", fontFamily: "Space Grotesk, sans-serif", border: "none" }}
+                onClick={() => {
+                  if (!addingItem.trim()) return;
+                  if (isEntidadesCat) addEntidad(addingItem, addingItemPais);
+                  else addItem(selectedCatKey as GenericCatKey);
+                  setShowAddItem(false);
+                }}>Guardar</button>
+            </div>
+          </div>
+        </div>
+      )}
       {editingItem !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ backgroundColor: "rgba(20,22,26,0.5)" }}>
           <div className="rounded-xl p-6 md:p-8 w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto" style={{ backgroundColor: C.card }}>
@@ -6328,6 +6615,30 @@ function AdminCatalogosScreen() {
                   className="w-full px-4 py-2.5 rounded-lg text-[13px] outline-none"
                   style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text, backgroundColor: C.canvas, border: `1px solid ${C.border}` }} />
               </div>
+              {editingItem.pais !== undefined && (
+                <div>
+                  <label className="block text-[11px] uppercase tracking-widest mb-1.5" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>País</label>
+                  <select value={editingItem.pais} onChange={e => setEditingItem(ei => ei ? { ...ei, pais: e.target.value as Country } : ei)} className="w-full" style={paisSelStyle}>
+                    {CATALOGOS.paises.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </div>
+              )}
+              {editingItem.periodoDesde !== undefined && (
+                <>
+                  <div>
+                    <label className="block text-[11px] uppercase tracking-widest mb-1.5" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Periodo de análisis — Desde</label>
+                    <input type="month" value={editingItem.periodoDesde} onChange={e => setEditingItem(ei => ei ? { ...ei, periodoDesde: e.target.value } : ei)}
+                      className="w-full px-4 py-2.5 rounded-lg text-[13px] outline-none"
+                      style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text, backgroundColor: C.canvas, border: `1px solid ${C.border}` }} />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] uppercase tracking-widest mb-1.5" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Periodo de análisis — Hasta</label>
+                    <input type="month" value={editingItem.periodoHasta} onChange={e => setEditingItem(ei => ei ? { ...ei, periodoHasta: e.target.value } : ei)}
+                      className="w-full px-4 py-2.5 rounded-lg text-[13px] outline-none"
+                      style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text, backgroundColor: C.canvas, border: `1px solid ${C.border}` }} />
+                  </div>
+                </>
+              )}
             </div>
             <div className="flex gap-3 mt-8 justify-end">
               <button className="px-5 py-2 rounded-lg text-[13px]"
@@ -6337,11 +6648,23 @@ function AdminCatalogosScreen() {
                 style={{ backgroundColor: C.steel4, color: "white", fontFamily: "Space Grotesk, sans-serif", border: "none" }}
                 onClick={() => {
                   if (!editingItem.value.trim()) return;
-                  setCatData(d => {
-                    const arr = [...(d[selectedCatKey] ?? [])];
-                    arr[editingItem.index] = editingItem.value.trim();
-                    return { ...d, [selectedCatKey]: arr };
-                  });
+                  if (editingItem.pais !== undefined) {
+                    saveEntidadEdit(editingItem.index, editingItem.value, editingItem.pais);
+                  } else {
+                    // País editado como el string original ANTES de un posible
+                    // renombre -- periodosAnalisis está indexado por el país
+                    // real (catData.paises[index]), no por lo que se haya
+                    // tipeado en "Nombre".
+                    if (editingItem.periodoDesde !== undefined && editingItem.periodoHasta !== undefined) {
+                      const paisOriginal = catData.paises[editingItem.index] as Exclude<Country, "Todos">;
+                      setPeriodoAnalisisPais(paisOriginal, { desde: editingItem.periodoDesde, hasta: editingItem.periodoHasta });
+                    }
+                    setCatData(d => {
+                      const arr = [...(d[selectedCatKey as GenericCatKey] ?? [])];
+                      arr[editingItem.index] = editingItem.value.trim();
+                      return { ...d, [selectedCatKey]: arr };
+                    });
+                  }
                   setEditingItem(null);
                 }}>Guardar</button>
             </div>
@@ -6349,7 +6672,8 @@ function AdminCatalogosScreen() {
         </div>
       )}
     </div>
-  );
+    );
+  }
 
   // ── Roles list view ────────────────────────────────────────────────────────
   if (view === "roles") return (
@@ -6503,6 +6827,325 @@ function AdminCatalogosScreen() {
                 </tr>
               );
             })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ─── Fuentes oficiales ──────────────────────────────────────────────────────
+// Basado en FUENTES_TRAZABILIDAD_MUESTRA (fuente/estado/errores ya existen
+// ahí) + los campos nuevos de este módulo (fuenteScrapeada, frecuencia,
+// responsable) -- dato de muestra, sin metodología real todavía.
+type FuenteAdminRow = {
+  pais: Exclude<Country, "Todos">;
+  fuenteObjetivo: string;
+  fuenteScrapeada: string;
+  frecuenciaActualizacion: "Diaria" | "Semanal" | "Mensual";
+  estado: "Completo" | "Parcial" | "Pendiente";
+  errores: number | null;
+  responsable: string;
+  activo: boolean;
+};
+
+const ESTADO_FUENTE_META: Record<"Completo" | "Parcial" | "Pendiente", { bg: string; color: string }> = {
+  Completo: { bg: "#E7F1DC", color: "#3B6D11" },
+  Parcial: { bg: "#F6EBD6", color: "#8A5A12" },
+  Pendiente: { bg: "#DCE3EB", color: "#6B7A8D" },
+};
+
+const FRECUENCIA_POR_INDICE: ("Diaria" | "Semanal" | "Mensual")[] = ["Diaria", "Semanal", "Semanal", "Mensual"];
+const RESPONSABLES_FUENTES_MUESTRA = ["Equipo Scraping LATAM", "Ana Torres", "Equipo Legal BID", "Luis Medina"];
+
+function slugFuenteScrapeada(pais: string, fuente: string): string {
+  const slug = fuente.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  const cc: Record<string, string> = { Argentina: "ar", Bolivia: "bo", Chile: "cl", Ecuador: "ec", "Perú": "pe" };
+  return `scraping.reglac.io/${cc[pais] ?? "xx"}/${slug}`;
+}
+
+const SAMPLE_FUENTES_ADMIN: FuenteAdminRow[] = COUNTRIES.flatMap((pais, pi) =>
+  FUENTES_TRAZABILIDAD_MUESTRA[pais].map((f, i) => ({
+    pais,
+    fuenteObjetivo: f.fuente,
+    fuenteScrapeada: slugFuenteScrapeada(pais, f.fuente),
+    frecuenciaActualizacion: FRECUENCIA_POR_INDICE[i % FRECUENCIA_POR_INDICE.length],
+    estado: f.estado,
+    errores: f.errores,
+    responsable: RESPONSABLES_FUENTES_MUESTRA[(pi * 4 + i) % RESPONSABLES_FUENTES_MUESTRA.length],
+    activo: true,
+  }))
+);
+
+function AdminFuentesScreen() {
+  const [fuentes, setFuentes] = useState<FuenteAdminRow[]>(SAMPLE_FUENTES_ADMIN);
+  const [filtroPais, setFiltroPais] = useState<string>("Todos");
+  const [showModal, setShowModal] = useState(false);
+  const [editing, setEditing] = useState<{ index: number } | null>(null);
+  const [form, setForm] = useState({
+    pais: "Bolivia", fuenteObjetivo: "", fuenteScrapeada: "",
+    frecuenciaActualizacion: "Semanal" as "Diaria" | "Semanal" | "Mensual",
+    estado: "Pendiente" as "Completo" | "Parcial" | "Pendiente",
+    errores: "", responsable: "",
+  });
+
+  const filtradas = fuentes.filter(f => filtroPais === "Todos" || f.pais === filtroPais);
+
+  const openCreate = () => {
+    setEditing(null);
+    setForm({ pais: "Bolivia", fuenteObjetivo: "", fuenteScrapeada: "", frecuenciaActualizacion: "Semanal", estado: "Pendiente", errores: "", responsable: "" });
+    setShowModal(true);
+  };
+  const openEdit = (f: FuenteAdminRow) => {
+    setEditing({ index: fuentes.indexOf(f) });
+    setForm({ pais: f.pais, fuenteObjetivo: f.fuenteObjetivo, fuenteScrapeada: f.fuenteScrapeada, frecuenciaActualizacion: f.frecuenciaActualizacion, estado: f.estado, errores: f.errores === null ? "" : String(f.errores), responsable: f.responsable });
+    setShowModal(true);
+  };
+  const save = () => {
+    const errores = form.errores.trim() === "" ? null : Number(form.errores);
+    const pais = form.pais as Exclude<Country, "Todos">;
+    if (editing) {
+      setFuentes(fs => fs.map((f, i) => i === editing.index
+        ? { ...f, pais, fuenteObjetivo: form.fuenteObjetivo, fuenteScrapeada: form.fuenteScrapeada, frecuenciaActualizacion: form.frecuenciaActualizacion, estado: form.estado, errores, responsable: form.responsable }
+        : f));
+    } else {
+      setFuentes(fs => [...fs, { pais, fuenteObjetivo: form.fuenteObjetivo, fuenteScrapeada: form.fuenteScrapeada, frecuenciaActualizacion: form.frecuenciaActualizacion, estado: form.estado, errores, responsable: form.responsable, activo: true }]);
+    }
+    setShowModal(false);
+  };
+  const toggleActivo = (f: FuenteAdminRow) => setFuentes(fs => fs.map(x => x === f ? { ...x, activo: !x.activo } : x));
+
+  const selStyle: React.CSSProperties = { fontFamily: "IBM Plex Sans, sans-serif", color: C.text, backgroundColor: C.canvas, border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 12px", fontSize: 13, outline: "none" };
+  const labelStyle: React.CSSProperties = { fontFamily: "Space Grotesk, sans-serif", color: C.textMuted };
+
+  return (
+    <div className="p-4 md:p-8 overflow-y-auto h-full">
+      <Header breadcrumb="Administración — Fuentes" title="Fuentes oficiales" subtitle="Gestión del sistema · Rol: Administrador" />
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <select value={filtroPais} onChange={e => setFiltroPais(e.target.value)} className="min-h-[40px]" style={selStyle}>
+          <option value="Todos">Todos los países</option>
+          {COUNTRIES.map(p => <option key={p} value={p}>{p}</option>)}
+        </select>
+        <button className="flex items-center gap-2 px-3 md:px-4 py-2 rounded-lg text-[13px] font-medium min-h-[44px]"
+          style={{ backgroundColor: C.steel4, color: "white", fontFamily: "Space Grotesk, sans-serif", border: "none" }}
+          onClick={openCreate}>+ Agregar fuente</button>
+      </div>
+      <div className="rounded-lg overflow-hidden overflow-x-auto" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
+        <table className="w-full min-w-[760px]">
+          <thead>
+            <tr style={{ borderBottom: `1px solid ${C.border}` }}>
+              {["País", "Fuente objetivo", "Frecuencia", "Estado", "Errores", "Responsable", "Acciones"].map(h => (
+                <th key={h} className="px-5 py-3 text-left text-[11px] uppercase tracking-widest" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {filtradas.map((f, i) => {
+              const meta = ESTADO_FUENTE_META[f.estado];
+              return (
+                <tr key={i} style={{ borderBottom: `1px solid ${C.border}`, opacity: f.activo ? 1 : 0.5 }}>
+                  <td className="px-5 py-3 text-[13px] font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>{f.pais}</td>
+                  <td className="px-5 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text }}>{f.fuenteObjetivo}</td>
+                  <td className="px-5 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{f.frecuenciaActualizacion}</td>
+                  <td className="px-5 py-3"><span className="text-[11px] px-2.5 py-1 rounded-full font-medium" style={{ backgroundColor: meta.bg, color: meta.color, fontFamily: "IBM Plex Sans, sans-serif" }}>{f.estado}</span></td>
+                  <td className="px-5 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: f.errores ? C.critico : C.textMuted }}>{f.errores ?? "—"}</td>
+                  <td className="px-5 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{f.responsable}</td>
+                  <td className="px-5 py-3">
+                    <div className="flex items-center gap-3">
+                      <button className="text-[12px]" style={{ color: C.steel3, fontFamily: "IBM Plex Sans, sans-serif", background: "none", border: "none" }} onClick={() => openEdit(f)}>Editar</button>
+                      <button className="text-[12px]" style={{ color: f.activo ? C.critico : "#2D7A3A", fontFamily: "IBM Plex Sans, sans-serif", background: "none", border: "none" }} onClick={() => toggleActivo(f)}>
+                        {f.activo ? "Desactivar" : "Activar"}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ backgroundColor: "rgba(20,22,26,0.5)" }}>
+          <div className="rounded-xl p-6 md:p-8 w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto" style={{ backgroundColor: C.card }}>
+            <h3 className="text-[18px] font-semibold mb-6" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>{editing ? "Editar fuente" : "Agregar fuente"}</h3>
+            <div className="flex flex-col gap-4">
+              <div>
+                <label className="block text-[11px] uppercase tracking-widest mb-1.5" style={labelStyle}>País</label>
+                <select value={form.pais} onChange={e => setForm({ ...form, pais: e.target.value })} className="w-full" style={selStyle}>
+                  {COUNTRIES.map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[11px] uppercase tracking-widest mb-1.5" style={labelStyle}>Fuente objetivo</label>
+                <input value={form.fuenteObjetivo} onChange={e => setForm({ ...form, fuenteObjetivo: e.target.value })} className="w-full" style={selStyle} />
+              </div>
+              <div>
+                <label className="block text-[11px] uppercase tracking-widest mb-1.5" style={labelStyle}>Fuente scrapeada (URL / identificador)</label>
+                <input value={form.fuenteScrapeada} onChange={e => setForm({ ...form, fuenteScrapeada: e.target.value })} className="w-full" style={selStyle} />
+              </div>
+              <div>
+                <label className="block text-[11px] uppercase tracking-widest mb-1.5" style={labelStyle}>Frecuencia de actualización</label>
+                <select value={form.frecuenciaActualizacion} onChange={e => setForm({ ...form, frecuenciaActualizacion: e.target.value as typeof form.frecuenciaActualizacion })} className="w-full" style={selStyle}>
+                  {(["Diaria", "Semanal", "Mensual"] as const).map(f => <option key={f} value={f}>{f}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[11px] uppercase tracking-widest mb-1.5" style={labelStyle}>Estado</label>
+                <select value={form.estado} onChange={e => setForm({ ...form, estado: e.target.value as typeof form.estado })} className="w-full" style={selStyle}>
+                  {(["Completo", "Parcial", "Pendiente"] as const).map(e => <option key={e} value={e}>{e}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[11px] uppercase tracking-widest mb-1.5" style={labelStyle}>Errores</label>
+                <input type="number" min={0} value={form.errores} onChange={e => setForm({ ...form, errores: e.target.value })} placeholder="Sin errores" className="w-full" style={selStyle} />
+              </div>
+              <div>
+                <label className="block text-[11px] uppercase tracking-widest mb-1.5" style={labelStyle}>Responsable</label>
+                <input value={form.responsable} onChange={e => setForm({ ...form, responsable: e.target.value })} className="w-full" style={selStyle} />
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button className="flex-1 py-2.5 rounded-lg text-[13px] font-medium" style={{ backgroundColor: C.steel4, color: "white", fontFamily: "Space Grotesk, sans-serif", border: "none" }} onClick={save}>Guardar</button>
+              <button className="flex-1 py-2.5 rounded-lg text-[13px] font-medium" style={{ backgroundColor: C.border, color: C.textMuted, fontFamily: "Space Grotesk, sans-serif", border: "none" }} onClick={() => setShowModal(false)}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Bitácora ───────────────────────────────────────────────────────────────
+// Enteramente dato de muestra -- no hay conexión real todavía.
+// TODO: conectar cada tipo de evento a su fuente real (cambios de catálogo
+// desde esta misma pantalla de Administración, validaciones desde el store
+// de Revisión/HITL, exportaciones desde las acciones de "Descargar" ya
+// implementadas en Reportes).
+type BitacoraTipo = "Cambio de catálogo" | "Validación" | "Exportación" | "Error" | "Actualización";
+const BITACORA_TIPOS: BitacoraTipo[] = ["Cambio de catálogo", "Validación", "Exportación", "Error", "Actualización"];
+const BITACORA_COLOR: Record<BitacoraTipo, string> = {
+  "Cambio de catálogo": C.steel3,
+  "Validación": "#2D7A3A",
+  "Exportación": C.steel4,
+  "Error": C.critico,
+  // C.alto === C.steel4 en theme.ts (mismo hex) -- se usa C.ambar1 para que
+  // "Actualización" no comparta color de badge con "Exportación".
+  "Actualización": C.ambar1,
+};
+const BITACORA_DETALLE_POR_TIPO: Record<BitacoraTipo, string[]> = {
+  "Cambio de catálogo": [
+    `Activó el sector "Servicios Digitales" en el catálogo de Sectores`,
+    `Agregó el registro "INAPI" al catálogo de Entidades`,
+    `Desactivó el tipo de trámite "Cierre" en el catálogo de Trámites`,
+    `Editó la descripción del rol "Usuario Gobierno"`,
+  ],
+  "Validación": [
+    `Validó la barrera BOL-BAR-0842 como Crítico confirmado`,
+    `Marcó el hallazgo ARG-BAR-0801 como "Por decidir"`,
+    `Aprobó la acción de mejora sugerida para "Restricción a Operadores Sin Planta"`,
+    `Devolvió a Analista un hallazgo de Chile para revisión adicional`,
+  ],
+  "Exportación": [
+    `Descargó el reporte operativo en PDF (Bolivia, Distorsión)`,
+    `Descargó datos filtrados en Excel (Todos los países, Carga)`,
+    `Exportó el reporte estratégico de Ecuador`,
+    `Descargó el Excel de trámites filtrados por Estado HITL: Publicado`,
+  ],
+  "Error": [
+    `Error de scraping en fuente "Gaceta Oficial de Chile" — timeout de conexión`,
+    `Fallo al sincronizar "SENAPI" — formato de documento no reconocido`,
+    `Error al generar el reporte PDF para Perú`,
+    `Captura incompleta en "Congreso de la Nación" — documentos pendientes`,
+  ],
+  "Actualización": [
+    `Actualizó la fuente "SENAPI" — frecuencia cambiada a Mensual`,
+    `Actualizó el periodo de análisis de Bolivia a enero 2015 – marzo 2026`,
+    `Actualizó el responsable de la fuente "INAPI" a Equipo Scraping LATAM`,
+    `Actualizó el estado de "Registro Oficial de Ecuador" a Completo`,
+  ],
+};
+
+const MESES_ABBR_BITACORA = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+function formatFechaBitacora(d: Date): string {
+  const dd = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return `${dd} ${MESES_ABBR_BITACORA[d.getMonth()]} ${d.getFullYear()}, ${hh}:${mm}`;
+}
+
+// 20 filas deterministas (sin Math.random, para que no cambien entre
+// renders), cubriendo los 5 tipos de evento con usuarios de SAMPLE_USERS y
+// fechas de los últimos 30 días.
+const SAMPLE_BITACORA: { fecha: string; fechaSort: number; usuario: string; tipo: BitacoraTipo; detalle: string }[] = (() => {
+  const HOY = new Date("2026-09-09T12:00:00");
+  const rows: { fecha: string; fechaSort: number; usuario: string; tipo: BitacoraTipo; detalle: string }[] = [];
+  for (let i = 0; i < 20; i++) {
+    const tipo = BITACORA_TIPOS[i % BITACORA_TIPOS.length];
+    const detalles = BITACORA_DETALLE_POR_TIPO[tipo];
+    const detalle = detalles[Math.floor(i / BITACORA_TIPOS.length) % detalles.length];
+    const usuario = SAMPLE_USERS[i % SAMPLE_USERS.length].nombre;
+    const diasAtras = Math.min(29, Math.round(i * 1.45));
+    const horas = 8 + (i * 3) % 11;
+    const minutos = (i * 17) % 60;
+    const fecha = new Date(HOY);
+    fecha.setDate(fecha.getDate() - diasAtras);
+    fecha.setHours(horas, minutos, 0, 0);
+    rows.push({ fecha: formatFechaBitacora(fecha), fechaSort: fecha.getTime(), usuario, tipo, detalle });
+  }
+  return rows.sort((a, b) => b.fechaSort - a.fechaSort);
+})();
+
+function AdminBitacoraScreen() {
+  const [filtroTipo, setFiltroTipo] = useState<string>("Todos");
+  const [filtroUsuario, setFiltroUsuario] = useState<string>("Todos");
+  const usuariosUnicos = Array.from(new Set(SAMPLE_BITACORA.map(r => r.usuario)));
+
+  const filtradas = SAMPLE_BITACORA.filter(r =>
+    (filtroTipo === "Todos" || r.tipo === filtroTipo) &&
+    (filtroUsuario === "Todos" || r.usuario === filtroUsuario)
+  );
+
+  const selStyle: React.CSSProperties = { fontFamily: "IBM Plex Sans, sans-serif", color: C.text, backgroundColor: C.canvas, border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 12px", fontSize: 13, outline: "none" };
+
+  return (
+    <div className="p-4 md:p-8 overflow-y-auto h-full">
+      <Header breadcrumb="Administración — Bitácora" title="Bitácora" subtitle="Gestión del sistema · Rol: Administrador" />
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        <select value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)} className="min-h-[40px]" style={selStyle}>
+          <option value="Todos">Todos los tipos de evento</option>
+          {BITACORA_TIPOS.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+        <select value={filtroUsuario} onChange={e => setFiltroUsuario(e.target.value)} className="min-h-[40px]" style={selStyle}>
+          <option value="Todos">Todos los usuarios</option>
+          {usuariosUnicos.map(u => <option key={u} value={u}>{u}</option>)}
+        </select>
+        <p className="text-[12px] ml-auto" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{filtradas.length} eventos</p>
+      </div>
+      <div className="rounded-lg overflow-hidden overflow-x-auto" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
+        <table className="w-full min-w-[720px]">
+          <thead>
+            <tr style={{ borderBottom: `1px solid ${C.border}` }}>
+              {["Fecha/Hora", "Usuario", "Tipo de evento", "Detalle"].map(h => (
+                <th key={h} className="px-5 py-3 text-left text-[11px] uppercase tracking-widest" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {filtradas.map((r, i) => (
+              <tr key={i} style={{ borderBottom: `1px solid ${C.border}` }}>
+                <td className="px-5 py-3 text-[12px] whitespace-nowrap" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{r.fecha}</td>
+                <td className="px-5 py-3 text-[13px] font-medium whitespace-nowrap" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>{r.usuario}</td>
+                <td className="px-5 py-3">
+                  <span className="text-[11px] px-2.5 py-1 rounded-full font-medium whitespace-nowrap" style={{ backgroundColor: BITACORA_COLOR[r.tipo] + "18", color: BITACORA_COLOR[r.tipo], fontFamily: "IBM Plex Sans, sans-serif" }}>
+                    {r.tipo}
+                  </span>
+                </td>
+                <td className="px-5 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text }}>{r.detalle}</td>
+              </tr>
+            ))}
+            {filtradas.length === 0 && (
+              <tr><td colSpan={4} className="px-5 py-6 text-center text-[13px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>Sin eventos con los filtros seleccionados</td></tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -8076,7 +8719,19 @@ const REVISION_DEMO_USER_ID: Record<UserRole, string> = {
 };
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
+// PeriodoAnalisisProvider envuelve toda la app (login incluido, aunque no lo
+// necesite, mismo criterio simple que RevisionProvider) desde AFUERA de
+// App(), porque a diferencia de RevisionProvider no depende de ningún
+// estado de App() (userRole, etc.) para inicializarse.
 export default function App() {
+  return (
+    <PeriodoAnalisisProvider>
+      <AppInner />
+    </PeriodoAnalisisProvider>
+  );
+}
+
+function AppInner() {
   const isMobile = useIsMobile();
   const [loggedIn, setLoggedIn] = useState(false);
   const [userRole, setUserRole] = useState<UserRole>("administrador");
@@ -8361,6 +9016,8 @@ export default function App() {
       case "administracion": {
         const adminTab = (view as { screen: "administracion"; tab?: string }).tab ?? "usuarios";
         if (adminTab === "catalogos") return <AdminCatalogosScreen />;
+        if (adminTab === "fuentes") return <AdminFuentesScreen />;
+        if (adminTab === "bitacora") return <AdminBitacoraScreen />;
         return <AdminUsuariosScreen />;
       }
       case "reportes": return <ReportesScreen prefill={(view as { screen: "reportes"; prefill?: ReportesPrefill }).prefill} onNavigate={navigate} />;

@@ -12,6 +12,9 @@ import {
   CANALES_TRANSMISION_TRAMITES_MUESTRA,
   TRAMITES_PRIORITARIOS_MUESTRA,
   ALL_TRAMITES,
+  usePeriodoAnalisis,
+  periodoRegional,
+  formatearPeriodo,
 } from "./App";
 import type { Country, View } from "./App";
 
@@ -57,6 +60,13 @@ function ImpactoEconomico({ country = "Todos", onCountryChange, onNavigate }: {
   onNavigate: (v: View) => void;
 }) {
   const [page, setPage] = useState(0);
+
+  // Mismo criterio que Barreras/Trámites: regional usa el rango de los 5
+  // países, por país usa el de ese país puntual.
+  const { periodosAnalisis } = usePeriodoAnalisis();
+  const periodoTexto = country === "Todos"
+    ? formatearPeriodo(periodoRegional(periodosAnalisis))
+    : formatearPeriodo(periodosAnalisis[country as Exclude<Country, "Todos">] ?? periodosAnalisis["Bolivia"]);
 
   const td = COUNTRY_TRAMITES_DATA["Todos"];
   const costoPromedioPorTramite = Math.round(td.costoEstimadoUSD / td.total);
@@ -113,7 +123,7 @@ function ImpactoEconomico({ country = "Todos", onCountryChange, onNavigate }: {
       <div className="flex items-center justify-between gap-2 mb-5 px-4 py-2.5 rounded-lg"
         style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
         <span style={{ fontSize: 14, fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted, lineHeight: 1.4 }}>
-          Standard Cost Model aplicado a trámites · barreras aún sin costeo · última actualización 12 mar 2026
+          Periodo de análisis: {periodoTexto} · Standard Cost Model aplicado a trámites · barreras aún sin costeo · última actualización 12 mar 2026
         </span>
         <Info size={16} color={C.textMuted} style={{ flexShrink: 0 }} />
       </div>

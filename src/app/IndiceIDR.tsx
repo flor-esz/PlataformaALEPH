@@ -11,6 +11,9 @@ import {
   IRR_GENERAL_MUESTRA,
   IDR_USADAS_RATIO_MUESTRA,
   nivelFriccionLabel,
+  usePeriodoAnalisis,
+  periodoRegional,
+  formatearPeriodo,
 } from "./App";
 import type { Country, View } from "./App";
 import type { TipoDato } from "./components/ui/PanelTipoSubdimension";
@@ -140,6 +143,13 @@ function IndiceIDR({ country = "Todos", onCountryChange, onNavigate }: {
   const puntajeGeneral = country === "Todos" ? 54.2 : IRR_GENERAL_MUESTRA[country];
   const nivelFriccion = nivelFriccionLabel(puntajeGeneral);
 
+  // Mismo criterio que Barreras/Trámites/Impacto Económico: regional usa el
+  // rango de los 5 países, por país usa el de ese país puntual.
+  const { periodosAnalisis } = usePeriodoAnalisis();
+  const periodoTexto = country === "Todos"
+    ? formatearPeriodo(periodoRegional(periodosAnalisis))
+    : formatearPeriodo(periodosAnalisis[country as Exclude<Country, "Todos">] ?? periodosAnalisis["Bolivia"]);
+
   const distorsiones = country === "Todos"
     ? DISTORSIONES_REGIONAL
     : (() => {
@@ -211,7 +221,7 @@ function IndiceIDR({ country = "Todos", onCountryChange, onNavigate }: {
       <div className="flex items-center justify-between gap-2 mb-5 px-4 py-2.5 rounded-lg"
         style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
         <span style={{ fontSize: 14, fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted, lineHeight: 1.4 }}>
-          Fecha de corte 12 mar 2026 · cobertura 91% · 68% de hallazgos usados están validados HITL
+          Periodo de análisis: {periodoTexto} · Fecha de corte 12 mar 2026 · cobertura 91% · 68% de hallazgos usados están validados HITL
         </span>
         <Info size={16} color={C.textMuted} style={{ flexShrink: 0 }} />
       </div>
