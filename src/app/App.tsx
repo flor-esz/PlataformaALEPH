@@ -113,6 +113,7 @@ import {
   FilterX,
   Edit3,
   Gauge,
+  LayoutDashboard,
 } from "lucide-react";
 
 // ─── Mobile hook ──────────────────────────────────────────────────────────────
@@ -3229,6 +3230,13 @@ export function KpiCard({ label, value, valueSuffix, sub, valueColor, tooltip }:
 }
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
+// Las 5 pantallas agrupadas bajo el desplegable "Dashboards" -- ninguna
+// cambió de ruta/pantalla, solo se agruparon visualmente. Se usa tanto para
+// el estado inicial de `dashboardsOpen` como para el resaltado "activo" del
+// botón padre (mismo criterio que ya usa "Administración" con `activeSection
+// === "administracion"`, pero acá contra 5 secciones en vez de 1 sola).
+const DASHBOARD_SECTIONS: Section[] = ["dashboard", "barreras", "tramites", "impacto-economico", "indice"];
+
 function Sidebar({
   activeCountry,
   activeSection, setActiveSection,
@@ -3251,6 +3259,7 @@ function Sidebar({
   onDrawerClose?: () => void;
 }) {
   const isMobile = useIsMobile();
+  const [dashboardsOpen, setDashboardsOpen] = useState(DASHBOARD_SECTIONS.includes(activeSection));
   const [adminOpen, setAdminOpen] = useState(activeView.screen === "administracion");
   const [revisionOpen, setRevisionOpen] = useState(activeView.screen.startsWith("revision"));
   const [lang, setLang] = useState<"ES" | "EN">("ES");
@@ -3300,20 +3309,44 @@ function Sidebar({
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-2">
-        {navItem("Panorama Regulatorio", "dashboard", <BarChart2 size={18} />, () => nav(() => {
-          onNavigate({ screen: "panel-regional" });
-        }))}
-        {navItem("Barreras Regulatorias", "barreras", <AlertTriangle size={18} />, () => nav(() => onNavigate({ screen: "barreras" })))}
-        {navItem("Trámites con potencial de mejora", "tramites", <FileText size={18} />, () => nav(() => onNavigate({ screen: "tramites" })))}
-        {navItem("Impacto económico", "impacto-economico", <Globe size={18} />, () => nav(() => onNavigate({ screen: "impacto-economico" })))}
-        {navItem("Reportes", "reportes", <ClipboardList size={18} />, () => nav(() => onNavigate({ screen: "reportes" })))}
-        {navItem("Documentación", "documentacion", <BookOpen size={18} />, () => nav(() => onNavigate({ screen: "documentacion" })))}
-        {navItem("Índice / IDR", "indice", <ChartBar size={18} />, () => nav(() => { onNavigate({ screen: "indice" });}))}
-        {/* Revisión — visible para asesor, analista, validador y administrador,
-            SIEMPRE expandible con los mismos 3 sub-ítems para los 4 roles:
-            "Hallazgos" (Repositorio -- Etapa 1 del Asesor ahora vive ahí como
-            una fila más, con su propia matriz de visibilidad por rol/etapa),
-            "Log de errores" e "Indicadores" (reporte interno de calidad +
+        {/* Dashboards — agrupa las 5 pantallas que antes eran ítems planos
+            (Panorama Regulatorio, Barreras, Trámites, Impacto económico,
+            Índice/IDR). Ninguna cambió de pantalla/ruta, solo se agruparon
+            visualmente bajo un desplegable, mismo patrón que Administración
+            (flecha, expand/collapse, primer click abre + navega al primer
+            hijo). Visible para todos los roles -- ninguna de las 5 estaba
+            gateada por rol antes, así que el grupo tampoco lo está. */}
+        <>
+          <button
+            className="w-full flex items-center gap-3 px-6 py-3 text-left relative"
+            style={{ color: DASHBOARD_SECTIONS.includes(activeSection) ? "#FAFBFC" : "#8FA3BA", fontFamily: "Space Grotesk, sans-serif", fontSize: 15, background: "none", border: "none" }}
+            onClick={() => { setDashboardsOpen(!dashboardsOpen); if (!dashboardsOpen) { nav(() => onNavigate({ screen: "panel-regional" })); } }}
+          >
+            <LayoutDashboard size={18} />
+            <span className="flex-1">Dashboards</span>
+            {dashboardsOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          </button>
+          {dashboardsOpen && (
+            <div className="ml-4 border-l pl-2" style={{ borderColor: "#2A3A4A" }}>
+              {navItem("Panorama Regulatorio", "dashboard", <BarChart2 size={16} />, () => nav(() => {
+                onNavigate({ screen: "panel-regional" });
+              }))}
+              {navItem("Barreras Regulatorias", "barreras", <AlertTriangle size={16} />, () => nav(() => onNavigate({ screen: "barreras" })))}
+              {navItem("Trámites con potencial de mejora", "tramites", <FileText size={16} />, () => nav(() => onNavigate({ screen: "tramites" })))}
+              {navItem("Impacto económico", "impacto-economico", <Globe size={16} />, () => nav(() => onNavigate({ screen: "impacto-economico" })))}
+              {navItem("Índice / IDR", "indice", <ChartBar size={16} />, () => nav(() => { onNavigate({ screen: "indice" }); }))}
+            </div>
+          )}
+        </>
+        {/* Calidad — mismo destino/submenú que antes tenía "Validación HITL"
+            (Repositorio/Hallazgos, Log de errores, Indicadores), solo cambió
+            la etiqueta visible; internamente sigue siendo el mismo grupo
+            "revision" (mismas rutas, mismo `revisionOpen`). Visible para
+            asesor, analista, validador y administrador, SIEMPRE expandible
+            con los mismos 3 sub-ítems para los 4 roles: "Hallazgos"
+            (Repositorio -- Etapa 1 del Asesor ahora vive ahí como una fila
+            más, con su propia matriz de visibilidad por rol/etapa), "Log de
+            errores" e "Indicadores" (reporte interno de calidad +
             retroalimentación al sistema, mismo criterio de visibilidad que
             los otros dos -- no se expone a usuario-bid ni a gobierno). Antes
             el Asesor entraba directo a un hallazgo fijo porque el Repositorio
@@ -3327,7 +3360,7 @@ function Sidebar({
               onClick={() => { setRevisionOpen(!revisionOpen); if (!revisionOpen) { nav(() => onNavigate({ screen: "revision-repositorio" })); } }}
             >
               <ClipboardCheck size={18} />
-              <span className="flex-1">Validación HITL</span>
+              <span className="flex-1">Calidad</span>
               {revisionOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
             </button>
             {revisionOpen && (
@@ -3339,6 +3372,12 @@ function Sidebar({
             )}
           </>
         )}
+        {navItem("Reportes", "reportes", <ClipboardList size={18} />, () => nav(() => onNavigate({ screen: "reportes" })))}
+        {/* Metodología — mismo destino que antes tenía "Documentación" (sigue
+            siendo el placeholder pendiente de contenido), solo cambió la
+            etiqueta visible; internamente sigue siendo el mismo screen
+            "documentacion". */}
+        {navItem("Metodología", "documentacion", <BookOpen size={18} />, () => nav(() => onNavigate({ screen: "documentacion" })))}
         {/* Administración submenu — visible solo para Administrador */}
         {userRole === "administrador" && (
           <>
