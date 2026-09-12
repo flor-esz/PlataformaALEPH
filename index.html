@@ -9,7 +9,24 @@
       <meta name="description" content="Platform delivering regulatory intelligence with AI-audited legal data, identifying barriers and costly procedures for regional analysts to drive reform." />
       <meta name="robots" content="noindex, nofollow" />
       <style>html, body { height: 100%; margin: 0; } #root { height: 100%; }</style>
-      
+      <script type="text/javascript">
+        // Complemento del redirect de public/404.html -- corre ANTES del
+        // bundle (inline en <head>, el <script type="module"> del body se
+        // difiere hasta que el HTML termine de parsear) para revertir la
+        // codificación "/?/..." y dejar la URL bonita otra vez con
+        // history.replaceState, así routing.ts la lee normal al montar.
+        (function(l) {
+          if (l.search[1] === '/') {
+            var decoded = l.search.slice(1).split('&').map(function(s) {
+              return s.replace(/~and~/g, '&');
+            }).join('?');
+            window.history.replaceState(
+              null, null,
+              l.pathname.slice(0, -1) + decoded + l.hash
+            );
+          }
+        }(window.location));
+      </script>
     </head>
 
     <body>
