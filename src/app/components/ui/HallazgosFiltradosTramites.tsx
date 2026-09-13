@@ -54,6 +54,7 @@ export type HallazgosFiltradosTramitesProps = {
   onQuitarFiltro: (key: string) => void;
   onLimpiarTodos: () => void;
   onNavigate: (v: View) => void;
+  notaCalculo?: string;
 };
 
 // ─── Hallazgos filtrados — Trámites ─────────────────────────────────────────
@@ -61,7 +62,7 @@ export type HallazgosFiltradosTramitesProps = {
 // HallazgosFiltradosBarreras.tsx, con su propio objeto `filtros` (ver
 // App.tsx, case "hallazgos-filtrados-tramites") -- no comparte estado con
 // esas otras dos pantallas.
-export function HallazgosFiltradosTramites({ filtros, resultados, onSetFiltro, onQuitarFiltro, onLimpiarTodos, onNavigate }: HallazgosFiltradosTramitesProps) {
+export function HallazgosFiltradosTramites({ filtros, resultados, onSetFiltro, onQuitarFiltro, onLimpiarTodos, onNavigate, notaCalculo }: HallazgosFiltradosTramitesProps) {
   return (
     <HallazgosFiltradosShell<TramiteItem>
       filtros={filtros}
@@ -72,6 +73,7 @@ export function HallazgosFiltradosTramites({ filtros, resultados, onSetFiltro, o
       onQuitarFiltro={onQuitarFiltro}
       onLimpiarTodos={onLimpiarTodos}
       onNavigate={onNavigate}
+      notaCalculo={notaCalculo}
       onRowClick={it => onNavigate({ screen: "tramite-detail", id: it.id })}
       // Clasificación/Subdimensión/Jerarquía quedan visual-only: son conceptos
       // de Barreras, ALL_TRAMITES no los tiene. "Tipo de usuario" no está en

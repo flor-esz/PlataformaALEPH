@@ -201,9 +201,13 @@ export type View =
   | { screen: "revision-indicadores" }
   | { screen: "revision-notificaciones" }
   | { screen: "indice" }
-  | { screen: "hallazgos-filtrados"; filtros: Record<string, string> }
-  | { screen: "hallazgos-filtrados-barreras"; filtros: Record<string, string> }
-  | { screen: "hallazgos-filtrados-tramites"; filtros: Record<string, string> };
+  // notaCalculo es opcional -- solo lo trae la navegación desde un KPI que
+  // "explica" cómo se calculó su valor (ver HallazgosFiltradosShell). Un
+  // Ver todo/clic en gráfica sin ese contexto no lo pasa, y el shell
+  // simplemente no muestra la caja informativa.
+  | { screen: "hallazgos-filtrados"; filtros: Record<string, string>; notaCalculo?: string }
+  | { screen: "hallazgos-filtrados-barreras"; filtros: Record<string, string>; notaCalculo?: string }
+  | { screen: "hallazgos-filtrados-tramites"; filtros: Record<string, string>; notaCalculo?: string };
 type AuthView = "login" | "recover" | "recover-sent" | "recover-new" | "recover-confirmed" | "recover-expired";
 
 export type ReportesPrefill = {
@@ -2077,6 +2081,41 @@ function attachRetroalimentacionGobierno<T extends { retroalimentacionGobierno?:
 
 export const ALL_BARRERAS = attachRetroalimentacionGobierno(attachImpactoEstimado([...BARRERAS_CAFE, ...BARRERAS_TEXTIL, ...BARRERAS_MUESTRA]));
 
+// ─── N real para notaCalculo de "Hallazgos filtrados" ──────────────────────────
+// Los KPI de Barreras/Trámites (Regional y País) muestran un N de MUESTRA
+// (COUNTRY_BARRERAS_DATA/COUNTRY_TRAMITES_DATA, cientos de registros) que no
+// tiene relación con el catálogo real chico que sí filtra "Hallazgos
+// filtrados" (ALL_BARRERAS/ALL_TRAMITES, ~17-20 registros) -- ese es
+// justamente el hueco ya documentado en otros TODOs de este archivo. Usar el
+// N de muestra en notaCalculo haría que el texto dijera un número que la
+// tabla de abajo nunca muestra. Estas dos funciones cuentan sobre el
+// catálogo REAL con el que "Hallazgos filtrados" arma `resultados`, para que
+// notaCalculo siempre coincida con lo que esa tabla efectivamente lista.
+export function countBarrerasPorPais(pais: Country): number {
+  return pais === "Todos" ? ALL_BARRERAS.length : ALL_BARRERAS.filter(b => b.pais === pais).length;
+}
+export function countTramitesPorPais(pais: Country): number {
+  return pais === "Todos" ? ALL_TRAMITES.length : ALL_TRAMITES.filter(t => t.pais === pais).length;
+}
+
+// ─── notaCalculo — armado con el N real de arriba + el período que cada
+// pantalla de origen ya calcula (periodoTexto*/BandaCobertura), sin
+// recalcular ese período aparte. ──────────────────────────────────────────────
+export function notaSeveridadPromedio(label: string, pais: Country, periodoTexto: string): string {
+  const n = countBarrerasPorPais(pais);
+  return `Este promedio (${label}) se calculó a partir de ${n} hallazgos de barreras entre ${periodoTexto}.`;
+}
+export function notaValidadoHitl(pct: number, tipo: "barreras" | "trámites", pais: Country): string {
+  const n = tipo === "barreras" ? countBarrerasPorPais(pais) : countTramitesPorPais(pais);
+  const sufijoPais = pais !== "Todos" ? ` de ${pais}` : "";
+  return `Este ${pct}% de validación HITL se calculó sobre ${n} hallazgos de ${tipo}${sufijoPais}.`;
+}
+export function notaCostoTramites(pais: Country): string {
+  const n = countTramitesPorPais(pais);
+  const sufijoPais = pais !== "Todos" ? ` de ${pais}` : "";
+  return `Este costo total se calculó sumando el costo estimado de ${n} trámites${sufijoPais}.`;
+}
+
 // ─── Filtros compartidos de hallazgos (Reportes / Reporte PDF) ────────────────
 // Único lugar donde vive la lógica de filtrado de ALL_BARRERAS/ALL_TRAMITES
 // para reportes -- ReportesScreen() (vista previa) y ReportePDFScreen() (ficha
@@ -3209,11 +3248,19 @@ export function BandaCobertura({ text }: { text: string }) {
   );
 }
 
-export function KpiCard({ label, value, valueSuffix, sub, valueColor, tooltip }: {
+export function KpiCard({ label, value, valueSuffix, sub, valueColor, tooltip, onClick }: {
   label: string; value: string; valueSuffix?: string; sub?: string; valueColor?: string; tooltip?: string;
+  // Si se pasa, la tarjeta entera navega a "Hallazgos filtrados" con el
+  // dataset/país que ya explica el propio KPI -- ver notaCalculo en cada
+  // sitio que lo usa (Severidad promedio, % Validado HITL, Costo estimado).
+  onClick?: () => void;
 }) {
   return (
-    <div className="rounded-lg p-5 flex flex-col justify-between h-[140px]" style={{ backgroundColor: C.card, overflow: "visible", position: "relative" }}>
+    <div
+      className="rounded-lg p-5 flex flex-col justify-between h-[140px] transition-shadow"
+      onClick={onClick}
+      style={{ backgroundColor: C.card, overflow: "visible", position: "relative", cursor: onClick ? "pointer" : undefined, boxShadow: onClick ? "0 1px 3px rgba(0,0,0,0.06)" : undefined }}
+    >
       <p className="text-[11px] tracking-widest uppercase font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>
         {label}
         {tooltip && <KpiTooltip content={tooltip} />}
@@ -4194,10 +4241,27 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
           <KpiCard label="Hallazgos de barreras" value={cd.total.toLocaleString("es-BO")} />
           <KpiCard label="Hallazgos críticos" value={String(cd.criticas)} valueColor={C.critico} />
-          <KpiCard label="Severidad promedio" value={severidadPromedio} sub={`IDR ${cd.irrPromedio}/4`} />
+          <KpiCard
+            label="Severidad promedio"
+            value={severidadPromedio}
+            sub={`IDR ${cd.irrPromedio}/4`}
+            onClick={() => onNavigate({
+              screen: "hallazgos-filtrados-barreras",
+              filtros: {},
+              notaCalculo: notaSeveridadPromedio("Severidad promedio", "Todos", periodoTextoBarreras),
+            })}
+          />
           <KpiCard label="Sectores afectados" value={String(cd.sectores)} />
-          {/* TODO: primer cruce Barreras↔Validación HITL, no existe ese cálculo real todavía */}
-          <KpiCard label="% Validado HITL" value={String(validadoHitlRegional)} valueSuffix="%" />
+          <KpiCard
+            label="% Validado HITL"
+            value={String(validadoHitlRegional)}
+            valueSuffix="%"
+            onClick={() => onNavigate({
+              screen: "hallazgos-filtrados-barreras",
+              filtros: {},
+              notaCalculo: notaValidadoHitl(validadoHitlRegional, "barreras", "Todos"),
+            })}
+          />
         </div>
 
         {/* Barreras por país */}
@@ -4358,10 +4422,27 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
               <KpiCard label="Total barreras" value={cd.total.toLocaleString("es-BO")} sub={countryLabel} />
               <KpiCard label="Barreras críticas" value={String(cd.criticas)} sub="nivel 4 · atención prioritaria" valueColor={C.critico} />
-              <KpiCard label="IDR promedio" value={severidadLabel(Number(cd.irrPromedio))} sub={`IDR ${cd.irrPromedio}/4 · Escala 1 a 4`} />
+              <KpiCard
+                label="IDR promedio"
+                value={severidadLabel(Number(cd.irrPromedio))}
+                sub={`IDR ${cd.irrPromedio}/4 · Escala 1 a 4`}
+                onClick={() => onNavigate({
+                  screen: "hallazgos-filtrados-barreras",
+                  filtros: { pais: country },
+                  notaCalculo: notaSeveridadPromedio("IDR promedio", country, periodoTextoBarreras),
+                })}
+              />
               <KpiCard label="Sectores afectados" value={String(cd.sectores)} sub="con barreras registradas" />
-              {/* TODO: primer cruce Barreras↔Validación HITL, no existe ese cálculo real todavía */}
-              <KpiCard label="% Validado HITL" value={String(VALIDADO_HITL_MUESTRA[country])} valueSuffix="%" />
+              <KpiCard
+                label="% Validado HITL"
+                value={String(VALIDADO_HITL_MUESTRA[country])}
+                valueSuffix="%"
+                onClick={() => onNavigate({
+                  screen: "hallazgos-filtrados-barreras",
+                  filtros: { pais: country },
+                  notaCalculo: notaValidadoHitl(VALIDADO_HITL_MUESTRA[country], "barreras", country),
+                })}
+              />
             </div>
           </>
         );
@@ -5021,10 +5102,28 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
           <KpiCard label="Total de trámites identificados" value={td.total.toLocaleString("es-BO")} />
           <KpiCard label="Trámites con potencial de mejora" value={td.total.toLocaleString("es-BO")} />
-          <KpiCard label="Costo estimado SCM" value={`USD ${(td.costoEstimadoUSD / 1_000_000).toFixed(1)} M`} valueColor={C.steel4} tooltip={scmTooltip} />
+          <KpiCard
+            label="Costo estimado SCM"
+            value={`USD ${(td.costoEstimadoUSD / 1_000_000).toFixed(1)} M`}
+            valueColor={C.steel4}
+            tooltip={scmTooltip}
+            onClick={() => onNavigate({
+              screen: "hallazgos-filtrados-tramites",
+              filtros: {},
+              notaCalculo: notaCostoTramites("Todos"),
+            })}
+          />
           <KpiCard label="Trámites críticos" value={String(td.criticos)} valueColor={C.critico} />
-          {/* TODO: primer cruce Trámites↔Validación HITL, no existe ese cálculo real todavía */}
-          <KpiCard label="% Validado HITL" value={String(TRAMITES_VALIDADO_HITL_MUESTRA["Todos"])} valueSuffix="%" />
+          <KpiCard
+            label="% Validado HITL"
+            value={String(TRAMITES_VALIDADO_HITL_MUESTRA["Todos"])}
+            valueSuffix="%"
+            onClick={() => onNavigate({
+              screen: "hallazgos-filtrados-tramites",
+              filtros: {},
+              notaCalculo: notaValidadoHitl(TRAMITES_VALIDADO_HITL_MUESTRA["Todos"], "trámites", "Todos"),
+            })}
+          />
         </div>
 
         {/* Trámites por país */}
@@ -5289,6 +5388,11 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
           sub="simulado · anual"
           valueColor={C.steel4}
           tooltip={scmTooltip}
+          onClick={() => onNavigate({
+            screen: "hallazgos-filtrados-tramites",
+            filtros: { pais: country },
+            notaCalculo: notaCostoTramites(country),
+          })}
         />
         <KpiCard label="Empresariales" value={String(td.tipoUsuario.empresarial)} sub={`${td.total > 0 ? Math.round((td.tipoUsuario.empresarial / td.total) * 100) : 0}% del total`} />
         <KpiCard label="Ciudadanos" value={String(td.tipoUsuario.ciudadano)} sub={`${td.total > 0 ? Math.round((td.tipoUsuario.ciudadano / td.total) * 100) : 0}% del total`} />
@@ -9235,6 +9339,7 @@ function AppInner() {
             onQuitarFiltro={(key) => setFiltro(key, "")}
             onLimpiarTodos={() => navigate({ screen: "hallazgos-filtrados", filtros: {} }, { replace: true })}
             onNavigate={navigate}
+            notaCalculo={view.notaCalculo}
           />
         );
       }
@@ -9286,6 +9391,7 @@ function AppInner() {
             onQuitarFiltro={(key) => setFiltro(key, "")}
             onLimpiarTodos={() => navigate({ screen: "hallazgos-filtrados-barreras", filtros: {} }, { replace: true })}
             onNavigate={navigate}
+            notaCalculo={view.notaCalculo}
           />
         );
       }
@@ -9342,6 +9448,7 @@ function AppInner() {
             onQuitarFiltro={(key) => setFiltro(key, "")}
             onLimpiarTodos={() => navigate({ screen: "hallazgos-filtrados-tramites", filtros: {} }, { replace: true })}
             onNavigate={navigate}
+            notaCalculo={view.notaCalculo}
           />
         );
       }

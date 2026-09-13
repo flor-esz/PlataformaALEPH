@@ -40,6 +40,7 @@ export type HallazgosFiltradosBarrerasProps = {
   onQuitarFiltro: (key: string) => void;
   onLimpiarTodos: () => void;
   onNavigate: (v: View) => void;
+  notaCalculo?: string;
 };
 
 // ─── Hallazgos filtrados — Barreras ─────────────────────────────────────────
@@ -48,7 +49,7 @@ export type HallazgosFiltradosBarrerasProps = {
 // App.tsx, case "hallazgos-filtrados-barreras") -- no comparte estado con
 // esas otras dos pantallas aunque una key como "subdimension" exista en las
 // tres, cada una vive en su propia URL/estado.
-export function HallazgosFiltradosBarreras({ filtros, resultados, onSetFiltro, onQuitarFiltro, onLimpiarTodos, onNavigate }: HallazgosFiltradosBarrerasProps) {
+export function HallazgosFiltradosBarreras({ filtros, resultados, onSetFiltro, onQuitarFiltro, onLimpiarTodos, onNavigate, notaCalculo }: HallazgosFiltradosBarrerasProps) {
   return (
     <HallazgosFiltradosShell<BarreraItem>
       filtros={filtros}
@@ -59,6 +60,7 @@ export function HallazgosFiltradosBarreras({ filtros, resultados, onSetFiltro, o
       onQuitarFiltro={onQuitarFiltro}
       onLimpiarTodos={onLimpiarTodos}
       onNavigate={onNavigate}
+      notaCalculo={notaCalculo}
       onRowClick={it => onNavigate({ screen: "barrera-detail", id: it.id })}
       // Los 7 campos de la barra existen en ALL_BARRERAS -- ninguno queda
       // visual-only acá (a diferencia de Instrumentos).

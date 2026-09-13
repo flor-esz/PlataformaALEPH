@@ -15,6 +15,7 @@ import {
   usePeriodoAnalisis,
   periodoRegional,
   formatearPeriodo,
+  notaCostoTramites,
 } from "./App";
 import type { Country, View } from "./App";
 
@@ -189,10 +190,29 @@ function ImpactoEconomico({ country = "Todos", onCountryChange, onNavigate }: {
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        <KpiCard label="Costo estimado total" value={formatUSDCompacto(td.costoEstimadoUSD)} sub="simulado · anual · 5 países" valueColor={C.steel4} />
+        {/* onClick siempre navega con filtros: {} (sin país), sin importar el
+            `country` seleccionado en esta pantalla -- `td` de arriba es
+            SIEMPRE COUNTRY_TRAMITES_DATA["Todos"] (no cambia con `country`,
+            comportamiento preexistente de esta pantalla), así que notaCalculo
+            y la tabla de destino tienen que coincidir con ESE alcance
+            regional, no con el país que esté elegido en el selector. */}
+        <KpiCard
+          label="Costo estimado total"
+          value={formatUSDCompacto(td.costoEstimadoUSD)}
+          sub="simulado · anual · 5 países"
+          valueColor={C.steel4}
+          onClick={() => onNavigate({
+            screen: "hallazgos-filtrados-tramites",
+            filtros: {},
+            notaCalculo: notaCostoTramites("Todos"),
+          })}
+        />
         <KpiCard label="Costo promedio por trámite" value={formatUSD(costoPromedioPorTramite)} sub="simulado" valueColor={C.steel4} />
         {/* TODO: Tiempo promedio y Pasos promedio deberían calcularse del
-            catálogo real de trámites cuando exista para los 5 países */}
+            catálogo real de trámites cuando exista para los 5 países --
+            quedan SIN conectar a propósito (igual que IDR general/Nivel de
+            fricciones): son datos de muestra fijos, sin ningún N real detrás
+            que citar en una nota de cálculo honesta. */}
         <KpiCard label="Tiempo promedio" value="18 días" sub="dato de muestra" />
         <KpiCard label="Pasos promedio" value="6.4" sub="dato de muestra" />
       </div>

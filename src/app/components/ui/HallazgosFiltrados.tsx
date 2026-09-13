@@ -40,6 +40,7 @@ export type HallazgosFiltradosProps = {
   onQuitarFiltro: (key: string) => void;
   onLimpiarTodos: () => void;
   onNavigate: (v: View) => void;
+  notaCalculo?: string;
 };
 
 // ─── Hallazgos filtrados — Instrumentos ─────────────────────────────────────
@@ -49,7 +50,7 @@ export type HallazgosFiltradosProps = {
 // PanelRegional.tsx y CountryDashboard en App.tsx). Usa el mismo shell que
 // HallazgosFiltradosBarreras.tsx/HallazgosFiltradosTramites.tsx -- Instrumento
 // no tiene pantalla de detalle propia, por eso no pasa onRowClick.
-export function HallazgosFiltrados({ filtros, resultados, onSetFiltro, onQuitarFiltro, onLimpiarTodos, onNavigate }: HallazgosFiltradosProps) {
+export function HallazgosFiltrados({ filtros, resultados, onSetFiltro, onQuitarFiltro, onLimpiarTodos, onNavigate, notaCalculo }: HallazgosFiltradosProps) {
   return (
     <HallazgosFiltradosShell<Instrumento>
       filtros={filtros}
@@ -60,6 +61,7 @@ export function HallazgosFiltrados({ filtros, resultados, onSetFiltro, onQuitarF
       onQuitarFiltro={onQuitarFiltro}
       onLimpiarTodos={onLimpiarTodos}
       onNavigate={onNavigate}
+      notaCalculo={notaCalculo}
       // País/Clasificación/Subdimensión/Severidad quedan visual-only:
       // Instrumento no tiene esos campos (son conceptos de Barreras). TODO:
       // si el catálogo de instrumentos suma esas dimensiones, agregarlas acá.

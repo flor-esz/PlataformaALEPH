@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { X, Download, ChevronDown } from "lucide-react";
+import { X, Download, ChevronDown, Info } from "lucide-react";
 import { C, HDR_BTN_PRIMARY, HDR_BTN_SECONDARY } from "../../theme";
 // Header y BarraFiltrosBarreras viven en App.tsx, y App.tsx importa (directa
 // o indirectamente, vía las 3 pantallas que usan este shell) este archivo de
@@ -52,6 +52,10 @@ export type HallazgosFiltradosShellProps<T> = {
   // usa (Barreras/Trámites no filtran por año todavía).
   mostrarPeriodo?: boolean;
   pageSize?: number;
+  // Si se pasa, se muestra una caja informativa arriba de la tabla (debajo de
+  // los chips de filtro) explicando cómo se calculó el KPI desde el que se
+  // navegó acá -- ver KpiCard.onClick en Barreras/Trámites/Impacto Económico.
+  notaCalculo?: string;
 };
 
 function textoCelda(valor: string | number) {
@@ -103,6 +107,7 @@ export function HallazgosFiltradosShell<T>({
   jerarquiaOptions,
   mostrarPeriodo,
   pageSize = 25,
+  notaCalculo,
 }: HallazgosFiltradosShellProps<T>) {
   const [page, setPage] = useState(0);
   const pageCount = Math.max(1, Math.ceil(resultados.length / pageSize));
@@ -224,6 +229,15 @@ export function HallazgosFiltradosShell<T>({
           >
             Limpiar todos <X size={12} />
           </button>
+        </div>
+      )}
+
+      {/* Nota de cálculo — solo cuando se navegó acá desde un KPI que explica
+          su propio valor (ver notaCalculo en HallazgosFiltradosShellProps). */}
+      {notaCalculo && (
+        <div className="flex items-start gap-2 mb-5 px-4 py-3 rounded-lg" style={{ backgroundColor: C.canvas, border: `1px solid ${C.border}` }}>
+          <Info size={15} color={C.textMuted} style={{ flexShrink: 0, marginTop: 1 }} />
+          <p style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 12, color: C.textMuted, lineHeight: 1.5 }}>{notaCalculo}</p>
         </div>
       )}
 

@@ -133,9 +133,11 @@ export function viewToUrl(view: View, activeCountry?: string): string {
     case "revision-indicadores": return "/validacion-hitl/indicadores";
     case "revision-notificaciones": return "/validacion-hitl/notificaciones";
     case "indice": return "/indice-idr";
-    case "hallazgos-filtrados": return withQuery("/hallazgos-filtrados", view.filtros);
-    case "hallazgos-filtrados-barreras": return withQuery("/hallazgos-filtrados/barreras", view.filtros);
-    case "hallazgos-filtrados-tramites": return withQuery("/hallazgos-filtrados/tramites", view.filtros);
+    // notaCalculo viaja como query param más -- mismo criterio que `sector`/
+    // `context`: si no está, `withQuery` simplemente no la agrega.
+    case "hallazgos-filtrados": return withQuery("/hallazgos-filtrados", { ...view.filtros, notaCalculo: view.notaCalculo });
+    case "hallazgos-filtrados-barreras": return withQuery("/hallazgos-filtrados/barreras", { ...view.filtros, notaCalculo: view.notaCalculo });
+    case "hallazgos-filtrados-tramites": return withQuery("/hallazgos-filtrados/tramites", { ...view.filtros, notaCalculo: view.notaCalculo });
   }
 }
 
@@ -235,10 +237,16 @@ export function urlToView(pathname: string, search: string): UrlToViewResult | n
       return V({ screen: "indice" });
 
     case "hallazgos-filtrados": {
-      const filtros = Object.fromEntries(params.entries());
-      if (!seg1) return V({ screen: "hallazgos-filtrados", filtros });
-      if (seg1 === "barreras") return V({ screen: "hallazgos-filtrados-barreras", filtros });
-      if (seg1 === "tramites") return V({ screen: "hallazgos-filtrados-tramites", filtros });
+      // notaCalculo viaja en el mismo query string pero no es un filtro --
+      // se separa antes de armar `filtros` para no agregar una columna/chip
+      // fantasma con ese texto.
+      const notaCalculo = params.get("notaCalculo") ?? undefined;
+      const filtroParams = new URLSearchParams(params);
+      filtroParams.delete("notaCalculo");
+      const filtros = Object.fromEntries(filtroParams.entries());
+      if (!seg1) return V({ screen: "hallazgos-filtrados", filtros, notaCalculo });
+      if (seg1 === "barreras") return V({ screen: "hallazgos-filtrados-barreras", filtros, notaCalculo });
+      if (seg1 === "tramites") return V({ screen: "hallazgos-filtrados-tramites", filtros, notaCalculo });
       return null;
     }
 
