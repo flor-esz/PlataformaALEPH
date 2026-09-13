@@ -2263,6 +2263,27 @@ export async function exportarLogErroresExcel(logErrores: LogErrorEntry[]) {
   XLSX.writeFile(wb, `RegLAC_log_errores_${fechaSlugHoy()}.xlsx`);
 }
 
+// Adaptación del mismo patrón para Administración → Fuentes -- visible para
+// cualquier rol logueado (ver AdminFuentesScreen: solo los controles de
+// edición quedan detrás de userRole === "administrador", exportar no).
+export async function exportarFuentesExcel(fuentes: FuenteAdminRow[]) {
+  const XLSX = await import("xlsx");
+  const rows = fuentes.map(f => ({
+    "País": f.pais,
+    "Fuente objetivo": f.fuenteObjetivo,
+    "Fuente scrapeada": f.fuenteScrapeada,
+    "Frecuencia de actualización": f.frecuenciaActualizacion,
+    "Estado": f.estado,
+    "Errores": f.errores ?? "",
+    "Responsable": f.responsable,
+    "Activa": f.activo ? "Sí" : "No",
+  }));
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Fuentes");
+  XLSX.writeFile(wb, `RegLAC_fuentes_${fechaSlugHoy()}.xlsx`);
+}
+
 // Captura `container` bloque por bloque (cada elemento con className
 // "pdf-block" -- portada, encabezado de instrumento, cada ficha individual)
 // y arma un PDF paginado, sin cortar ningún bloque a la mitad entre páginas
@@ -7232,7 +7253,16 @@ const SAMPLE_FUENTES_ADMIN: FuenteAdminRow[] = COUNTRIES.flatMap((pais, pi) =>
 // de Fuentes y trazabilidad en Panorama País) -- mismo patrón que
 // initialSector ya usa en BarrerasScreen/TramitesScreen. Opcional: sin
 // prop, arranca en "Todos" como siempre.
-function AdminFuentesScreen({ paisInicial }: { paisInicial?: string }) {
+//
+// A diferencia de las otras 3 pantallas de Administración, esta YA NO
+// requiere userRole === "administrador" para VERSE -- cualquier rol
+// logueado puede abrir la tabla, filtrar por país y exportarla (necesario
+// para que "Ver detalle" de Fuentes y trazabilidad funcione para cualquier
+// rol, no solo Administrador). userRole solo decide si los controles de
+// edición (Agregar/Editar/Desactivar) se muestran -- mismo criterio ya
+// usado en RetroalimentacionGobiernoSection: visible para todos, editable
+// solo para el rol correspondiente.
+function AdminFuentesScreen({ paisInicial, userRole }: { paisInicial?: string; userRole: UserRole }) {
   const [fuentes, setFuentes] = useState<FuenteAdminRow[]>(SAMPLE_FUENTES_ADMIN);
   const [filtroPais, setFiltroPais] = useState<string>(paisInicial ?? "Todos");
   const [showModal, setShowModal] = useState(false);
@@ -7273,23 +7303,35 @@ function AdminFuentesScreen({ paisInicial }: { paisInicial?: string }) {
   const selStyle: React.CSSProperties = { fontFamily: "IBM Plex Sans, sans-serif", color: C.text, backgroundColor: C.canvas, border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 12px", fontSize: 13, outline: "none" };
   const labelStyle: React.CSSProperties = { fontFamily: "Space Grotesk, sans-serif", color: C.textMuted };
 
+  // Único punto que decide qué controles de edición se muestran -- el resto
+  // de la pantalla (tabla, filtro, exportar) es igual para cualquier rol.
+  const isAdmin = userRole === "administrador";
+  const columnas = ["País", "Fuente objetivo", "Frecuencia", "Estado", "Errores", "Responsable", ...(isAdmin ? ["Acciones"] : [])];
+
   return (
     <div className="p-4 md:p-8 overflow-y-auto h-full">
-      <Header breadcrumb="Administración — Fuentes" title="Fuentes oficiales" subtitle="Gestión del sistema · Rol: Administrador" />
+      <Header breadcrumb="Administración — Fuentes" title="Fuentes oficiales" subtitle={`Gestión del sistema · Rol: ${ROLE_LABEL[userRole]}`} />
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <select value={filtroPais} onChange={e => setFiltroPais(e.target.value)} className="min-h-[40px]" style={selStyle}>
           <option value="Todos">Todos los países</option>
           {COUNTRIES.map(p => <option key={p} value={p}>{p}</option>)}
         </select>
-        <button className="flex items-center gap-2 px-3 md:px-4 py-2 rounded-lg text-[13px] font-medium min-h-[44px]"
-          style={{ backgroundColor: C.steel4, color: "white", fontFamily: "Space Grotesk, sans-serif", border: "none" }}
-          onClick={openCreate}>+ Agregar fuente</button>
+        <div className="flex items-center gap-2">
+          <button style={HDR_BTN_SECONDARY} onClick={() => { void exportarFuentesExcel(filtradas); }}>
+            <Download size={13} /> Exportar
+          </button>
+          {isAdmin && (
+            <button className="flex items-center gap-2 px-3 md:px-4 py-2 rounded-lg text-[13px] font-medium min-h-[44px]"
+              style={{ backgroundColor: C.steel4, color: "white", fontFamily: "Space Grotesk, sans-serif", border: "none" }}
+              onClick={openCreate}>+ Agregar fuente</button>
+          )}
+        </div>
       </div>
       <div className="rounded-lg overflow-hidden overflow-x-auto" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
         <table className="w-full min-w-[760px]">
           <thead>
             <tr style={{ borderBottom: `1px solid ${C.border}` }}>
-              {["País", "Fuente objetivo", "Frecuencia", "Estado", "Errores", "Responsable", "Acciones"].map(h => (
+              {columnas.map(h => (
                 <th key={h} className="px-5 py-3 text-left text-[11px] uppercase tracking-widest" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>{h}</th>
               ))}
             </tr>
@@ -7305,14 +7347,16 @@ function AdminFuentesScreen({ paisInicial }: { paisInicial?: string }) {
                   <td className="px-5 py-3"><span className="text-[11px] px-2.5 py-1 rounded-full font-medium" style={{ backgroundColor: meta.bg, color: meta.color, fontFamily: "IBM Plex Sans, sans-serif" }}>{f.estado}</span></td>
                   <td className="px-5 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: f.errores ? C.critico : C.textMuted }}>{f.errores ?? "—"}</td>
                   <td className="px-5 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{f.responsable}</td>
-                  <td className="px-5 py-3">
-                    <div className="flex items-center gap-3">
-                      <button className="text-[12px]" style={{ color: C.steel3, fontFamily: "IBM Plex Sans, sans-serif", background: "none", border: "none" }} onClick={() => openEdit(f)}>Editar</button>
-                      <button className="text-[12px]" style={{ color: f.activo ? C.critico : "#2D7A3A", fontFamily: "IBM Plex Sans, sans-serif", background: "none", border: "none" }} onClick={() => toggleActivo(f)}>
-                        {f.activo ? "Desactivar" : "Activar"}
-                      </button>
-                    </div>
-                  </td>
+                  {isAdmin && (
+                    <td className="px-5 py-3">
+                      <div className="flex items-center gap-3">
+                        <button className="text-[12px]" style={{ color: C.steel3, fontFamily: "IBM Plex Sans, sans-serif", background: "none", border: "none" }} onClick={() => openEdit(f)}>Editar</button>
+                        <button className="text-[12px]" style={{ color: f.activo ? C.critico : "#2D7A3A", fontFamily: "IBM Plex Sans, sans-serif", background: "none", border: "none" }} onClick={() => toggleActivo(f)}>
+                          {f.activo ? "Desactivar" : "Activar"}
+                        </button>
+                      </div>
+                    </td>
+                  )}
                 </tr>
               );
             })}
@@ -9465,7 +9509,7 @@ function AppInner() {
         const adminView = view as { screen: "administracion"; tab?: string; paisInicial?: string };
         const adminTab = adminView.tab ?? "usuarios";
         if (adminTab === "catalogos") return <AdminCatalogosScreen />;
-        if (adminTab === "fuentes") return <AdminFuentesScreen paisInicial={adminView.paisInicial} />;
+        if (adminTab === "fuentes") return <AdminFuentesScreen paisInicial={adminView.paisInicial} userRole={userRole} />;
         if (adminTab === "bitacora") return <AdminBitacoraScreen />;
         return <AdminUsuariosScreen />;
       }
