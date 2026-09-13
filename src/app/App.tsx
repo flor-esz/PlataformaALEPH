@@ -184,7 +184,10 @@ export type View =
   | { screen: "tramite-detail"; id: string }
   | { screen: "distorsion-detail"; id: string }
   | { screen: "placeholder"; label: string }
-  | { screen: "administracion"; tab?: string }
+  // paisInicial precarga el filtro de país de AdminFuentesScreen (tab
+  // "fuentes") -- lo usa el botón "Ver detalle" de Fuentes y trazabilidad en
+  // Panorama País. Se ignora en los demás tabs (Usuarios/Catálogos/Bitácora).
+  | { screen: "administracion"; tab?: string; paisInicial?: string }
   | { screen: "reportes"; prefill?: ReportesPrefill }
   | { screen: "reporte-pdf"; context?: string }
   | { screen: "documentacion" }
@@ -3816,10 +3819,12 @@ function CountryDashboard({ country, onCountryChange, onNavigate }: { country: s
 
       {/* "Fuentes y trazabilidad" es sobre FUENTES de scraping, no sobre
           registros individuales de instrumentos/barreras/trámites -- no
-          calza con ninguno de los 3 HallazgosFiltrados*, se deja como
-          estaba (apunta a "indice", un placeholder genérico igual que
-          antes de este barrido). */}
-      <FuentesTrazabilidadTable filas={fuentesTrazabilidad} onVerDetalle={() => onNavigate({ screen: "indice" })} />
+          calza con ninguno de los 3 HallazgosFiltrados*. Va a Administración
+          → Fuentes (AdminFuentesScreen), que es la pantalla real de fuentes,
+          con el país que se está viendo acá ya precargado en su filtro
+          (fix: antes apuntaba por error a "indice", quedó mal cableado en el
+          barrido de auditoría de botones). */}
+      <FuentesTrazabilidadTable filas={fuentesTrazabilidad} onVerDetalle={() => onNavigate({ screen: "administracion", tab: "fuentes", paisInicial: country })} />
 
       <SectionDivider label="Trámites y respaldo normativo" />
 
@@ -7223,9 +7228,13 @@ const SAMPLE_FUENTES_ADMIN: FuenteAdminRow[] = COUNTRIES.flatMap((pais, pi) =>
   }))
 );
 
-function AdminFuentesScreen() {
+// paisInicial precarga el filtro de país (ej. llegando desde "Ver detalle"
+// de Fuentes y trazabilidad en Panorama País) -- mismo patrón que
+// initialSector ya usa en BarrerasScreen/TramitesScreen. Opcional: sin
+// prop, arranca en "Todos" como siempre.
+function AdminFuentesScreen({ paisInicial }: { paisInicial?: string }) {
   const [fuentes, setFuentes] = useState<FuenteAdminRow[]>(SAMPLE_FUENTES_ADMIN);
-  const [filtroPais, setFiltroPais] = useState<string>("Todos");
+  const [filtroPais, setFiltroPais] = useState<string>(paisInicial ?? "Todos");
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<{ index: number } | null>(null);
   const [form, setForm] = useState({
@@ -9453,9 +9462,10 @@ function AppInner() {
         );
       }
       case "administracion": {
-        const adminTab = (view as { screen: "administracion"; tab?: string }).tab ?? "usuarios";
+        const adminView = view as { screen: "administracion"; tab?: string; paisInicial?: string };
+        const adminTab = adminView.tab ?? "usuarios";
         if (adminTab === "catalogos") return <AdminCatalogosScreen />;
-        if (adminTab === "fuentes") return <AdminFuentesScreen />;
+        if (adminTab === "fuentes") return <AdminFuentesScreen paisInicial={adminView.paisInicial} />;
         if (adminTab === "bitacora") return <AdminBitacoraScreen />;
         return <AdminUsuariosScreen />;
       }

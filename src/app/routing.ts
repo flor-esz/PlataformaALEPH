@@ -25,7 +25,7 @@
 //   tramite-detail {id}                            → /tramites/detalle/:id
 //   distorsion-detail {id}                         → /distorsiones/detalle/:id
 //   placeholder {label}                            → /placeholder?label=
-//   administracion {tab?}                          → /administracion/:tab (default "usuarios")
+//   administracion {tab?, paisInicial?}             → /administracion/:tab (default "usuarios")[?pais=]
 //   reportes {prefill?}                            → /reportes[?prefill=<JSON codificado>]
 //   reporte-pdf {context?}                         → /reportes/pdf[?context=]
 //   documentacion                                  → /documentacion
@@ -116,7 +116,9 @@ export function viewToUrl(view: View, activeCountry?: string): string {
     case "tramite-detail": return `/tramites/detalle/${encodeURIComponent(view.id)}`;
     case "distorsion-detail": return `/distorsiones/detalle/${encodeURIComponent(view.id)}`;
     case "placeholder": return withQuery("/placeholder", { label: view.label });
-    case "administracion": return `/administracion/${view.tab ?? "usuarios"}`;
+    // paisInicial (solo relevante para tab "fuentes", ver AdminFuentesScreen)
+    // viaja como query param -- mismo criterio que sector/context/notaCalculo.
+    case "administracion": return withQuery(`/administracion/${view.tab ?? "usuarios"}`, { pais: view.paisInicial });
     case "reportes": return withQuery("/reportes", { prefill: view.prefill ? JSON.stringify(view.prefill) : undefined });
     case "reporte-pdf": return withQuery("/reportes/pdf", { context: view.context });
     case "documentacion": return "/documentacion";
@@ -199,7 +201,7 @@ export function urlToView(pathname: string, search: string): UrlToViewResult | n
     }
 
     case "administracion":
-      return V({ screen: "administracion", tab: seg1 ?? "usuarios" });
+      return V({ screen: "administracion", tab: seg1 ?? "usuarios", paisInicial: params.get("pais") ?? undefined });
 
     case "reportes": {
       if (!seg1) {
