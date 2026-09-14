@@ -224,6 +224,14 @@ export type ReportesPrefill = {
   tipoCarga?: string;
   subdimCarga?: string;
   tipoTramite?: string;
+  // Solo tienen sentido para tipoHallazgo "carga" (Trámites) -- mismo
+  // criterio que tipoCarga/subdimCarga/tipoTramite, que tampoco aplican a
+  // "distorsion". ALL_TRAMITES no tiene campo "tamaño de empresa" ni "etapa
+  // del ciclo de vida" propios todavía -- ver el filtro correspondiente en
+  // filtrarTramites() para el criterio de match usado mientras tanto.
+  tamano?: string;
+  etapaCiclo?: string;
+  ano?: string;
 };
 
 // ─── Colours ──────────────────────────────────────────────────────────────────
@@ -1301,6 +1309,29 @@ const ACCION_CATEGORIA_TRAMITES_POR_INDICE = repartoProporcional(CANT_TRAMITES_T
   { valor: "Clarificar", pct: 11 },
   { valor: "Proporcionalizar", pct: 10 },
 ]);
+// tamano/anio -- dato de muestra nuevo, sin metodología real (mismo criterio
+// que el resto de campos de esta sección), agregado porque ALL_TRAMITES no
+// tenía ningún campo de tamaño de empresa ni de año propio todavía --
+// filtrarTramites() los necesita para que tamano/ano en Reportes filtren de
+// verdad en vez de quedar sin nada que comparar. Pirámide típica de tamaño de
+// empresa (más micro/pequeñas que grandes); años concentrados en la segunda
+// mitad del rango 2015-2026 ya usado por los selects de Reportes/Trámites.
+const TAMANO_EMPRESA_TRAMITES_POR_INDICE = repartoProporcional(CANT_TRAMITES_TOTAL, [
+  { valor: "Micro", pct: 40 },
+  { valor: "Pequeña", pct: 30 },
+  { valor: "Mediana", pct: 20 },
+  { valor: "Grande", pct: 10 },
+]);
+const ANIO_TRAMITES_POR_INDICE = repartoProporcional(CANT_TRAMITES_TOTAL, [
+  { valor: 2018, pct: 10 },
+  { valor: 2019, pct: 10 },
+  { valor: 2020, pct: 12 },
+  { valor: 2021, pct: 14 },
+  { valor: 2022, pct: 18 },
+  { valor: 2023, pct: 16 },
+  { valor: 2024, pct: 12 },
+  { valor: 2025, pct: 8 },
+]);
 
 // tipoCarga/subdimension -- mismo criterio que los 3 campos de arriba, dato
 // de muestra nuevo. Los porcentajes son literales (no una referencia viva a
@@ -1363,6 +1394,8 @@ export const ALL_TRAMITES = [...TRAMITES_CAFE, ...TRAMITES_TEXTIL, ...TRAMITES_M
   afectacionMipyme: AFECTACION_MIPYME_TRAMITES_POR_INDICE[i],
   tipoAfectacion: TIPO_AFECTACION_POR_INDICE[i],
   accionCategoria: ACCION_CATEGORIA_TRAMITES_POR_INDICE[i],
+  tamano: TAMANO_EMPRESA_TRAMITES_POR_INDICE[i],
+  anio: ANIO_TRAMITES_POR_INDICE[i],
   // Sin muestra pre-cargada para trámites -- solo se pidió para ALL_BARRERAS.
   // Editable en vivo por el rol "gobierno" desde TramiteDetail().
   retroalimentacionGobierno: null as RetroalimentacionGobierno,
@@ -2132,12 +2165,20 @@ export type FiltrosHallazgos = {
   estadoHitl: string[];
   fuentes: string[];
   tipoTramite: string; // solo aplica a trámites; "" = todos
+  // Solo aplican a trámites, igual que tipoTramite -- ALL_TRAMITES tiene
+  // `etapa`/`tamano`/`anio` (los 2 últimos, dato de muestra agregado para
+  // esto mismo, ver ANIO_TRAMITES_POR_INDICE/TAMANO_EMPRESA_TRAMITES_POR_
+  // INDICE más arriba), así que los 3 filtran de verdad (ver
+  // filtrarTramites() abajo).
+  etapaCiclo: string;
+  tamano: string;
+  ano: string; // string (viene de un <select>), se compara contra t.anio (number)
   coberturaMin: number;
   idrMin: number;
 };
 
 export const FILTROS_HALLAZGOS_DEFAULT: FiltrosHallazgos = {
-  pais: "Todos", sectores: [], severidades: [], estadoHitl: [], fuentes: [], tipoTramite: "", coberturaMin: 0, idrMin: 0,
+  pais: "Todos", sectores: [], severidades: [], estadoHitl: [], fuentes: [], tipoTramite: "", etapaCiclo: "", tamano: "", ano: "", coberturaMin: 0, idrMin: 0,
 };
 
 function paisesIncluidosPorMinimos(pais: Country, coberturaMin: number, idrMin: number): Exclude<Country, "Todos">[] | null {
@@ -2167,6 +2208,9 @@ export function filtrarTramites(f: FiltrosHallazgos) {
     if (f.pais !== "Todos" && t.pais !== f.pais) return false;
     if (f.sectores.length > 0 && !f.sectores.includes(t.sector)) return false;
     if (f.tipoTramite && t.tipo !== f.tipoTramite) return false;
+    if (f.etapaCiclo && t.etapa !== f.etapaCiclo) return false;
+    if (f.tamano && t.tamano !== f.tamano) return false;
+    if (f.ano && t.anio !== Number(f.ano)) return false;
     if (f.estadoHitl.length > 0 && !f.estadoHitl.includes(t.estadoHitl ?? "")) return false;
     if (f.fuentes.length > 0 && !f.fuentes.includes(t.fuente)) return false;
     if (paisesIncluidos && !paisesIncluidos.includes(t.pais as Exclude<Country, "Todos">)) return false;
@@ -3741,7 +3785,12 @@ function CountryDashboard({ country, onCountryChange, onNavigate }: { country: s
     <>
       <button style={HDR_BTN_PILL} onClick={() => onNavigate({ screen: "tramites" })}>Ver trámites</button>
       <button style={HDR_BTN_PILL} onClick={() => onNavigate({ screen: "barreras" })}>Ver barreras</button>
-      <button style={HDR_BTN_PRIMARY} onClick={() => onNavigate({ screen: "reportes" })}>
+      {/* Panorama País es de instrumentos, no de barreras/trámites
+          individuales -- no tiene sentido pasarle tipoHallazgo/severidad
+          como las otras pantallas. CountryDashboard no declara ningún
+          useState de filtro propio (sector/entidad/etc.), así que el único
+          dato real que hay para precargar es el país actual. */}
+      <button style={HDR_BTN_PRIMARY} onClick={() => onNavigate({ screen: "reportes", prefill: { pais: country as Country } })}>
         <Download size={13} /><span className="hidden sm:inline">Generar reporte</span><span className="sm:hidden">Reporte</span>
       </button>
       {/* TODO: dropdown de opciones de descarga */}
@@ -5102,6 +5151,29 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
       { label: "Alta", color: C.alto },
     ];
 
+    // Mismo patrón que el branch por país de esta función (más abajo) y el
+    // de BarrerasScreen -- arma el prefill con los estados de filtro ya
+    // declarados en esta pantalla en vez de un literal fijo. HOY este branch
+    // Regional no tiene ningún <select> real que toque sector/entidad/
+    // tipoCarga/subdimension/tipoUsuario/tamano/etapaCiclo/ano (el único
+    // "filtro" visible es un <select> decorativo sin lógica, ver "Trámites
+    // por: Entidad" más abajo), así que en la práctica el resultado es igual
+    // a un prefill vacío -- el cambio deja todo listo para reflejar filtros
+    // reales el día que este branch los tenga, sin que alguien tenga que
+    // acordarse de venir a tocar este botón también.
+    const reportesPrefill: ReportesPrefill = {
+      tipoHallazgo: "carga",
+      pais: "Todos",
+      sectores: sector ? [sector] : [],
+      tipoCarga: tipoCarga || "",
+      subdimCarga: subdimension || "",
+      entidad: entidad || "",
+      tipoTramite: tipoUsuario || "",
+      tamano: tamano || "",
+      etapaCiclo: etapaCiclo || "",
+      ano: ano || "",
+    };
+
     return (
       <div className="p-4 md:p-8 overflow-y-auto h-full">
         <Header
@@ -5111,7 +5183,7 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
             <>
               {/* TODO: destino de "Ver metodología" (¿documentación / metodología del SCM?) */}
               <button style={HDR_BTN_PILL}>Ver metodología</button>
-              <button style={HDR_BTN_PRIMARY} onClick={() => onNavigate({ screen: "reportes", prefill: { tipoHallazgo: "carga", pais: "Todos" } })}>
+              <button style={HDR_BTN_PRIMARY} onClick={() => onNavigate({ screen: "reportes", prefill: reportesPrefill })}>
                 <ExternalLink size={13} /><span className="hidden sm:inline">Generar reporte</span><span className="sm:hidden">Reporte</span>
               </button>
               {/* TODO: dropdown de opciones de descarga */}
@@ -5325,6 +5397,9 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
           subdimCarga: subdimension || "",
           tipoTramite: tipoUsuario || "",
           entidad: entidad || "",
+          tamano: tamano || "",
+          etapaCiclo: etapaCiclo || "",
+          ano: ano || "",
         };
         return (
           <Header
@@ -5614,23 +5689,31 @@ function TramiteDetail({ id, onNavigate, userRole, retroGobiernoOverrides, onGua
 
   return (
     <div className="p-4 md:p-8 overflow-y-auto h-full">
+      <Header
+        breadcrumb="Trámites con potencial de mejora › Detalle Trámite"
+        title={tramite.nombre}
+        actions={
+          <>
+            <button style={HDR_BTN_PRIMARY} onClick={() => onNavigate({ screen: "reportes", prefill: { tipoHallazgo: "carga", pais: tramite.pais, sectores: [tramite.sector] } })}>
+              <Download size={13} /><span className="hidden sm:inline">Generar reporte</span><span className="sm:hidden">Reporte</span>
+            </button>
+            <button style={HDR_BTN_SECONDARY}>
+              Descargar <ChevronDown size={13} />
+            </button>
+          </>
+        }
+      />
+
       <button className="flex items-center gap-1 text-[12px] mb-4" style={{ color: C.textMuted, fontFamily: "IBM Plex Sans, sans-serif", background: "none", border: "none" }}
         onClick={() => onNavigate({ screen: "tramites" })}>
         ← Volver a Trámites
       </button>
-      <div className="flex items-center justify-between mb-1">
-        <p className="text-[11px] uppercase tracking-widest" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>Regulaciones › Trámites › Detalle</p>
-        <button className="flex items-center gap-2 px-3 md:px-4 py-2 rounded-lg text-[12px] font-medium"
-          style={{ backgroundColor: C.text, color: "#FAFBFC", fontFamily: "Space Grotesk, sans-serif", border: "none" }}
-          onClick={() => onNavigate({ screen: "reporte-pdf", context: tramite.sector })}>
-          <Download size={13} /> <span className="hidden sm:inline">Exportar PDF</span><span className="sm:hidden">PDF</span>
-        </button>
-      </div>
 
+      {/* Fila de badges -- el nombre ya se muestra una sola vez, en el
+          título del Header de arriba (antes se repetía acá en un <h1>). */}
       <div className="flex items-start justify-between mt-2 mb-6">
         <div>
           <div className="flex flex-wrap items-center gap-2 md:gap-3 mb-1">
-            <h1 className="text-[24px] font-semibold" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>{tramite.nombre}</h1>
             {(tramite as any).prioritario ? (
               <span className="text-[11px] px-3 py-1 rounded-full font-semibold" style={{ backgroundColor: C.steel4, color: "white", fontFamily: "Space Grotesk, sans-serif" }}>Prioritario</span>
             ) : (
@@ -5803,24 +5886,36 @@ function DistorsionDetail({ id, onNavigate }: { id: string; onNavigate: (v: View
 
   return (
     <div className="p-4 md:p-8 overflow-y-auto h-full">
+      {/* Distorsion no tiene pais/sector propios (ver type Distorsion más
+          arriba) -- se derivan del trámite vinculado (d.tramiteId), que ya
+          se resolvía acá arriba para el breadcrumb/"Volver al trámite". Si
+          no hay trámite vinculado, quedan fuera del prefill en vez de
+          inventar un valor. */}
+      <Header
+        breadcrumb={`Trámites con potencial de mejora › ${tramite?.nombre ?? "Detalle Trámite"} › Distorsión`}
+        title={d.nombre}
+        actions={
+          <>
+            <button style={HDR_BTN_PRIMARY} onClick={() => onNavigate({ screen: "reportes", prefill: { tipoHallazgo: "distorsion", pais: tramite?.pais, sectores: tramite?.sector ? [tramite.sector] : [] } })}>
+              <Download size={13} /><span className="hidden sm:inline">Generar reporte</span><span className="sm:hidden">Reporte</span>
+            </button>
+            <button style={HDR_BTN_SECONDARY}>
+              Descargar <ChevronDown size={13} />
+            </button>
+          </>
+        }
+      />
+
       <button className="flex items-center gap-1 text-[12px] mb-4 min-h-[44px]" style={{ color: C.textMuted, fontFamily: "IBM Plex Sans, sans-serif", background: "none", border: "none" }}
         onClick={() => tramite ? onNavigate({ screen: "tramite-detail", id: tramite.id }) : onNavigate({ screen: "tramites" })}>
         ← Volver al trámite
       </button>
-      <div className="flex items-center justify-between mb-1 gap-2">
-        <p className="text-[10px] md:text-[11px] uppercase tracking-widest" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>
-          Regulaciones › Trámites › {tramite?.nombre ?? "Detalle"} › Distorsión
-        </p>
-        <button className="flex items-center gap-2 px-3 md:px-4 py-2 rounded-lg text-[12px] font-medium flex-shrink-0"
-          style={{ backgroundColor: C.text, color: "#FAFBFC", fontFamily: "Space Grotesk, sans-serif", border: "none" }}
-          onClick={() => onNavigate({ screen: "reporte-pdf", context: d.tipoCarga })}>
-          <Download size={13} /> Exportar PDF
-        </button>
-      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
         {/* Main column */}
         <div className="md:col-span-2 flex flex-col gap-5">
+          {/* Fila de badges -- el nombre ya se muestra una sola vez, en el
+              título del Header de arriba (antes se repetía acá en un <h1>). */}
           <div>
             <div className="flex items-center gap-3 mb-2">
               <span className="text-[11px] px-2.5 py-1 rounded-full font-semibold tracking-wide uppercase"
@@ -5829,8 +5924,7 @@ function DistorsionDetail({ id, onNavigate }: { id: string; onNavigate: (v: View
               </span>
               <span className="text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{d.tipoCarga} · {d.subdimension}</span>
             </div>
-            <p className="text-[11px] uppercase tracking-widest mb-1" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.steel3 }}>{d.id}</p>
-            <h1 className="text-[24px] font-semibold" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>{d.nombre}</h1>
+            <p className="text-[11px] uppercase tracking-widest" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.steel3 }}>{d.id}</p>
           </div>
 
           {/* Legal text block */}
@@ -7670,6 +7764,14 @@ function ReportesScreen({ prefill, onNavigate }: { prefill?: ReportesPrefill; on
   const [subdimCarga, setSubdimCarga] = useState(prefill?.subdimCarga ?? "");
   const [tipoTramite, setTipoTramite] = useState(prefill?.tipoTramite ?? "");
   const [selectedAccionesCarga, setSelectedAccionesCarga] = useState<string[]>([]);
+  // etapaCiclo/tamano/ano filtran de verdad sobre previewTramites (ver
+  // filtrarTramites()) -- ALL_TRAMITES tiene `etapa` (real) y `tamano`/`anio`
+  // (dato de muestra agregado para esto, ver TAMANO_EMPRESA_TRAMITES_POR_
+  // INDICE/ANIO_TRAMITES_POR_INDICE más arriba, distinto de TRAMITES_EXT, la
+  // vista enriquecida solo para la tabla local de TramitesScreen).
+  const [etapaCiclo, setEtapaCiclo] = useState(prefill?.etapaCiclo ?? "");
+  const [tamano, setTamano] = useState(prefill?.tamano ?? "");
+  const [ano, setAno] = useState(prefill?.ano ?? "");
 
   // ── Derived ────────────────────────────────────────────────────────────────────
   const availableSectors = pais === "Todos"
@@ -7731,7 +7833,7 @@ function ReportesScreen({ prefill, onNavigate }: { prefill?: ReportesPrefill; on
   // vista previa de acá y la ficha final nunca puedan desalinearse.
   const filtrosActivos: FiltrosHallazgos = {
     pais, sectores: selectedSectors, severidades: selectedSeveridades,
-    estadoHitl: selectedEstadoHitl, fuentes: selectedFuentes, tipoTramite, coberturaMin, idrMin,
+    estadoHitl: selectedEstadoHitl, fuentes: selectedFuentes, tipoTramite, etapaCiclo, tamano, ano, coberturaMin, idrMin,
   };
   const previewBarreras = filtrarBarreras(filtrosActivos);
   const previewTramites = filtrarTramites(filtrosActivos);
@@ -7921,6 +8023,27 @@ function ReportesScreen({ prefill, onNavigate }: { prefill?: ReportesPrefill; on
                     <ChipToggle key={t} label={t} active={tipoTramite === t} onClick={() => setTipoTramite(tipoTramite === t ? "" : t)} />
                   ))}
                 </div>
+              </SectionCard>
+
+              <SectionCard title="Etapa del ciclo de vida">
+                <select style={selStyle} value={etapaCiclo} onChange={e => setEtapaCiclo(e.target.value)}>
+                  <option value="">Todas las etapas</option>
+                  {["Apertura", "Operación", "Cierre", "Expansión"].map(et => <option key={et} value={et}>{et}</option>)}
+                </select>
+              </SectionCard>
+
+              <SectionCard title="Tamaño de empresa">
+                <select style={selStyle} value={tamano} onChange={e => setTamano(e.target.value)}>
+                  <option value="">Todos los tamaños</option>
+                  {["Micro", "Pequeña", "Mediana", "Grande"].map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </SectionCard>
+
+              <SectionCard title="Año">
+                <select style={selStyle} value={ano} onChange={e => setAno(e.target.value)}>
+                  <option value="">Todos los años</option>
+                  {Array.from({ length: 2026 - 2015 + 1 }, (_, i) => 2015 + i).map(y => <option key={y} value={String(y)}>{y}</option>)}
+                </select>
               </SectionCard>
 
               <SectionCard title="Tipo de acción AMR">
