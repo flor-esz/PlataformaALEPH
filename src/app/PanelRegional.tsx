@@ -1,9 +1,11 @@
-import { Download, ChevronDown } from "lucide-react";
-import { C, HDR_BTN_PRIMARY, HDR_BTN_SECONDARY, HDR_BTN_PILL } from "./theme";
+import { useRef } from "react";
+import { Download } from "lucide-react";
+import { C, HDR_BTN_PRIMARY, HDR_BTN_PILL } from "./theme";
 import {
   Header,
   KpiCard,
   BandaCobertura,
+  DescargarDropdown,
   COUNTRIES,
   COUNTRY_DATA,
   COBERTURA_MUESTRA,
@@ -12,6 +14,7 @@ import {
   periodoRegional,
   formatearPeriodo,
 } from "./App";
+import type { HojaExcel } from "./App";
 import type { View, Country } from "./App";
 import { BarrasComposicion } from "./components/ui/BarrasComposicion";
 import type { BarrasComposicionCategoria } from "./components/ui/BarrasComposicion";
@@ -23,6 +26,9 @@ import { JERARQUIA_N2N6_TOTALES, ESTADO_PROCESAMIENTO_RATIOS } from "./data/inst
 // Vista agregada de los COUNTRIES.length países activos — punto de entrada de
 // "Panorama Regulatorio" antes de anclar a un país específico (CountryDashboard).
 function PanelRegional({ onNavigate }: { onNavigate: (v: View) => void }) {
+  // Contenedor raíz -- lo captura DescargarDropdown para el PDF (filtros +
+  // gráficas tal como se ven en pantalla).
+  const containerRef = useRef<HTMLDivElement>(null);
   // Reutilizada por el <select> de país y por el botón "Ver panorama del
   // país →" de cada tarjeta — un solo lugar para la navegación a Panel País.
   const irAPanoramaDePais = (pais: Country) => onNavigate({ screen: "country-dashboard", country: pais });
@@ -61,8 +67,49 @@ function PanelRegional({ onNavigate }: { onNavigate: (v: View) => void }) {
     "Pendientes": C.border,
   };
 
+  // "Tabla activa" de esta pantalla = la grilla de tarjetas "Países" más
+  // abajo (país/instrumentos/cobertura/barreras/trámites) -- no hay un
+  // <table> literal acá, pero es el mismo dato tabular que ya se ve en
+  // pantalla, calculado una sola vez acá para no duplicarlo en el .map() del
+  // render y en el export. Esta pantalla no tiene ningún filtro propio (el
+  // <select> de país NAVEGA a Panel País, no filtra esta vista).
+  const paisesFilas = COUNTRIES.map(pais => {
+    const d = COUNTRY_DATA[pais];
+    const instrumentos = JERARQUIA_NORMATIVA_DATA.find(c => c.nombre === pais)?.total ?? 0;
+    const cobertura = COBERTURA_MUESTRA[pais as Exclude<Country, "Todos">];
+    return { "País": pais, "Instrumentos": instrumentos, "Cobertura %": cobertura, "Barreras": d.barreras, "Trámites": d.tramites };
+  });
+
+  // ── Hojas del Excel -- una por cada bloque visible en esta pantalla, no
+  // solo la tabla de países. "Resumen" junta los 8 KPIs de las 2 filas de
+  // tarjetas (label/value); "Estado de procesamiento" y "Instrumentos por
+  // jerarquía normativa" exportan la tabla COMPLETA detrás de cada gráfica
+  // (no solo lo que se alcanza a ver en el panel visual).
+  const hojaResumen: HojaExcel = {
+    nombre: "Resumen",
+    filas: [
+      { Indicador: "Países activos", Valor: COUNTRIES.length },
+      { Indicador: "Instrumentos analizados", Valor: instrumentosAnalizados },
+      { Indicador: "Trámites identificados", Valor: tramitesIdentificados },
+      { Indicador: "Fuentes oficiales identificadas", Valor: 10 },
+      { Indicador: "Fuentes procesadas", Valor: 7 },
+      { Indicador: "Entidades emisoras", Valor: 20 },
+      { Indicador: "Sectores cubiertos", Valor: 20 },
+      { Indicador: "IDR General", Valor: 54.2 },
+    ],
+  };
+  const hojaEstadoProcesamiento: HojaExcel = {
+    nombre: "Estado de procesamiento",
+    filas: ESTADO_PROCESAMIENTO_RATIOS.map(e => ({ Etapa: e.nombre, "Porcentaje": e.pct })),
+  };
+  const hojaJerarquia: HojaExcel = {
+    nombre: "Instrumentos por jerarquía normativa",
+    filas: JERARQUIA_N2N6_TOTALES.map(({ nivel, total }) => ({ Nivel: nivel, Total: total })),
+  };
+  const hojaPaises: HojaExcel = { nombre: "Países", filas: paisesFilas };
+
   return (
-    <div className="p-4 md:p-8 overflow-y-auto h-full">
+    <div ref={containerRef} className="p-4 md:p-8 overflow-y-auto h-full">
       <Header
         breadcrumb="Panorama Regulatorio › Panel Regional"
         title="Panel Regional"
@@ -73,10 +120,12 @@ function PanelRegional({ onNavigate }: { onNavigate: (v: View) => void }) {
             <button style={HDR_BTN_PRIMARY} onClick={() => onNavigate({ screen: "reportes" })}>
               <Download size={13} /><span className="hidden sm:inline">Generar reporte</span><span className="sm:hidden">Reporte</span>
             </button>
-            {/* TODO: dropdown de opciones de descarga */}
-            <button style={HDR_BTN_SECONDARY}>
-              Descargar <ChevronDown size={13} />
-            </button>
+            <DescargarDropdown
+              hojas={[hojaResumen, hojaEstadoProcesamiento, hojaJerarquia, hojaPaises]}
+              filtrosActivos={[]}
+              nombreArchivoBase="panel_regional"
+              containerRef={containerRef}
+            />
           </>
         }
       />

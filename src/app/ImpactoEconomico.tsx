@@ -1,10 +1,11 @@
-import { useState } from "react";
-import { Download, ChevronDown, Info } from "lucide-react";
-import { C, HDR_BTN_PRIMARY, HDR_BTN_SECONDARY, HDR_BTN_PILL } from "./theme";
+import { useState, useRef } from "react";
+import { Download, Info } from "lucide-react";
+import { C, HDR_BTN_PRIMARY, HDR_BTN_PILL } from "./theme";
 import {
   Header,
   KpiCard,
   ComposicionSimplePanel,
+  DescargarDropdown,
   COUNTRIES,
   COUNTRY_TRAMITES_DATA,
   MIPYME_MUESTRA,
@@ -17,7 +18,7 @@ import {
   formatearPeriodo,
   notaCostoTramites,
 } from "./App";
-import type { Country, View } from "./App";
+import type { Country, View, HojaExcel } from "./App";
 
 // ─── Formato de moneda compacto/expandido ──────────────────────────────────
 function formatUSDCompacto(v: number): string {
@@ -61,6 +62,9 @@ function ImpactoEconomico({ country = "Todos", onCountryChange, onNavigate }: {
   onNavigate: (v: View) => void;
 }) {
   const [page, setPage] = useState(0);
+  // Contenedor raíz -- lo captura DescargarDropdown para el PDF (filtros +
+  // gráficas tal como se ven en pantalla).
+  const containerRef = useRef<HTMLDivElement>(null);
 
   // Mismo criterio que Barreras/Trámites: regional usa el rango de los 5
   // países, por país usa el de ese país puntual.
@@ -102,8 +106,50 @@ function ImpactoEconomico({ country = "Todos", onCountryChange, onNavigate }: {
   const pageCount = Math.ceil(costoPorTramiteFilas.length / PAGE_SIZE);
   const pageItems = costoPorTramiteFilas.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
+  // ── Hojas del Excel -- una por cada bloque visible en esta pantalla (no
+  // solo "Costo por trámite", que era la única exportada antes): los 4 KPIs,
+  // costo por país, los 2 desgloses de canal de transmisión económica
+  // (trámites y barreras son series independientes) y afectación MIPYME.
+  const hojaResumen: HojaExcel = {
+    nombre: "Resumen",
+    filas: [
+      { Indicador: "Costo estimado total (USD)", Valor: Math.round(td.costoEstimadoUSD) },
+      { Indicador: "Costo promedio por trámite (USD)", Valor: costoPromedioPorTramite },
+      { Indicador: "Tiempo promedio", Valor: "18 días" },
+      { Indicador: "Pasos promedio", Valor: "6.4" },
+    ],
+  };
+  const hojaCostoPorPais: HojaExcel = {
+    nombre: "Costo estimado por país",
+    filas: costoPorPaisFilas.map(f => ({ País: f.nombre, "Costo estimado (USD)": Math.round(f.valor) })),
+  };
+  const hojaCanalesTramites: HojaExcel = {
+    nombre: "Canal transmisión — trámites",
+    filas: canalesTramites.map(f => ({ "Canal de transmisión económica": f.nombre, "Trámites afectados": f.valor })),
+  };
+  const hojaCanalesBarreras: HojaExcel = {
+    nombre: "Canal transmisión — barreras",
+    filas: canalesBarreras.map(f => ({ "Canal de transmisión económica": f.nombre, "Barreras afectadas": f.valor })),
+  };
+  const hojaMipyme: HojaExcel = {
+    nombre: "Afectación MIPYME",
+    filas: mipymeFilas.map(f => ({ "Nivel de afectación": f.nombre, "Trámites": f.valor })),
+  };
+  const hojaCostoPorTramite: HojaExcel = {
+    nombre: "Costo por trámite",
+    filas: costoPorTramiteFilas.map(t => ({
+      "Trámite": t.tramite,
+      "Entidad": t.entidad,
+      "Tipo de usuario": t.tipoUsuario,
+      "Sector": t.sector,
+      "Tiempo": t.tiempo,
+      "Pasos": t.pasos,
+      "Costo estimado": t.costoEstimado,
+    })),
+  };
+
   return (
-    <div className="p-4 md:p-8 overflow-y-auto h-full">
+    <div ref={containerRef} className="p-4 md:p-8 overflow-y-auto h-full">
       <Header
         breadcrumb="Impacto Económico"
         title="Impacto Económico"
@@ -112,10 +158,18 @@ function ImpactoEconomico({ country = "Todos", onCountryChange, onNavigate }: {
             <button style={HDR_BTN_PRIMARY} onClick={() => onNavigate({ screen: "reportes" })}>
               <Download size={13} /><span className="hidden sm:inline">Generar reporte</span><span className="sm:hidden">Reporte</span>
             </button>
-            {/* TODO: dropdown de opciones de descarga */}
-            <button style={HDR_BTN_SECONDARY}>
-              Descargar <ChevronDown size={13} />
-            </button>
+            {/* "Tabla activa" = costoPorTramiteFilas (el <table> "Costo por
+                trámite" más abajo, TODAS las filas ya filtradas por país, no
+                solo pageItems -- mismo criterio que ReportesScreen exporta
+                el dataset filtrado completo, no una sola página). Único
+                filtro real de esta pantalla es País (ver TODO junto a los
+                <select> de más abajo: el resto es visual todavía). */}
+            <DescargarDropdown
+              hojas={[hojaResumen, hojaCostoPorPais, hojaCanalesTramites, hojaCanalesBarreras, hojaMipyme, hojaCostoPorTramite]}
+              filtrosActivos={[{ label: "País", value: country === "Todos" ? "Todos los países" : country }]}
+              nombreArchivoBase="impacto_economico"
+              containerRef={containerRef}
+            />
           </>
         }
       />

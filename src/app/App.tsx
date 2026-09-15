@@ -2429,6 +2429,91 @@ export async function exportarReportePdf(container: HTMLElement, nombreArchivo: 
   pdf.save(`${nombreArchivo}.pdf`);
 }
 
+// ─── Descargar (Excel/PDF) — botón compartido de dashboards ────────────────────
+// Usado por el botón "Descargar" de Panel Regional/Panel País/Impacto
+// Económico/Índice-IDR -- las 4 pantallas antes tenían el botón sin ningún
+// onClick. Un solo componente (DescargarDropdown, más abajo) + estas 2
+// funciones, cada pantalla solo pasa SUS datos/columnas/filtros.
+
+// Excel: exporta TODA la información visible del dashboard, no solo su tabla
+// principal -- una hoja por cada KPI/breakdown/tabla que la pantalla ya
+// muestra (cada caller arma su propia lista de HojaExcel, ver PanelRegional.
+// tsx/CountryDashboard/ImpactoEconomico.tsx/IndiceIDR.tsx para el detalle de
+// qué hoja sale de qué bloque visible), más una última hoja "Filtros
+// aplicados" con los filtros activos al momento de exportar (siempre al
+// final, generada acá una sola vez -- no la arma cada caller).
+export type HojaExcel = { nombre: string; filas: Record<string, unknown>[] };
+
+export async function exportarVistaExcel(
+  hojas: HojaExcel[],
+  filtrosActivos: { label: string; value: string }[],
+  nombreArchivoBase: string,
+) {
+  const XLSX = await import("xlsx");
+  const wb = XLSX.utils.book_new();
+  for (const hoja of hojas) {
+    const ws = XLSX.utils.json_to_sheet(hoja.filas);
+    // Los nombres de hoja de Excel no pueden superar 31 caracteres.
+    XLSX.utils.book_append_sheet(wb, ws, hoja.nombre.slice(0, 31));
+  }
+  const filasFiltros = filtrosActivos.length > 0
+    ? filtrosActivos.map(f => ({ Filtro: f.label, Valor: f.value }))
+    : [{ Filtro: "(sin filtros aplicados)", Valor: "" }];
+  const wsFiltros = XLSX.utils.json_to_sheet(filasFiltros);
+  XLSX.utils.book_append_sheet(wb, wsFiltros, "Filtros aplicados");
+  XLSX.writeFile(wb, `reporte_${nombreArchivoBase}_${fechaSlugHoy()}.xlsx`);
+}
+
+// PDF: a diferencia de exportarReportePdf (que arma un documento con portada
+// + fichas, cada una escalada para NUNCA cortarse entre páginas), acá se
+// captura `container` como UNA sola imagen larga (la vista tal como se ve en
+// pantalla -- filtros + gráficas incluidas, un "screenshot" funcional) y se
+// reparte en páginas A4 cortando donde toque, como cualquier "imprimir esta
+// página" -- es la vista completa, no un documento de fichas discretas.
+export async function exportarVistaPdf(container: HTMLElement, nombreArchivoBase: string) {
+  const [html2canvasMod, jsPdfMod] = await Promise.all([import("html2canvas"), import("jspdf")]);
+  const html2canvas = html2canvasMod.default;
+  const { jsPDF } = jsPdfMod;
+
+  const canvas = await html2canvas(container, { scale: 1.5, useCORS: true, backgroundColor: "#ffffff" });
+
+  const pdf = new jsPDF({ unit: "mm", format: "a4" });
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  const MARGIN = 10;
+  const contentWidthMm = pageWidth - MARGIN * 2;
+  const contentHeightMm = pageHeight - MARGIN * 2;
+
+  // Ancho de la imagen ya escalado a mm de página; cuánto "alto de canvas en
+  // píxeles" entra en una página se deriva de esa misma escala, para cortar
+  // el canvas ORIGINAL (no la imagen ya convertida a mm).
+  const pageHeightPx = (contentHeightMm * canvas.width) / contentWidthMm;
+
+  let recortadoPx = 0;
+  let primeraPagina = true;
+  while (recortadoPx < canvas.height) {
+    const altoPagina = Math.min(pageHeightPx, canvas.height - recortadoPx);
+
+    const lienzoPagina = document.createElement("canvas");
+    lienzoPagina.width = canvas.width;
+    lienzoPagina.height = altoPagina;
+    const ctx = lienzoPagina.getContext("2d")!;
+    ctx.drawImage(canvas, 0, recortadoPx, canvas.width, altoPagina, 0, 0, canvas.width, altoPagina);
+    // JPEG por el mismo motivo que exportarReportePdf: texto/tarjetas sobre
+    // fondo blanco, no fotografía -- PNG sin comprimir sería impracticable.
+    const imgData = lienzoPagina.toDataURL("image/jpeg", 0.85);
+    const altoPaginaMm = (altoPagina * contentWidthMm) / canvas.width;
+
+    if (!primeraPagina) pdf.addPage();
+    pdf.addImage(imgData, "JPEG", MARGIN, MARGIN, contentWidthMm, altoPaginaMm);
+
+    recortadoPx += altoPagina;
+    primeraPagina = false;
+  }
+
+  pdf.save(`reporte_${nombreArchivoBase}_${fechaSlugHoy()}.pdf`);
+}
+
 // ─── Distorsiones de carga ─────────────────────────────────────────────────────
 const IRR_LABELS: Record<number, string> = { 4: "Crítico", 3: "Alto", 2: "Mediano", 1: "Bajo" };
 
@@ -3344,6 +3429,77 @@ export function KpiCard({ label, value, valueSuffix, sub, valueColor, tooltip, o
   );
 }
 
+// ─── Descargar (Excel/PDF) ──────────────────────────────────────────────────────
+// Botón "Descargar" compartido por Panel Regional/Panel País/Impacto
+// Económico/Índice-IDR -- mismo estilo/ubicación (último ítem del header,
+// HDR_BTN_SECONDARY) que ya tenían, ahora con un dropdown real en vez de
+// quedar sin onClick. Cada pantalla solo pasa SUS datos ya filtrados; la
+// mecánica de exportar (exportarVistaExcel/exportarVistaPdf, más arriba) es
+// una sola, no una copia por pantalla.
+export function DescargarDropdown({
+  hojas,
+  filtrosActivos,
+  nombreArchivoBase,
+  containerRef,
+  disabled,
+}: {
+  // Una hoja de Excel por cada KPI/breakdown/tabla visible en la pantalla
+  // (no solo su tabla principal) -- cada caller arma su propia lista, con
+  // los mismos datos que ve el usuario en pantalla, no el dataset sin filtrar.
+  hojas: HojaExcel[];
+  filtrosActivos: { label: string; value: string }[];
+  nombreArchivoBase: string;
+  // Contenedor a capturar para el PDF -- normalmente el mismo <div> raíz de
+  // la pantalla (filtros + gráficas incluidos), asignado por cada caller.
+  containerRef: React.RefObject<HTMLElement>;
+  disabled?: boolean;
+}) {
+  const [descargando, setDescargando] = useState<"excel" | "pdf" | null>(null);
+  const isDisabled = !!disabled || descargando !== null;
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          style={{ ...HDR_BTN_SECONDARY, opacity: isDisabled ? 0.6 : 1, cursor: isDisabled ? "not-allowed" : "pointer" }}
+          disabled={isDisabled}
+        >
+          {descargando ? "Generando…" : "Descargar"} <ChevronDown size={13} />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-[190px]">
+        <DropdownMenuItem
+          className="flex items-center gap-2 text-[12px] cursor-pointer"
+          onSelect={async () => {
+            setDescargando("excel");
+            try {
+              await exportarVistaExcel(hojas, filtrosActivos, nombreArchivoBase);
+            } finally {
+              setDescargando(null);
+            }
+          }}
+        >
+          <FileSpreadsheet size={14} /> Excel (.xlsx)
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          className="flex items-center gap-2 text-[12px] cursor-pointer"
+          onSelect={async () => {
+            if (!containerRef.current) return;
+            setDescargando("pdf");
+            try {
+              await exportarVistaPdf(containerRef.current, nombreArchivoBase);
+            } finally {
+              setDescargando(null);
+            }
+          }}
+        >
+          <FileText size={14} /> PDF
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 // Las 5 pantallas agrupadas bajo el desplegable "Dashboards" -- ninguna
 // cambió de ruta/pantalla, solo se agruparon visualmente. Se usa tanto para
@@ -3743,6 +3899,9 @@ function CountryDashboard({ country, onCountryChange, onNavigate }: { country: s
   // Antes del early return de abajo -- regla de los Hooks, mismo criterio
   // que ya se aplicó en ReportePDFScreen().
   const { periodosAnalisis } = usePeriodoAnalisis();
+  // Contenedor raíz -- lo captura DescargarDropdown para el PDF (filtros +
+  // gráficas tal como se ven en pantalla).
+  const containerRef = useRef<HTMLDivElement>(null);
   const d = COUNTRY_DATA[country];
   if (!d) return null;
 
@@ -3781,6 +3940,73 @@ function CountryDashboard({ country, onCountryChange, onNavigate }: { country: s
     { nombre: "Mixto",       valor: tramitesMixto,        color: C.steel2 },
   ];
 
+  // ── Hojas del Excel -- una por cada bloque visible en esta pantalla (no
+  // solo "Fuentes y trazabilidad", que era la única exportada antes). Panel
+  // País tiene más contenido que Panel Regional: evolución en el tiempo,
+  // 2 desgloses jerárquicos distintos, estructura de documentos, respaldo
+  // normativo/tipo de usuario y la tabla exploratoria.
+  const hojaResumen: HojaExcel = {
+    nombre: "Resumen",
+    filas: [
+      { Indicador: "Instrumentos analizados", Valor: instrumentos },
+      { Indicador: "Trámites identificados", Valor: d.tramites },
+      { Indicador: "Sectores cubiertos", Valor: d.sectores },
+      { Indicador: "Fuentes oficiales", Valor: fuentes.oficiales },
+      { Indicador: "Fuentes procesadas", Valor: fuentes.procesadas },
+      { Indicador: "Entidades emisoras", Valor: fuentes.entidadesEmisoras },
+      { Indicador: "IRR general", Valor: irrGeneral },
+      { Indicador: "Con respaldo normativo identificado", Valor: conRespaldo },
+      { Indicador: "Sin respaldo normativo identificado", Valor: sinRespaldo },
+      { Indicador: "Entidades gestoras", Valor: entidadesGestoras },
+    ],
+  };
+  const hojaEvolucion: HojaExcel = {
+    nombre: "Evolución de instrumentos",
+    filas: buildEvolucion(instrumentos).flatMap(a =>
+      a.segmentos.map(s => ({ "Año": a.anio, "Total del año": a.total, "Nivel": s.nombre, "Instrumentos": s.valor }))
+    ),
+  };
+  const hojaJerarquia: HojaExcel = {
+    nombre: "Instrumentos por jerarquía normativa",
+    filas: buildJerarquiaN2N6(instrumentos).map(c => ({ Nivel: c.nombre, Total: c.total })),
+  };
+  const hojaPalabras: HojaExcel = {
+    nombre: "Instrumentos por cantidad de palabras",
+    filas: instrumentosPorPalabrasData.map(c => ({ Nivel: c.nombre, Total: c.total })),
+  };
+  const hojaEstructuraDocs: HojaExcel = {
+    nombre: "Estructura de documentos",
+    filas: docEstructuraFilas.map(f => ({ Nivel: f.nombre, "% no estructurado": f.pctNoEstructurado })),
+  };
+  const hojaFuentesTrazabilidad: HojaExcel = {
+    nombre: "Fuentes y trazabilidad",
+    filas: fuentesTrazabilidad.map(f => ({
+      "Fuente oficial": f.fuente,
+      "Estado de scraping": f.estado,
+      "Última captura": f.ultimaCaptura,
+      "Errores": f.errores ?? "",
+      "Capturados": f.capturados,
+      "Total esperado": f.totalEsperado,
+    })),
+  };
+  const hojaTipoUsuario: HojaExcel = {
+    nombre: "Tipo de usuario",
+    filas: tipoUsuarioFilas.map(f => ({ "Tipo de usuario": f.nombre, "Trámites": f.valor })),
+  };
+  const hojaTablaExploratoria: HojaExcel = {
+    nombre: "Tabla exploratoria",
+    filas: tablaExploratoria.map(t => ({
+      Nombre: t.nombre,
+      Tipo: t.tipo,
+      Entidad: t.entidad,
+      Sector: t.sector,
+      "Año": t.año,
+      Jerarquía: t.jerarquia,
+      Vigencia: t.vigencia,
+      Estado: t.estado,
+    })),
+  };
+
   const headerActions = (
     <>
       <button style={HDR_BTN_PILL} onClick={() => onNavigate({ screen: "tramites" })}>Ver trámites</button>
@@ -3793,15 +4019,21 @@ function CountryDashboard({ country, onCountryChange, onNavigate }: { country: s
       <button style={HDR_BTN_PRIMARY} onClick={() => onNavigate({ screen: "reportes", prefill: { pais: country as Country } })}>
         <Download size={13} /><span className="hidden sm:inline">Generar reporte</span><span className="sm:hidden">Reporte</span>
       </button>
-      {/* TODO: dropdown de opciones de descarga */}
-      <button style={HDR_BTN_SECONDARY}>
-        Descargar <ChevronDown size={13} />
-      </button>
+      {/* "Tabla activa" de esta pantalla = fuentesTrazabilidad (la única con
+          <table> real, ver FuentesTrazabilidadTable más abajo). Único filtro
+          real de esta pantalla es el país (sin useState de filtro propio,
+          ver comentario arriba). */}
+      <DescargarDropdown
+        hojas={[hojaResumen, hojaEvolucion, hojaJerarquia, hojaPalabras, hojaEstructuraDocs, hojaFuentesTrazabilidad, hojaTipoUsuario, hojaTablaExploratoria]}
+        filtrosActivos={[{ label: "País", value: country }]}
+        nombreArchivoBase="panel_pais"
+        containerRef={containerRef}
+      />
     </>
   );
 
   return (
-    <div className="p-4 md:p-8 overflow-y-auto h-full">
+    <div ref={containerRef} className="p-4 md:p-8 overflow-y-auto h-full">
       <Header breadcrumb={`Panorama Regulatorio › Panel País › ${country}`} title={`Panel ${country}`} actions={headerActions} />
 
       {/* Country selector — sin "Todos los países": esta pantalla siempre está anclada a un país */}
@@ -4284,8 +4516,9 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
           title="Barreras Regulatorias"
           actions={
             <>
-              {/* TODO: destino de "Ver metodología" (¿documentación / metodología del IRR?) */}
-              <button style={HDR_BTN_PILL}>Ver metodología</button>
+              {/* Lleva a la sección "Metodología" del sidebar (screen "documentacion" --
+                  ver Sidebar en este mismo archivo, renombrada de "Documentación"). */}
+              <button style={HDR_BTN_PILL} onClick={() => onNavigate({ screen: "documentacion" })}>Ver metodología</button>
               <button style={HDR_BTN_PRIMARY} onClick={() => onNavigate({ screen: "reportes", prefill: reportesPrefill })}>
                 <ExternalLink size={13} /><span className="hidden sm:inline">Generar reporte</span><span className="sm:hidden">Reporte</span>
               </button>
@@ -4454,6 +4687,8 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
               subtitle={countryLabel}
               actions={
                 <>
+                  {/* Mismo botón/destino ya corregido en Barreras Regional (screen "documentacion" -> "Metodología" del sidebar). */}
+                  <button style={HDR_BTN_PILL} onClick={() => onNavigate({ screen: "documentacion" })}>Ver metodología</button>
                   <button style={HDR_BTN_SECONDARY} onClick={() => onNavigate({ screen: "reporte-pdf", context: exportCtx })}>
                     <Download size={13} /><span className="hidden sm:inline">Exportar PDF</span><span className="sm:hidden">PDF</span>
                   </button>
@@ -5107,6 +5342,11 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
   // estaban hardcodeadas sin importar el país seleccionado.
   const td = COUNTRY_TRAMITES_DATA[country] ?? COUNTRY_TRAMITES_DATA["Bolivia"];
 
+  // Contenedor raíz -- lo captura DescargarDropdown para el PDF (filtros +
+  // gráficas tal como se ven en pantalla). Un solo ref para los 2 branches
+  // (Regional/por país) de este componente, ya que solo uno se monta a la vez.
+  const containerRef = useRef<HTMLDivElement>(null);
+
   // ── Panel regional (país === "Todos") ───────────────────────────────────────
   if (country === "Todos") {
     const paisesRow1 = COUNTRIES.slice(0, 3);
@@ -5174,22 +5414,85 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
       ano: ano || "",
     };
 
+    // ── Hojas del Excel -- una por cada bloque visible en esta pantalla (no
+    // solo "Trámites prioritarios"): los 5 KPIs, la grilla "Trámites por
+    // país" (con su desglose de entrada por subdimensión), "Tipo de
+    // usuario" y "Trámites por: Entidad".
+    const hojaResumen: HojaExcel = {
+      nombre: "Resumen",
+      filas: [
+        { Indicador: "Total de trámites identificados", Valor: td.total },
+        { Indicador: "Trámites con potencial de mejora", Valor: td.total },
+        { Indicador: "Costo estimado SCM (USD)", Valor: Math.round(td.costoEstimadoUSD) },
+        { Indicador: "Trámites críticos", Valor: td.criticos },
+        { Indicador: "% Validado HITL", Valor: TRAMITES_VALIDADO_HITL_MUESTRA["Todos"] },
+      ],
+    };
+    const hojaTramitesPorPais: HojaExcel = {
+      nombre: "Trámites por país",
+      filas: COUNTRIES.map(pais => ({
+        "País": pais,
+        "Total": COUNTRY_TRAMITES_DATA[pais].total,
+        "Cobertura %": COBERTURA_MUESTRA[pais as Exclude<Country, "Todos">],
+        "% Validado HITL": TRAMITES_VALIDADO_HITL_MUESTRA[pais],
+      })),
+    };
+    const hojaEntradaPorPais: HojaExcel = {
+      nombre: "Desglose entrada por país",
+      filas: COUNTRIES.flatMap(pais => {
+        const subdims = COUNTRY_TRAMITES_DATA[pais].cargaPorTipo["Accesibilidad"]?.subdimensiones ?? [];
+        return subdims.map(s => ({
+          "País": pais,
+          "Subdimensión": s.nombre,
+          "Total": s.niveles.n4 + s.niveles.n3 + s.niveles.n2 + s.niveles.n1,
+        }));
+      }),
+    };
+    const hojaTipoUsuario: HojaExcel = {
+      nombre: "Tipo de usuario",
+      filas: [
+        { "Tipo de usuario": "Empresarial", "Trámites": td.tipoUsuario.empresarial },
+        { "Tipo de usuario": "Ciudadano", "Trámites": td.tipoUsuario.ciudadano },
+        { "Tipo de usuario": "Mixto", "Trámites": td.tipoUsuario.mixto },
+      ],
+    };
+    const hojaPorEntidad: HojaExcel = {
+      nombre: "Trámites por entidad",
+      filas: td.topEntidades.map(e => ({ "Entidad": e.name, "Trámites": e.value })),
+    };
+    const hojaTramitesPrioritarios: HojaExcel = {
+      nombre: "Trámites prioritarios",
+      filas: tramitesPrioritariosFilas.map(t => ({
+        "Trámite": t.tramite,
+        "País": t.pais,
+        "Entidad": t.entidad,
+        "Eje": t.eje,
+        "Costo": t.costo,
+        "Severidad": t.severidad,
+        "Estado HITL": t.estadoHitl,
+        "Acción sugerida": t.accion,
+      })),
+    };
+
     return (
-      <div className="p-4 md:p-8 overflow-y-auto h-full">
+      <div ref={containerRef} className="p-4 md:p-8 overflow-y-auto h-full">
         <Header
           breadcrumb="Trámites con potencial de mejora"
           title="Trámites con potencial de mejora"
           actions={
             <>
-              {/* TODO: destino de "Ver metodología" (¿documentación / metodología del SCM?) */}
-              <button style={HDR_BTN_PILL}>Ver metodología</button>
+              {/* Lleva a la sección "Metodología" del sidebar (screen "documentacion" --
+                  ver Sidebar en este mismo archivo, renombrada de "Documentación"). */}
+              <button style={HDR_BTN_PILL} onClick={() => onNavigate({ screen: "documentacion" })}>Ver metodología</button>
               <button style={HDR_BTN_PRIMARY} onClick={() => onNavigate({ screen: "reportes", prefill: reportesPrefill })}>
                 <ExternalLink size={13} /><span className="hidden sm:inline">Generar reporte</span><span className="sm:hidden">Reporte</span>
               </button>
-              {/* TODO: dropdown de opciones de descarga */}
-              <button style={HDR_BTN_SECONDARY}>
-                Descargar <ChevronDown size={13} />
-              </button>
+              <DescargarDropdown
+                hojas={[hojaResumen, hojaTramitesPorPais, hojaEntradaPorPais, hojaTipoUsuario, hojaPorEntidad, hojaTramitesPrioritarios]}
+                filtrosActivos={[]}
+                nombreArchivoBase="tramites_regional"
+                containerRef={containerRef}
+              />
             </>
           }
         />
@@ -5376,8 +5679,86 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
     );
   }
 
+  // "Trámites prioritarios" — misma expresión que ya usaba la tabla más abajo
+  // (hoisted acá para no calcularla 2 veces: la usan tanto el Excel del header
+  // como la tabla).
+  const filasPais = TRAMITES_PRIORITARIOS_MUESTRA[country as Exclude<Country, "Todos">] ?? TRAMITES_PRIORITARIOS_MUESTRA["Bolivia"];
+
+  // ── Hojas del Excel -- una por cada bloque visible en esta pantalla (no
+  // solo "Trámites prioritarios"): los 5 KPIs, "Carga por eje" (con su
+  // desglose de subdimensión), Top 10 entidades, Etapa del ciclo empresarial,
+  // Afectación MIPYME, Tipo de usuario, Acciones de mejora y Afectaciones.
+  const hojaResumen: HojaExcel = {
+    nombre: "Resumen",
+    filas: [
+      { Indicador: "Total trámites", Valor: td.total },
+      { Indicador: "Costo estimado de trámites (USD)", Valor: Math.round(td.costoEstimadoUSD) },
+      { Indicador: "Empresariales", Valor: td.tipoUsuario.empresarial },
+      { Indicador: "Ciudadanos", Valor: td.tipoUsuario.ciudadano },
+      { Indicador: "Cargas críticas", Valor: td.criticos },
+    ],
+  };
+  const hojaCargaPorEje: HojaExcel = {
+    nombre: "Carga por eje",
+    filas: ["Accesibilidad", "Certidumbre", "Cumplimiento", "Proporcionalidad"].flatMap(tipo => {
+      const dato = td.cargaPorTipo[tipo];
+      if (!dato) return [];
+      const totalTipo = dato.niveles.n4 + dato.niveles.n3 + dato.niveles.n2 + dato.niveles.n1;
+      return [
+        { "Tipo de carga": tipo, "Subdimensión": "(total)", "Total": totalTipo },
+        ...dato.subdimensiones.map(s => ({
+          "Tipo de carga": tipo,
+          "Subdimensión": s.nombre,
+          "Total": s.niveles.n4 + s.niveles.n3 + s.niveles.n2 + s.niveles.n1,
+        })),
+      ];
+    }),
+  };
+  const hojaTopEntidades: HojaExcel = {
+    nombre: "Top 10 entidades",
+    filas: td.topEntidades.map(e => ({ "Entidad": e.name, "Trámites": e.value })),
+  };
+  const hojaEtapaCiclo: HojaExcel = {
+    nombre: "Etapa del ciclo empresarial",
+    filas: (ETAPA_CICLO_MUESTRA[country as Exclude<Country, "Todos">] ?? ETAPA_CICLO_MUESTRA["Bolivia"]).map(f => ({ "Etapa": f.nombre, "Trámites": f.valor })),
+  };
+  const hojaMipyme: HojaExcel = {
+    nombre: "Afectación MIPYME",
+    filas: (MIPYME_MUESTRA[country as Exclude<Country, "Todos">] ?? MIPYME_MUESTRA["Bolivia"]).map(f => ({ "Nivel de afectación": f.nombre, "Trámites": f.valor })),
+  };
+  const hojaTipoUsuario: HojaExcel = {
+    nombre: "Tipo de usuario",
+    filas: [
+      { "Tipo de usuario": "Empresarial", "Trámites": td.tipoUsuario.empresarial },
+      { "Tipo de usuario": "Ciudadano", "Trámites": td.tipoUsuario.ciudadano },
+      { "Tipo de usuario": "Mixto", "Trámites": td.tipoUsuario.mixto },
+    ],
+  };
+  const hojaAccionMejora: HojaExcel = {
+    nombre: "Acciones de mejora en trámites",
+    filas: (TRAMITES_ACCION_MEJORA_MUESTRA[country as Exclude<Country, "Todos">] ?? TRAMITES_ACCION_MEJORA_MUESTRA["Bolivia"]).map(f => ({ "Acción": f.nombre, "Trámites": f.valor })),
+  };
+  const hojaAfectaciones: HojaExcel = {
+    nombre: "Afectaciones",
+    filas: (TRAMITES_AFECTACIONES_MUESTRA[country as Exclude<Country, "Todos">] ?? TRAMITES_AFECTACIONES_MUESTRA["Bolivia"]).map(f => ({ "Afectación": f.nombre, "Trámites": f.valor })),
+  };
+  const hojaTramitesPrioritarios: HojaExcel = {
+    nombre: "Trámites prioritarios",
+    filas: filasPais.map(t => ({
+      "Trámite": t.tramite,
+      "Tipo de usuario": t.tipoUsuario,
+      "Entidad": t.entidad,
+      "Sector": t.sector,
+      "Eje": t.eje,
+      "Costo": t.costo,
+      "Severidad": t.severidad,
+      "Estado HITL": t.estadoHitl,
+      "Acción sugerida": t.accion,
+    })),
+  };
+
   return (
-    <div className="p-4 md:p-8 overflow-y-auto h-full">
+    <div ref={containerRef} className="p-4 md:p-8 overflow-y-auto h-full">
       {(() => {
         const activeFilters: string[] = [];
         if (sector) activeFilters.push(`Sector: ${sector}`);
@@ -5388,7 +5769,6 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
         if (etapaCiclo) activeFilters.push(`Etapa: ${etapaCiclo}`);
         if (tamano) activeFilters.push(`Tamaño: ${tamano}`);
         if (ano) activeFilters.push(`Año: ${ano}`);
-        const exportCtx = JSON.stringify({ tipo: "carga", pais: countryLabel, sector: sector || "Todos los sectores", filtros: activeFilters, registros: `${filtered.length} de ${TRAMITES_EXT.length} trámites`, fecha: new Date().toLocaleString("es-BO"), periodo: periodoTextoTramites });
         const reportesPrefill: ReportesPrefill = {
           tipoHallazgo: "carga",
           pais: country,
@@ -5401,6 +5781,17 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
           etapaCiclo: etapaCiclo || "",
           ano: ano || "",
         };
+        const filtrosActivosExcel = [
+          { label: "País", value: countryLabel },
+          ...(sector ? [{ label: "Sector", value: sector }] : []),
+          ...(entidad ? [{ label: "Entidad", value: entidad }] : []),
+          ...(tipoUsuario ? [{ label: "Tipo de usuario", value: tipoUsuario }] : []),
+          ...(tipoCarga ? [{ label: "Tipo de carga", value: tipoCarga }] : []),
+          ...(subdimension ? [{ label: "Subdimensión", value: subdimension }] : []),
+          ...(etapaCiclo ? [{ label: "Etapa", value: etapaCiclo }] : []),
+          ...(tamano ? [{ label: "Tamaño", value: tamano }] : []),
+          ...(ano ? [{ label: "Año", value: ano }] : []),
+        ];
         return (
           <Header
             breadcrumb="Regulaciones › Trámites"
@@ -5408,12 +5799,17 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
             subtitle={`${countryLabel} · Todos los sectores`}
             actions={
               <>
-                <button style={HDR_BTN_SECONDARY} onClick={() => onNavigate({ screen: "reporte-pdf", context: exportCtx })}>
-                  <Download size={13} /><span className="hidden sm:inline">Exportar PDF</span><span className="sm:hidden">PDF</span>
-                </button>
+                {/* Mismo botón/destino ya corregido en Trámites Regional (screen "documentacion" -> "Metodología" del sidebar). */}
+                <button style={HDR_BTN_PILL} onClick={() => onNavigate({ screen: "documentacion" })}>Ver metodología</button>
                 <button style={HDR_BTN_PRIMARY} onClick={() => onNavigate({ screen: "reportes", prefill: reportesPrefill })}>
                   <ExternalLink size={13} /><span className="hidden sm:inline">Generar reporte</span><span className="sm:hidden">Reporte</span>
                 </button>
+                <DescargarDropdown
+                  hojas={[hojaResumen, hojaCargaPorEje, hojaTopEntidades, hojaEtapaCiclo, hojaMipyme, hojaTipoUsuario, hojaAccionMejora, hojaAfectaciones, hojaTramitesPrioritarios]}
+                  filtrosActivos={filtrosActivosExcel}
+                  nombreArchivoBase="tramites_pais"
+                  containerRef={containerRef}
+                />
               </>
             }
           />
@@ -5600,7 +5996,8 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
           filtrado por país; antes esta tabla mostraba TRAMITES_EXT (catálogo
           de Bolivia) sin importar el país seleccionado en el filtro de arriba. */}
       {(() => {
-        const filasPais = TRAMITES_PRIORITARIOS_MUESTRA[country as Exclude<Country, "Todos">] ?? TRAMITES_PRIORITARIOS_MUESTRA["Bolivia"];
+        // `filasPais` ya viene calculada más arriba (la reusa también el
+        // Excel del header, ver hojaTramitesPrioritarios).
         const prioritariosPageCount = Math.ceil(filasPais.length / PAGE_SIZE);
         const prioritariosPageItems = filasPais.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
         return (

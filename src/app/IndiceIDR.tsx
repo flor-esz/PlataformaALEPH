@@ -1,8 +1,10 @@
-import { Download, ChevronDown, Info } from "lucide-react";
-import { C, HDR_BTN_PRIMARY, HDR_BTN_SECONDARY, HDR_BTN_PILL } from "./theme";
+import { useRef } from "react";
+import { Download, Info } from "lucide-react";
+import { C, HDR_BTN_PRIMARY, HDR_BTN_PILL } from "./theme";
 import {
   Header,
   KpiCard,
+  DescargarDropdown,
   COUNTRIES,
   COUNTRY_DATA,
   COUNTRY_BARRERAS_DATA,
@@ -15,7 +17,7 @@ import {
   periodoRegional,
   formatearPeriodo,
 } from "./App";
-import type { Country, View } from "./App";
+import type { Country, View, HojaExcel } from "./App";
 import type { TipoDato } from "./components/ui/PanelTipoSubdimension";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -132,6 +134,9 @@ function IndiceIDR({ country = "Todos", onCountryChange, onNavigate }: {
   onCountryChange?: (c: Country) => void;
   onNavigate: (v: View) => void;
 }) {
+  // Contenedor raíz -- lo captura DescargarDropdown para el PDF (filtros +
+  // gráficas tal como se ven en pantalla).
+  const containerRef = useRef<HTMLDivElement>(null);
   // "Puntaje general" — 54.2 es el mismo valor de muestra ya usado por
   // IrrGeneralCard en Panel Regional (escala 0–100, IRR_GENERAL_MUESTRA).
   // TODO: confirmar con Franco/Juanjo si el IDR general regional (54.2)
@@ -199,20 +204,70 @@ function IndiceIDR({ country = "Todos", onCountryChange, onNavigate }: {
   const paisesRow1 = COUNTRIES.slice(0, 3);
   const paisesRow2 = COUNTRIES.slice(3);
 
+  // "Tabla activa" = la grilla comparativa de 5 países más abajo (paisCard) --
+  // es el único dato tabular de esta pantalla; SIEMPRE muestra los 5 países
+  // (no se filtra por `country`, que solo cambia los KPIs/gráficas de más
+  // arriba), así que se exporta igual -- "los mismos datos que ve el
+  // usuario en pantalla" -- y el país elegido en el selector de KPIs queda
+  // igual documentado en la hoja de filtros, aunque esta tabla no cambie con él.
+  const paisesFilas = COUNTRIES.map(pais => {
+    const detectadas = COUNTRY_DATA[pais].barreras;
+    const usadas = Math.round(detectadas * IDR_USADAS_RATIO_MUESTRA);
+    return {
+      "País": pais,
+      "IDR general": IRR_GENERAL_MUESTRA[pais],
+      "Barreras detectadas": detectadas,
+      "Barreras usadas": usadas,
+      "% Validado HITL": VALIDADO_HITL_MUESTRA[pais],
+    };
+  });
+
+  // ── Hojas del Excel -- una por cada bloque visible en esta pantalla (no
+  // solo "Comparación por país", que era la única exportada antes): los 3
+  // KPIs y los 2 paneles de peso del índice (Distorsiones regulatorias/Carga
+  // administrativa), cada uno con su total y peso % además del desglose.
+  const hojaResumen: HojaExcel = {
+    nombre: "Resumen",
+    filas: [
+      { Indicador: "Puntaje general", Valor: puntajeGeneral },
+      { Indicador: "Nivel de fricciones", Valor: nivelFriccion },
+      { Indicador: "Escala", Valor: "0–100" },
+    ],
+  };
+  const hojaDistorsiones: HojaExcel = {
+    nombre: "Distorsiones regulatorias",
+    filas: [
+      { Subdimensión: "(total)", Valor: distorsiones.total, "Peso del índice": "55%" },
+      ...distorsiones.filas.map(f => ({ Subdimensión: f.nombre, Valor: f.valor, "Peso del índice": "" })),
+    ],
+  };
+  const hojaCarga: HojaExcel = {
+    nombre: "Carga administrativa",
+    filas: [
+      { Subdimensión: "(total)", Valor: carga.total, "Peso del índice": "45%" },
+      ...carga.filas.map(f => ({ Subdimensión: f.nombre, Valor: f.valor, "Peso del índice": "" })),
+    ],
+  };
+  const hojaComparacionPais: HojaExcel = { nombre: "Comparación por país", filas: paisesFilas };
+
   return (
-    <div className="p-4 md:p-8 overflow-y-auto h-full">
+    <div ref={containerRef} className="p-4 md:p-8 overflow-y-auto h-full">
       <Header
         breadcrumb="Índice / IDR"
         title="Índice / IDR"
         actions={
           <>
+            {/* Mismo botón/destino ya corregido en Barreras Regional/Trámites Regional (screen "documentacion" -> "Metodología" del sidebar). */}
+            <button style={HDR_BTN_PILL} onClick={() => onNavigate({ screen: "documentacion" })}>Ver metodología</button>
             <button style={HDR_BTN_PRIMARY} onClick={() => onNavigate({ screen: "reportes" })}>
               <Download size={13} /><span className="hidden sm:inline">Generar reporte</span><span className="sm:hidden">Reporte</span>
             </button>
-            {/* TODO: dropdown de opciones de descarga */}
-            <button style={HDR_BTN_SECONDARY}>
-              Descargar <ChevronDown size={13} />
-            </button>
+            <DescargarDropdown
+              hojas={[hojaResumen, hojaDistorsiones, hojaCarga, hojaComparacionPais]}
+              filtrosActivos={[{ label: "País (selector de KPIs arriba)", value: country === "Todos" ? "Todos los países" : country }]}
+              nombreArchivoBase="indice_idr"
+              containerRef={containerRef}
+            />
           </>
         }
       />
