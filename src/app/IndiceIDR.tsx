@@ -1,4 +1,3 @@
-import { useRef } from "react";
 import { Download, Info } from "lucide-react";
 import { C, HDR_BTN_PRIMARY, HDR_BTN_PILL } from "./theme";
 import {
@@ -17,7 +16,7 @@ import {
   periodoRegional,
   formatearPeriodo,
 } from "./App";
-import type { Country, View, HojaExcel } from "./App";
+import type { Country, View, HojaExcel, ReporteEstrategicoData } from "./App";
 import type { TipoDato } from "./components/ui/PanelTipoSubdimension";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -134,9 +133,6 @@ function IndiceIDR({ country = "Todos", onCountryChange, onNavigate }: {
   onCountryChange?: (c: Country) => void;
   onNavigate: (v: View) => void;
 }) {
-  // Contenedor raíz -- lo captura DescargarDropdown para el PDF (filtros +
-  // gráficas tal como se ven en pantalla).
-  const containerRef = useRef<HTMLDivElement>(null);
   // "Puntaje general" — 54.2 es el mismo valor de muestra ya usado por
   // IrrGeneralCard en Panel Regional (escala 0–100, IRR_GENERAL_MUESTRA).
   // TODO: confirmar con Franco/Juanjo si el IDR general regional (54.2)
@@ -250,8 +246,50 @@ function IndiceIDR({ country = "Todos", onCountryChange, onNavigate }: {
   };
   const hojaComparacionPais: HojaExcel = { nombre: "Comparación por país", filas: paisesFilas };
 
+  // ── Reporte Estratégico (PDF) -- mismos datos ya calculados arriba para
+  // el Excel/pantalla, según el país elegido en el selector de KPIs. Sin
+  // hallazgos individuales en memoria (esta pantalla solo tiene agregados
+  // por subdimensión, no registros puntuales), así que esa sección queda
+  // vacía en vez de rellenarla con datos inventados.
+  const estrategicoData: ReporteEstrategicoData = {
+    paisLabel: country === "Todos" ? "Regional (5 países)" : country,
+    isRegional: country === "Todos",
+    codigo: `RegLAC-${country === "Todos" ? "REG" : country.slice(0, 3).toUpperCase()}-IDR-2026-001`,
+    sectorLabel: "Todos los sectores",
+    fechaCorte: "Marzo 2026",
+    filtrosActivos: [{ label: "País (selector de KPIs arriba)", value: country === "Todos" ? "Todos los países" : country }],
+    mensajes: { titulo: "", items: [] },
+    bloquesKpi: [
+      {
+        titulo: "Índice / IDR",
+        variante: "panorama",
+        items: [
+          { label: "Puntaje general", val: String(puntajeGeneral), sub: "dato de muestra · escala 0–100" },
+          { label: "Nivel de fricciones", val: nivelFriccion },
+          { label: "Escala", val: "0–100" },
+        ],
+      },
+    ],
+    graficas: [
+      {
+        titulo: "Distorsiones regulatorias",
+        intro: "peso 55% del índice",
+        chartLabel: "Distorsiones regulatorias por subdimensión",
+        categorias: distorsiones.filas.map(f => ({ nombre: f.nombre, total: f.valor, componentes: [{ nombre: f.nombre, valor: f.valor }] })),
+      },
+      {
+        titulo: "Carga administrativa",
+        intro: "peso 45% del índice",
+        chartLabel: "Carga administrativa por subdimensión",
+        categorias: carga.filas.map(f => ({ nombre: f.nombre, total: f.valor, componentes: [{ nombre: f.nombre, valor: f.valor }] })),
+      },
+    ],
+    accionesAMR: { titulo: "", items: [] },
+    hallazgosDestacados: { titulo: "", items: [] },
+  };
+
   return (
-    <div ref={containerRef} className="p-4 md:p-8 overflow-y-auto h-full">
+    <div className="p-4 md:p-8 overflow-y-auto h-full">
       <Header
         breadcrumb="Índice / IDR"
         title="Índice / IDR"
@@ -266,7 +304,7 @@ function IndiceIDR({ country = "Todos", onCountryChange, onNavigate }: {
               hojas={[hojaResumen, hojaDistorsiones, hojaCarga, hojaComparacionPais]}
               filtrosActivos={[{ label: "País (selector de KPIs arriba)", value: country === "Todos" ? "Todos los países" : country }]}
               nombreArchivoBase="indice_idr"
-              containerRef={containerRef}
+              estrategicoData={estrategicoData}
             />
           </>
         }

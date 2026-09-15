@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { Download, Info } from "lucide-react";
 import { C, HDR_BTN_PRIMARY, HDR_BTN_PILL } from "./theme";
 import {
@@ -18,7 +18,7 @@ import {
   formatearPeriodo,
   notaCostoTramites,
 } from "./App";
-import type { Country, View, HojaExcel } from "./App";
+import type { Country, View, HojaExcel, ReporteEstrategicoData } from "./App";
 
 // ─── Formato de moneda compacto/expandido ──────────────────────────────────
 function formatUSDCompacto(v: number): string {
@@ -62,9 +62,6 @@ function ImpactoEconomico({ country = "Todos", onCountryChange, onNavigate }: {
   onNavigate: (v: View) => void;
 }) {
   const [page, setPage] = useState(0);
-  // Contenedor raíz -- lo captura DescargarDropdown para el PDF (filtros +
-  // gráficas tal como se ven en pantalla).
-  const containerRef = useRef<HTMLDivElement>(null);
 
   // Mismo criterio que Barreras/Trámites: regional usa el rango de los 5
   // países, por país usa el de ese país puntual.
@@ -101,6 +98,9 @@ function ImpactoEconomico({ country = "Todos", onCountryChange, onNavigate }: {
       tiempo: completo?.costo.tiempo ?? "—",
       pasos: completo?.pasos.length ?? 0,
       costoEstimado: completo?.costo.monetario ?? completo?.costo.cargaTotal ?? fila.costo,
+      // Usado solo por el Reporte Estratégico (hallazgos destacados, más
+      // abajo) como texto de respaldo real en vez de una cita inventada.
+      diagnostico: completo?.diagnostico,
     };
   });
   const pageCount = Math.ceil(costoPorTramiteFilas.length / PAGE_SIZE);
@@ -148,8 +148,67 @@ function ImpactoEconomico({ country = "Todos", onCountryChange, onNavigate }: {
     })),
   };
 
+  // ── Reporte Estratégico (PDF) -- mismos datos ya filtrados por país que
+  // alimentan pantalla/Excel arriba. Sin registros de distorsión (esta
+  // pantalla solo tiene trámites/carga en memoria), así que los hallazgos
+  // destacados salen únicamente de costoPorTramiteFilas -- los primeros 2
+  // (o menos, si el filtro deja menos de 2) del país activo, no un pool fijo.
+  const estrategicoData: ReporteEstrategicoData = {
+    paisLabel: country === "Todos" ? "Regional (5 países)" : country,
+    isRegional: country === "Todos",
+    codigo: `RegLAC-${country === "Todos" ? "REG" : country.slice(0, 3).toUpperCase()}-IMPECO-2026-001`,
+    sectorLabel: "Todos los sectores",
+    fechaCorte: "Marzo 2026",
+    filtrosActivos: [{ label: "País", value: country === "Todos" ? "Todos los países" : country }],
+    mensajes: { titulo: "", items: [] },
+    bloquesKpi: [
+      {
+        titulo: "Impacto económico",
+        variante: "panorama",
+        items: [
+          { label: "Costo estimado total", val: formatUSDCompacto(td.costoEstimadoUSD), sub: "simulado · anual · 5 países" },
+          { label: "Costo promedio por trámite", val: formatUSD(costoPromedioPorTramite), sub: "simulado" },
+          { label: "Tiempo promedio", val: "18 días", sub: "dato de muestra" },
+          { label: "Pasos promedio", val: "6.4", sub: "dato de muestra" },
+        ],
+      },
+    ],
+    graficas: [
+      {
+        titulo: "Costo estimado por país",
+        chartLabel: "Costo estimado por país",
+        categorias: costoPorPaisFilas.map(f => ({ nombre: f.nombre, total: Math.round(f.valor), componentes: [{ nombre: f.nombre, valor: Math.round(f.valor) }] })),
+      },
+      {
+        titulo: "Trámites afectados por canal de transmisión económica",
+        chartLabel: "Canal de transmisión económica — trámites",
+        categorias: canalesTramites.map(f => ({ nombre: f.nombre, total: f.valor, componentes: [{ nombre: f.nombre, valor: f.valor }] })),
+      },
+      {
+        titulo: "Afectación MIPYME",
+        chartLabel: "Afectación MIPYME",
+        categorias: mipymeFilas.map(f => ({ nombre: f.nombre, total: f.valor, componentes: [{ nombre: f.nombre, valor: f.valor }] })),
+      },
+    ],
+    accionesAMR: { titulo: "", items: [] },
+    hallazgosDestacados: {
+      titulo: "Trámites de mayor costo en el conjunto filtrado",
+      intro: "Trámites reales del conjunto ya filtrado por país en esta pantalla.",
+      items: costoPorTramiteFilas.slice(0, 2).map(t => ({
+        categoria: "Carga",
+        entidad: t.entidad,
+        titulo: t.tramite,
+        cita: t.diagnostico,
+        severidad: t.severidad,
+        etiqueta: t.tipoUsuario,
+        accion: t.accion,
+        costoLabel: String(t.costoEstimado),
+      })),
+    },
+  };
+
   return (
-    <div ref={containerRef} className="p-4 md:p-8 overflow-y-auto h-full">
+    <div className="p-4 md:p-8 overflow-y-auto h-full">
       <Header
         breadcrumb="Impacto Económico"
         title="Impacto Económico"
@@ -168,7 +227,7 @@ function ImpactoEconomico({ country = "Todos", onCountryChange, onNavigate }: {
               hojas={[hojaResumen, hojaCostoPorPais, hojaCanalesTramites, hojaCanalesBarreras, hojaMipyme, hojaCostoPorTramite]}
               filtrosActivos={[{ label: "País", value: country === "Todos" ? "Todos los países" : country }]}
               nombreArchivoBase="impacto_economico"
-              containerRef={containerRef}
+              estrategicoData={estrategicoData}
             />
           </>
         }

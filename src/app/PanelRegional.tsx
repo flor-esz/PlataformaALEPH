@@ -1,4 +1,3 @@
-import { useRef } from "react";
 import { Download } from "lucide-react";
 import { C, HDR_BTN_PRIMARY, HDR_BTN_PILL } from "./theme";
 import {
@@ -14,7 +13,7 @@ import {
   periodoRegional,
   formatearPeriodo,
 } from "./App";
-import type { HojaExcel } from "./App";
+import type { HojaExcel, ReporteEstrategicoData } from "./App";
 import type { View, Country } from "./App";
 import { BarrasComposicion } from "./components/ui/BarrasComposicion";
 import type { BarrasComposicionCategoria } from "./components/ui/BarrasComposicion";
@@ -26,9 +25,6 @@ import { JERARQUIA_N2N6_TOTALES, ESTADO_PROCESAMIENTO_RATIOS } from "./data/inst
 // Vista agregada de los COUNTRIES.length países activos — punto de entrada de
 // "Panorama Regulatorio" antes de anclar a un país específico (CountryDashboard).
 function PanelRegional({ onNavigate }: { onNavigate: (v: View) => void }) {
-  // Contenedor raíz -- lo captura DescargarDropdown para el PDF (filtros +
-  // gráficas tal como se ven en pantalla).
-  const containerRef = useRef<HTMLDivElement>(null);
   // Reutilizada por el <select> de país y por el botón "Ver panorama del
   // país →" de cada tarjeta — un solo lugar para la navegación a Panel País.
   const irAPanoramaDePais = (pais: Country) => onNavigate({ screen: "country-dashboard", country: pais });
@@ -108,8 +104,63 @@ function PanelRegional({ onNavigate }: { onNavigate: (v: View) => void }) {
   };
   const hojaPaises: HojaExcel = { nombre: "Países", filas: paisesFilas };
 
+  // ── Reporte Estratégico (PDF) -- mismos datos ya calculados arriba para
+  // el Excel/pantalla, reempaquetados en el contrato genérico de
+  // ReporteEstrategicoPaper. Sin filtros propios (ver DescargarDropdown
+  // más abajo, filtrosActivos={[]} -- esta pantalla no filtra nada) y sin
+  // hallazgos individuales en memoria (no hay catálogo de barreras/trámites
+  // puntuales acá, solo agregados), así que esas 2 secciones quedan vacías
+  // en vez de rellenarlas con datos inventados.
+  const estrategicoData: ReporteEstrategicoData = {
+    paisLabel: "Regional (5 países)",
+    isRegional: true,
+    codigo: "RegLAC-REG-PANREG-2026-001",
+    sectorLabel: "Todos los sectores (20)",
+    fechaCorte: "Marzo 2026",
+    filtrosActivos: [],
+    mensajes: { titulo: "", items: [] },
+    bloquesKpi: [
+      {
+        titulo: "Indicadores generales",
+        variante: "panorama",
+        items: [
+          { label: "Países activos", val: String(COUNTRIES.length) },
+          { label: "Instrumentos analizados", val: instrumentosAnalizados.toLocaleString("es") },
+          { label: "Trámites identificados", val: tramitesIdentificados.toLocaleString("es") },
+          { label: "IDR General", val: "54.2" },
+        ],
+      },
+      {
+        titulo: "Cobertura de fuentes",
+        variante: "panorama",
+        items: [
+          { label: "Fuentes oficiales identificadas", val: "10" },
+          { label: "Fuentes procesadas", val: "7" },
+          { label: "Entidades emisoras", val: "20" },
+          { label: "Sectores cubiertos", val: "20" },
+        ],
+      },
+    ],
+    graficas: [
+      {
+        titulo: "Instrumentos por jerarquía normativa",
+        chartLabel: "Instrumentos por jerarquía normativa",
+        categorias: jerarquiaCategorias,
+      },
+      {
+        titulo: "Estado de procesamiento",
+        chartLabel: "Estado de procesamiento (%)",
+        categorias: ESTADO_PROCESAMIENTO_RATIOS.map(e => ({
+          nombre: e.nombre, total: e.pct, componentes: [{ nombre: e.nombre, valor: e.pct }],
+        })),
+      },
+    ],
+    accionesAMR: { titulo: "", items: [] },
+    hallazgosDestacados: { titulo: "", items: [] },
+  };
+
   return (
-    <div ref={containerRef} className="p-4 md:p-8 overflow-y-auto h-full">
+    <div className="p-4 md:p-8 overflow-y-auto h-full">
       <Header
         breadcrumb="Panorama Regulatorio › Panel Regional"
         title="Panel Regional"
@@ -124,7 +175,7 @@ function PanelRegional({ onNavigate }: { onNavigate: (v: View) => void }) {
               hojas={[hojaResumen, hojaEstadoProcesamiento, hojaJerarquia, hojaPaises]}
               filtrosActivos={[]}
               nombreArchivoBase="panel_regional"
-              containerRef={containerRef}
+              estrategicoData={estrategicoData}
             />
           </>
         }

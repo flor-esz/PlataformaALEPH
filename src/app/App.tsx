@@ -2345,6 +2345,16 @@ export async function exportarReportePdf(container: HTMLElement, nombreArchivo: 
   const html2canvas = html2canvasMod.default;
   const { jsPDF } = jsPdfMod;
 
+  // Esperar a que las fuentes (Space Grotesk, IBM Plex Sans) terminen de
+  // cargar ANTES de capturar -- si html2canvas dibuja con la fuente de
+  // respaldo del sistema mientras la real todavía está en camino, el
+  // resultado queda inconsistente entre bloques capturados en distintos
+  // momentos. document.fonts.ready no alcanza solo: puede resolver con el
+  // layout todavía sin asentar del todo, así que se suma un frame de
+  // animación extra de margen después.
+  await document.fonts.ready;
+  await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+
   const bloques = Array.from(container.querySelectorAll<HTMLElement>(".pdf-block"));
   const pdf = new jsPDF({ unit: "mm", format: "a4" });
   const pageWidth = pdf.internal.pageSize.getWidth();
@@ -2365,7 +2375,81 @@ export async function exportarReportePdf(container: HTMLElement, nombreArchivo: 
 
   for (const bloque of bloques) {
     const esPortada = esPrimerBloque;
-    const canvas = await html2canvas(bloque, { scale: 1.5, useCORS: true, backgroundColor: "#ffffff" });
+    // Colchón vertical: SOLO para los 2 bloques marcados con
+    // data-pdf-colchon en ReporteEstrategicoPaper (la sección de KPIs que
+    // trae la barra de severidad, y el encabezado de hallazgos cuando trae
+    // subtítulo) -- ahí html2canvas, al dibujar varios elementos apilados,
+    // termina el contenido un poco más alto de lo que mide el propio DOM
+    // (getBoundingClientRect), cortando la ÚLTIMA línea del bloque contra el
+    // borde inferior del canvas aunque en pantalla se vea perfecto.
+    // Confirmado a mano: pedirle a html2canvas un `height` unos px mayor que
+    // el real alcanza para que entre completo.
+    //
+    // NO se aplica a los demás bloques (portada, fichas de hallazgo,
+    // gráficas de BarrasComposicion, etc.) -- se probó pasarlo a TODOS por
+    // igual y rompió cosas sin relación aparente con el colchón: portada con
+    // una franja blanca (el sobrante de canvas sin contenido, relleno del
+    // backgroundColor blanco por defecto, quedaba DENTRO de la imagen
+    // capturada y tapaba el azul de fondo ya pintado), etiquetas de
+    // BarrasComposicion cortadas de nuevo, texto de fichas deformado y el
+    // badge "CRÍTICO" perdiendo su forma de píldora -- fijar `windowHeight`
+    // cambia el tamaño del iframe donde html2canvas clona y re-layoutea TODO
+    // el bloque, no solo el recorte final, así que cualquier bloque que no
+    // necesite el colchón queda mejor sin tocar height/windowHeight en
+    // absoluto (su comportamiento de antes, ya correcto).
+    const pideColchon = bloque.dataset.pdfColchon === "1";
+    const alturaConColchon = pideColchon ? Math.ceil(bloque.getBoundingClientRect().height) + 20 : undefined;
+    const canvas = await html2canvas(bloque, {
+      scale: 1.5,
+      useCORS: true,
+      backgroundColor: "#ffffff",
+      ...(alturaConColchon ? { height: alturaConColchon, windowHeight: alturaConColchon } : {}),
+      // Dos bugs de html2canvas, distintos entre sí, neutralizados acá --
+      // SOLO en el documento clonado que rasteriza (nunca en el DOM real
+      // que ve el usuario):
+      //
+      // 1) Recorte de la parte superior de texto truncado (ej. las
+      // etiquetas de fila de BarrasComposicion, o cualquier texto con la
+      // clase Tailwind `truncate`): al combinar `overflow: hidden` con
+      // `text-overflow: ellipsis`, la implementación propia de la elipsis
+      // de html2canvas ubica el rectángulo de recorte más arriba de lo
+      // debido -- confirmado que pasa SIEMPRE que se computa
+      // text-overflow:ellipsis, exista o no truncamiento real (ej. "Legal",
+      // "Constitucional": scrollWidth === clientWidth, nunca truncan, y aun
+      // así html2canvas los recorta). Por eso NO se condiciona a
+      // scrollWidth/scrollHeight -- un intento anterior de "solo tocar si
+      // realmente trunca" (para no afectar a SevBadge) dejó afuera
+      // justamente a las etiquetas cortas que no truncan, reintroduciendo
+      // el recorte. No hacía falta esa condición: SevBadge/AMRBadge nunca
+      // tienen text-overflow:ellipsis en su propio estilo (confirmado), así
+      // que este `if` no los toca de todas formas.
+      //
+      // 2) Rectángulo fantasma detrás de píldoras con borde traslúcido (ej.
+      // SevBadge/AMRBadge, `border: 1px solid ${color}NN` con alfa < 100%):
+      // reproducido incluso en un repro mínimo sin Tailwind ni React,
+      // html2canvas no recorta ese borde al border-radius cuando su color
+      // tiene transparencia -- deja ver una versión rectangular de más
+      // detrás de la píldora redondeada. Un borde 100% opaco (mismo color,
+      // sin canal alfa) no tiene el problema, así que se aplana el alfa acá
+      // solo para la captura.
+      onclone: (clonedDoc) => {
+        const view = clonedDoc.defaultView;
+        if (!view) return;
+        clonedDoc.querySelectorAll<HTMLElement>("*").forEach(el => {
+          const cs = view.getComputedStyle(el);
+          if (cs.textOverflow === "ellipsis") {
+            el.style.textOverflow = "clip";
+            el.style.overflow = "visible";
+          }
+          if (cs.borderTopStyle !== "none" && parseFloat(cs.borderTopWidth) > 0 && cs.borderTopLeftRadius !== "0px") {
+            const m = cs.borderTopColor.match(/^rgba\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)$/);
+            if (m && parseFloat(m[4]) < 1) {
+              el.style.borderColor = `rgb(${m[1]}, ${m[2]}, ${m[3]})`;
+            }
+          }
+        });
+      },
+    });
     // JPEG en vez de PNG -- un reporte de 17 fichas en PNG sin comprimir pesa
     // ~170MB (impracticable para descargar); el contenido es texto/tarjetas
     // sobre fondo blanco, no fotografía, así que JPEG calidad 0.85 reduce el
@@ -2429,6 +2513,47 @@ export async function exportarReportePdf(container: HTMLElement, nombreArchivo: 
   pdf.save(`${nombreArchivo}.pdf`);
 }
 
+// Monta ReporteEstrategicoPaper fuera de pantalla (posición fixed, fuera del
+// viewport -- NO display:none, que dejaría todo en 0×0 e inutilizaría a
+// html2canvas), lo captura con la MISMA paginación por bloques de
+// exportarReportePdf (portada a color completo + fichas que nunca se cortan
+// entre páginas) y desmonta el nodo temporal al terminar. Reemplaza a
+// exportarVistaPdf (captura de pantalla completa cortada por página, ya
+// descartada) como generador de PDF para DescargarDropdown: cada pantalla le
+// pasa su propio ReporteEstrategicoData ya armado con sus filtros/KPIs/
+// gráficas/hallazgos reales, y esta función solo se encarga de renderizarlo
+// y convertirlo a PDF -- no conoce país ni pantalla de origen.
+export async function exportarReporteEstrategicoPdf(data: ReporteEstrategicoData, nombreArchivo: string) {
+  const { createRoot } = await import("react-dom/client");
+  const host = document.createElement("div");
+  host.style.position = "fixed";
+  host.style.top = "0";
+  host.style.left = "-99999px";
+  host.style.width = "820px";
+  host.style.pointerEvents = "none";
+  document.body.appendChild(host);
+  const root = createRoot(host);
+  try {
+    await new Promise<void>(resolve => {
+      root.render(<ReporteEstrategicoPaper data={data} />);
+      // 2 frames: el primero deja que React aplique el render, el segundo
+      // asegura que el layout/paint ya reflejó ese render antes de seguir.
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+    });
+    // document.fonts.ready recién puede reflejar la carga de Space Grotesk/
+    // IBM Plex Sans una vez que el render de arriba ya pidió esas fuentes
+    // (por eso va después, no antes) -- exportarReportePdf() también espera
+    // esto mismo antes de capturar (cubre a su otro caller, el Reporte
+    // Operativo), pero se repite acá para no depender de ese detalle interno.
+    await document.fonts.ready;
+    await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+    await exportarReportePdf(host, nombreArchivo);
+  } finally {
+    root.unmount();
+    document.body.removeChild(host);
+  }
+}
+
 // ─── Descargar (Excel/PDF) — botón compartido de dashboards ────────────────────
 // Usado por el botón "Descargar" de Panel Regional/Panel País/Impacto
 // Económico/Índice-IDR -- las 4 pantallas antes tenían el botón sin ningún
@@ -2462,56 +2587,6 @@ export async function exportarVistaExcel(
   const wsFiltros = XLSX.utils.json_to_sheet(filasFiltros);
   XLSX.utils.book_append_sheet(wb, wsFiltros, "Filtros aplicados");
   XLSX.writeFile(wb, `reporte_${nombreArchivoBase}_${fechaSlugHoy()}.xlsx`);
-}
-
-// PDF: a diferencia de exportarReportePdf (que arma un documento con portada
-// + fichas, cada una escalada para NUNCA cortarse entre páginas), acá se
-// captura `container` como UNA sola imagen larga (la vista tal como se ve en
-// pantalla -- filtros + gráficas incluidas, un "screenshot" funcional) y se
-// reparte en páginas A4 cortando donde toque, como cualquier "imprimir esta
-// página" -- es la vista completa, no un documento de fichas discretas.
-export async function exportarVistaPdf(container: HTMLElement, nombreArchivoBase: string) {
-  const [html2canvasMod, jsPdfMod] = await Promise.all([import("html2canvas"), import("jspdf")]);
-  const html2canvas = html2canvasMod.default;
-  const { jsPDF } = jsPdfMod;
-
-  const canvas = await html2canvas(container, { scale: 1.5, useCORS: true, backgroundColor: "#ffffff" });
-
-  const pdf = new jsPDF({ unit: "mm", format: "a4" });
-  const pageWidth = pdf.internal.pageSize.getWidth();
-  const pageHeight = pdf.internal.pageSize.getHeight();
-  const MARGIN = 10;
-  const contentWidthMm = pageWidth - MARGIN * 2;
-  const contentHeightMm = pageHeight - MARGIN * 2;
-
-  // Ancho de la imagen ya escalado a mm de página; cuánto "alto de canvas en
-  // píxeles" entra en una página se deriva de esa misma escala, para cortar
-  // el canvas ORIGINAL (no la imagen ya convertida a mm).
-  const pageHeightPx = (contentHeightMm * canvas.width) / contentWidthMm;
-
-  let recortadoPx = 0;
-  let primeraPagina = true;
-  while (recortadoPx < canvas.height) {
-    const altoPagina = Math.min(pageHeightPx, canvas.height - recortadoPx);
-
-    const lienzoPagina = document.createElement("canvas");
-    lienzoPagina.width = canvas.width;
-    lienzoPagina.height = altoPagina;
-    const ctx = lienzoPagina.getContext("2d")!;
-    ctx.drawImage(canvas, 0, recortadoPx, canvas.width, altoPagina, 0, 0, canvas.width, altoPagina);
-    // JPEG por el mismo motivo que exportarReportePdf: texto/tarjetas sobre
-    // fondo blanco, no fotografía -- PNG sin comprimir sería impracticable.
-    const imgData = lienzoPagina.toDataURL("image/jpeg", 0.85);
-    const altoPaginaMm = (altoPagina * contentWidthMm) / canvas.width;
-
-    if (!primeraPagina) pdf.addPage();
-    pdf.addImage(imgData, "JPEG", MARGIN, MARGIN, contentWidthMm, altoPaginaMm);
-
-    recortadoPx += altoPagina;
-    primeraPagina = false;
-  }
-
-  pdf.save(`reporte_${nombreArchivoBase}_${fechaSlugHoy()}.pdf`);
 }
 
 // ─── Distorsiones de carga ─────────────────────────────────────────────────────
@@ -3431,16 +3506,19 @@ export function KpiCard({ label, value, valueSuffix, sub, valueColor, tooltip, o
 
 // ─── Descargar (Excel/PDF) ──────────────────────────────────────────────────────
 // Botón "Descargar" compartido por Panel Regional/Panel País/Impacto
-// Económico/Índice-IDR -- mismo estilo/ubicación (último ítem del header,
-// HDR_BTN_SECONDARY) que ya tenían, ahora con un dropdown real en vez de
-// quedar sin onClick. Cada pantalla solo pasa SUS datos ya filtrados; la
-// mecánica de exportar (exportarVistaExcel/exportarVistaPdf, más arriba) es
-// una sola, no una copia por pantalla.
+// Económico/Índice-IDR/Trámites/Barreras -- mismo estilo/ubicación (último
+// ítem del header, HDR_BTN_SECONDARY) en todas. Cada pantalla solo pasa SUS
+// datos ya filtrados: `hojas`/`filtrosActivos` para el Excel (sin cambios) y
+// `estrategicoData` -- su propio ReporteEstrategicoData, armado con esos
+// MISMOS datos filtrados -- para el PDF. El PDF ya NO es una captura de
+// pantalla completa cortada por página (exportarVistaPdf, descartada);
+// ahora renderiza ReporteEstrategicoPaper fuera de pantalla y lo pagina por
+// bloques con exportarReporteEstrategicoPdf (ver esa función, más arriba).
 export function DescargarDropdown({
   hojas,
   filtrosActivos,
   nombreArchivoBase,
-  containerRef,
+  estrategicoData,
   disabled,
 }: {
   // Una hoja de Excel por cada KPI/breakdown/tabla visible en la pantalla
@@ -3449,9 +3527,10 @@ export function DescargarDropdown({
   hojas: HojaExcel[];
   filtrosActivos: { label: string; value: string }[];
   nombreArchivoBase: string;
-  // Contenedor a capturar para el PDF -- normalmente el mismo <div> raíz de
-  // la pantalla (filtros + gráficas incluidos), asignado por cada caller.
-  containerRef: React.RefObject<HTMLElement>;
+  // Reporte Estratégico ya armado con los datos/filtros/KPIs/gráficas/
+  // hallazgos REALES y filtrados de esta pantalla (no un pool fijo) -- ver
+  // ReporteEstrategicoData, más arriba.
+  estrategicoData: ReporteEstrategicoData;
   disabled?: boolean;
 }) {
   const [descargando, setDescargando] = useState<"excel" | "pdf" | null>(null);
@@ -3484,10 +3563,9 @@ export function DescargarDropdown({
         <DropdownMenuItem
           className="flex items-center gap-2 text-[12px] cursor-pointer"
           onSelect={async () => {
-            if (!containerRef.current) return;
             setDescargando("pdf");
             try {
-              await exportarVistaPdf(containerRef.current, nombreArchivoBase);
+              await exportarReporteEstrategicoPdf(estrategicoData, `reporte_${nombreArchivoBase}_${fechaSlugHoy()}`);
             } finally {
               setDescargando(null);
             }
@@ -3899,9 +3977,6 @@ function CountryDashboard({ country, onCountryChange, onNavigate }: { country: s
   // Antes del early return de abajo -- regla de los Hooks, mismo criterio
   // que ya se aplicó en ReportePDFScreen().
   const { periodosAnalisis } = usePeriodoAnalisis();
-  // Contenedor raíz -- lo captura DescargarDropdown para el PDF (filtros +
-  // gráficas tal como se ven en pantalla).
-  const containerRef = useRef<HTMLDivElement>(null);
   const d = COUNTRY_DATA[country];
   if (!d) return null;
 
@@ -4007,6 +4082,65 @@ function CountryDashboard({ country, onCountryChange, onNavigate }: { country: s
     })),
   };
 
+  // ── Reporte Estratégico (PDF) -- mismos datos ya calculados arriba para
+  // el Excel/pantalla de este país. Sin hallazgos individuales en memoria
+  // (esta pantalla es de instrumentos/fuentes, no de barreras/trámites
+  // puntuales) ni acciones AMR derivables, así que esas 2 secciones quedan
+  // vacías en vez de rellenarlas con datos inventados.
+  const estrategicoData: ReporteEstrategicoData = {
+    paisLabel: country,
+    isRegional: false,
+    codigo: `RegLAC-${(country as string).slice(0, 3).toUpperCase()}-PANPAIS-2026-001`,
+    sectorLabel: `Todos los sectores (${d.sectores})`,
+    fechaCorte: "Marzo 2026",
+    filtrosActivos: [{ label: "País", value: country }],
+    mensajes: { titulo: "", items: [] },
+    bloquesKpi: [
+      {
+        titulo: "Indicadores generales",
+        variante: "panorama",
+        items: [
+          { label: "Instrumentos analizados", val: instrumentos.toLocaleString("es"), sub: "leyes, decretos, reglamentos" },
+          { label: "Trámites identificados", val: d.tramites.toLocaleString("es"), sub: "ciudadanos y empresariales" },
+          { label: "Sectores cubiertos", val: String(d.sectores), sub: country },
+        ],
+      },
+      {
+        titulo: "Fuentes e índice",
+        variante: "panorama",
+        items: [
+          { label: "Fuentes oficiales", val: String(fuentes.oficiales) },
+          { label: "Fuentes procesadas", val: String(fuentes.procesadas) },
+          { label: "Entidades emisoras", val: String(fuentes.entidadesEmisoras) },
+          { label: "IRR general", val: String(irrGeneral) },
+        ],
+      },
+      {
+        titulo: "Trámites y respaldo normativo",
+        variante: "panorama",
+        items: [
+          { label: "Con respaldo normativo identificado", val: conRespaldo.toLocaleString("es") },
+          { label: "Sin respaldo normativo identificado", val: sinRespaldo.toLocaleString("es") },
+          { label: "Entidades gestoras", val: String(entidadesGestoras) },
+        ],
+      },
+    ],
+    graficas: [
+      {
+        titulo: "Instrumentos por jerarquía normativa",
+        chartLabel: "Instrumentos por jerarquía normativa",
+        categorias: buildJerarquiaN2N6(instrumentos),
+      },
+      {
+        titulo: "Instrumentos por cantidad de palabras",
+        chartLabel: "Instrumentos por: Cantidad de palabras",
+        categorias: instrumentosPorPalabrasData,
+      },
+    ],
+    accionesAMR: { titulo: "", items: [] },
+    hallazgosDestacados: { titulo: "", items: [] },
+  };
+
   const headerActions = (
     <>
       <button style={HDR_BTN_PILL} onClick={() => onNavigate({ screen: "tramites" })}>Ver trámites</button>
@@ -4027,13 +4161,13 @@ function CountryDashboard({ country, onCountryChange, onNavigate }: { country: s
         hojas={[hojaResumen, hojaEvolucion, hojaJerarquia, hojaPalabras, hojaEstructuraDocs, hojaFuentesTrazabilidad, hojaTipoUsuario, hojaTablaExploratoria]}
         filtrosActivos={[{ label: "País", value: country }]}
         nombreArchivoBase="panel_pais"
-        containerRef={containerRef}
+        estrategicoData={estrategicoData}
       />
     </>
   );
 
   return (
-    <div ref={containerRef} className="p-4 md:p-8 overflow-y-auto h-full">
+    <div className="p-4 md:p-8 overflow-y-auto h-full">
       <Header breadcrumb={`Panorama Regulatorio › Panel País › ${country}`} title={`Panel ${country}`} actions={headerActions} />
 
       {/* Country selector — sin "Todos los países": esta pantalla siempre está anclada a un país */}
@@ -4509,6 +4643,117 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
       />
     );
 
+    // ── Excel + Reporte Estratégico (PDF) -- esta pantalla nunca tuvo
+    // ninguno de los 2 cableado (el botón "Descargar" era un TODO sin
+    // onClick). filtrosActivosBarreras es el mismo criterio ya usado en
+    // Trámites/Impacto Económico (un chip por filtro activo de
+    // BarraFiltrosBarreras); `filtered` (BARRERAS_NIVEL4_LIST ya filtrada
+    // por esos mismos estados, arriba) alimenta los hallazgos destacados --
+    // no un pool fijo. La severidad del bloque KPI sale de sumar niveles
+    // reales por clasificación (cd.clasificacion), no de una interpolación.
+    const totalNivelesBar = (n: { n4: number; n3: number; n2: number; n1: number }) => n.n4 + n.n3 + n.n2 + n.n1;
+    const sevAgg = Object.values(cd.clasificacion).reduce(
+      (acc, dato) => ({ n4: acc.n4 + dato.niveles.n4, n3: acc.n3 + dato.niveles.n3, n2: acc.n2 + dato.niveles.n2, n1: acc.n1 + dato.niveles.n1 }),
+      { n4: 0, n3: 0, n2: 0, n1: 0 },
+    );
+    const filtrosActivosBarreras = [
+      ...(sector ? [{ label: "Sector", value: sector }] : []),
+      ...(entidad ? [{ label: "Entidad", value: entidad }] : []),
+      ...(clasificacion ? [{ label: "Clasificación", value: clasificacion }] : []),
+      ...(subdimension ? [{ label: "Subdimensión", value: subdimension }] : []),
+      ...(jerarquia ? [{ label: "Jerarquía", value: jerarquia }] : []),
+      ...(severidadFil ? [{ label: "Severidad", value: severidadFil }] : []),
+    ];
+    const hojaResumenBar: HojaExcel = {
+      nombre: "Resumen",
+      filas: [
+        { Indicador: "Hallazgos de barreras", Valor: cd.total },
+        { Indicador: "Hallazgos críticos", Valor: cd.criticas },
+        { Indicador: "Severidad promedio", Valor: severidadPromedio },
+        { Indicador: "Sectores afectados", Valor: cd.sectores },
+        { Indicador: "% Validado HITL", Valor: validadoHitlRegional },
+      ],
+    };
+    const hojaClasificacionBar: HojaExcel = {
+      nombre: "Clasificación",
+      filas: Object.entries(cd.clasificacion).flatMap(([nombre, dato]) => [
+        { Clasificación: nombre, Subdimensión: "(total)", Total: totalNivelesBar(dato.niveles) },
+        ...dato.subdimensiones.map(s => ({ Clasificación: nombre, Subdimensión: s.nombre, Total: totalNivelesBar(s.niveles) })),
+      ]),
+    };
+    const hojaJerarquiaBar: HojaExcel = {
+      nombre: "Jerarquía",
+      filas: cd.jerarquia.map(j => ({ Jerarquía: j.nombre, Total: j.total, Crítico: j.n4, Alto: j.n3, Mediano: j.n2, Bajo: j.n1 })),
+    };
+    const hojaTopBarrerasReg: HojaExcel = {
+      nombre: "Top barreras por país",
+      filas: topBarrerasFilas.map(b => ({ País: b.pais, IDR: b.irr, Clasificación: b.clasificacion, Subdimensión: b.subdimension, Sector: b.sector, Instrumento: b.instrumento, "Estado HITL": b.estadoHitl })),
+    };
+    const estrategicoDataBarRegional: ReporteEstrategicoData = {
+      paisLabel: "Regional (5 países)",
+      isRegional: true,
+      codigo: "RegLAC-REG-BAR-2026-001",
+      sectorLabel: `Todos los sectores (${cd.sectores})`,
+      fechaCorte: "Marzo 2026",
+      filtrosActivos: filtrosActivosBarreras,
+      mensajes: { titulo: "", items: [] },
+      bloquesKpi: [
+        {
+          titulo: "Barreras Regulatorias",
+          variante: "panorama",
+          items: [
+            { label: "Hallazgos de barreras", val: cd.total.toLocaleString("es-BO") },
+            { label: "Hallazgos críticos", val: String(cd.criticas) },
+            { label: "Severidad promedio", val: severidadPromedio, sub: `IDR ${cd.irrPromedio}/4` },
+            { label: "Sectores afectados", val: String(cd.sectores) },
+            { label: "% Validado HITL", val: `${validadoHitlRegional}%` },
+          ],
+          severidad: {
+            total: cd.total,
+            segmentos: [
+              { label: "Crítico", val: sevAgg.n4 },
+              { label: "Alto", val: sevAgg.n3 },
+              { label: "Mediano", val: sevAgg.n2 },
+              { label: "Bajo", val: sevAgg.n1 },
+            ],
+          },
+        },
+      ],
+      graficas: [
+        {
+          titulo: "Clasificación",
+          chartLabel: "Barreras por clasificación",
+          categorias: Object.entries(cd.clasificacion).map(([nombre, dato]) => ({
+            nombre, total: totalNivelesBar(dato.niveles),
+            componentes: dato.subdimensiones.map(s => ({ nombre: s.nombre, valor: totalNivelesBar(s.niveles) })),
+          })),
+        },
+        {
+          titulo: "Barreras por jerarquía normativa",
+          chartLabel: "Barreras por jerarquía normativa",
+          categorias: cd.jerarquia.map(j => ({
+            nombre: j.nombre, total: j.total,
+            componentes: [
+              { nombre: "Crítico", valor: j.n4 }, { nombre: "Alto", valor: j.n3 },
+              { nombre: "Mediano", valor: j.n2 }, { nombre: "Bajo", valor: j.n1 },
+            ],
+          })),
+        },
+      ],
+      accionesAMR: { titulo: "", items: [] },
+      hallazgosDestacados: {
+        titulo: "Hallazgos destacados",
+        intro: "Hallazgos reales del conjunto ya filtrado en esta pantalla.",
+        items: filtered.slice(0, 2).map(b => ({
+          categoria: "Distorsión",
+          entidad: b.entidad,
+          titulo: b.titulo,
+          cita: b.instrumento,
+          severidad: IRR_LABELS[b.irr],
+        })),
+      },
+    };
+
     return (
       <div className="p-4 md:p-8 overflow-y-auto h-full">
         <Header
@@ -4522,10 +4767,12 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
               <button style={HDR_BTN_PRIMARY} onClick={() => onNavigate({ screen: "reportes", prefill: reportesPrefill })}>
                 <ExternalLink size={13} /><span className="hidden sm:inline">Generar reporte</span><span className="sm:hidden">Reporte</span>
               </button>
-              {/* TODO: dropdown de opciones de descarga */}
-              <button style={HDR_BTN_SECONDARY}>
-                Descargar <ChevronDown size={13} />
-              </button>
+              <DescargarDropdown
+                hojas={[hojaResumenBar, hojaClasificacionBar, hojaJerarquiaBar, hojaTopBarrerasReg]}
+                filtrosActivos={filtrosActivosBarreras}
+                nombreArchivoBase="barreras_regional"
+                estrategicoData={estrategicoDataBarRegional}
+              />
             </>
           }
         />
@@ -4657,19 +4904,157 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
     );
   }
 
+  // "Top 3 barreras" -- Bolivia usa `filtered` (BARRERAS_NIVEL4_LIST YA
+  // filtrada por sector/entidad/clasificación/subdimensión/jerarquía/
+  // severidad, arriba); el resto de países cae a TOP_BARRERAS_PAIS_TABLA
+  // (catálogo de muestra propio, sin los mismos 7 filtros aplicados -- no
+  // hay registros individuales reales para esos países todavía). Hoisted
+  // acá (antes solo vivía dentro del IIFE de la tabla, más abajo) para que
+  // el Reporte Estratégico use EXACTAMENTE la misma fuente que la tabla en
+  // pantalla, no una copia recalculada aparte.
+  const esBolivia = country === "Bolivia";
+  const tablaFilas = esBolivia
+    ? pageItems.map((b, i) => ({
+        ...b,
+        canal: CANAL_POR_SUBDIMENSION_MUESTRA[b.subdimension] ?? "Modelo de negocio",
+        estadoHitl: (["Publicado", "Por decidir", "Etapa 3"] as const)[i % 3] as EstadoHitl,
+      }))
+    : TOP_BARRERAS_PAIS_TABLA[country as Exclude<Country, "Todos">] ?? TOP_BARRERAS_PAIS_TABLA["Bolivia"];
+
+  // ── Excel + Reporte Estratégico (PDF) -- esta pantalla nunca tuvo Excel
+  // cableado, y el PDF era una navegación aparte a reporte-pdf (Reporte
+  // Operativo, no el Estratégico) -- ver DescargarDropdown más abajo, que
+  // reemplaza a ambos. accionesAMR reusa ACCION_MEJORA_MUESTRA[país] -- el
+  // mismo desglose real que ya se muestra en pantalla en "Barreras por
+  // acción de mejora sugerida" -- y los hallazgos destacados salen de
+  // tablaFilas (arriba), no de un pool fijo.
+  const countryLabelBar = country;
+  const filtrosActivosBarPais = [
+    { label: "País", value: countryLabelBar },
+    ...(sector ? [{ label: "Sector", value: sector }] : []),
+    ...(entidad ? [{ label: "Entidad", value: entidad }] : []),
+    ...(clasificacion ? [{ label: "Clasificación", value: clasificacion }] : []),
+    ...(subdimension ? [{ label: "Subdimensión", value: subdimension }] : []),
+    ...(jerarquia ? [{ label: "Jerarquía", value: jerarquia }] : []),
+    ...(severidadFil ? [{ label: "Severidad", value: severidadFil }] : []),
+  ];
+  const totalNivelesBarPais = (n: { n4: number; n3: number; n2: number; n1: number }) => n.n4 + n.n3 + n.n2 + n.n1;
+  const sevAggPais = Object.values(cd.clasificacion).reduce(
+    (acc, dato) => ({ n4: acc.n4 + dato.niveles.n4, n3: acc.n3 + dato.niveles.n3, n2: acc.n2 + dato.niveles.n2, n1: acc.n1 + dato.niveles.n1 }),
+    { n4: 0, n3: 0, n2: 0, n1: 0 },
+  );
+  const canalesBarrerasPais = CANALES_TRANSMISION_MUESTRA[country as Exclude<Country, "Todos">] ?? CANALES_TRANSMISION_MUESTRA["Bolivia"];
+  const accionMejoraBarrerasPais = ACCION_MEJORA_MUESTRA[country as Exclude<Country, "Todos">] ?? ACCION_MEJORA_MUESTRA["Bolivia"];
+  const hojaResumenBarPais: HojaExcel = {
+    nombre: "Resumen",
+    filas: [
+      { Indicador: "Total barreras", Valor: cd.total },
+      { Indicador: "Barreras críticas", Valor: cd.criticas },
+      { Indicador: "IDR promedio", Valor: cd.irrPromedio },
+      { Indicador: "Sectores afectados", Valor: cd.sectores },
+      { Indicador: "% Validado HITL", Valor: VALIDADO_HITL_MUESTRA[country] },
+    ],
+  };
+  const hojaClasificacionBarPais: HojaExcel = {
+    nombre: "Clasificación",
+    filas: Object.entries(cd.clasificacion).flatMap(([nombre, dato]) => [
+      { Clasificación: nombre, Subdimensión: "(total)", Total: totalNivelesBarPais(dato.niveles) },
+      ...dato.subdimensiones.map(s => ({ Clasificación: nombre, Subdimensión: s.nombre, Total: totalNivelesBarPais(s.niveles) })),
+    ]),
+  };
+  const hojaJerarquiaBarPais: HojaExcel = {
+    nombre: "Jerarquía",
+    filas: cd.jerarquia.map(j => ({ Jerarquía: j.nombre, Total: j.total, Crítico: j.n4, Alto: j.n3, Mediano: j.n2, Bajo: j.n1 })),
+  };
+  const hojaCanalesBarPais: HojaExcel = {
+    nombre: "Canales de transmisión económica",
+    filas: canalesBarrerasPais.map(f => ({ "Canal de transmisión económica": f.nombre, "Barreras afectadas": f.valor })),
+  };
+  const hojaAccionMejoraBarPais: HojaExcel = {
+    nombre: "Acción de mejora sugerida",
+    filas: accionMejoraBarrerasPais.map(f => ({ "Acción": f.nombre, "Barreras": f.valor })),
+  };
+  const hojaTopBarrerasPais: HojaExcel = {
+    nombre: "Top barreras",
+    filas: tablaFilas.map(b => ({ Barrera: b.titulo, IDR: b.irr, Clasificación: b.clasificacion, Subdimensión: b.subdimension, Sector: b.sector, Instrumento: b.instrumento, "Estado HITL": b.estadoHitl })),
+  };
+  const estrategicoDataBarPais: ReporteEstrategicoData = {
+    paisLabel: country,
+    isRegional: false,
+    codigo: `RegLAC-${(country as string).slice(0, 3).toUpperCase()}-BAR-2026-001`,
+    sectorLabel: sector || `Todos los sectores (${cd.sectores})`,
+    fechaCorte: "Marzo 2026",
+    filtrosActivos: filtrosActivosBarPais,
+    mensajes: { titulo: "", items: [] },
+    bloquesKpi: [
+      {
+        titulo: "Barreras",
+        variante: "panorama",
+        items: [
+          { label: "Total barreras", val: cd.total.toLocaleString("es-BO"), sub: countryLabelBar },
+          { label: "Barreras críticas", val: String(cd.criticas), sub: "nivel 4 · atención prioritaria" },
+          { label: "IDR promedio", val: severidadLabel(Number(cd.irrPromedio)), sub: `IDR ${cd.irrPromedio}/4 · Escala 1 a 4` },
+          { label: "Sectores afectados", val: String(cd.sectores), sub: "con barreras registradas" },
+          { label: "% Validado HITL", val: `${VALIDADO_HITL_MUESTRA[country]}%` },
+        ],
+        severidad: {
+          total: cd.total,
+          segmentos: [
+            { label: "Crítico", val: sevAggPais.n4 },
+            { label: "Alto", val: sevAggPais.n3 },
+            { label: "Mediano", val: sevAggPais.n2 },
+            { label: "Bajo", val: sevAggPais.n1 },
+          ],
+        },
+      },
+    ],
+    graficas: [
+      {
+        titulo: "Clasificación",
+        chartLabel: "Barreras por clasificación",
+        categorias: Object.entries(cd.clasificacion).map(([nombre, dato]) => ({
+          nombre, total: totalNivelesBarPais(dato.niveles),
+          componentes: dato.subdimensiones.map(s => ({ nombre: s.nombre, valor: totalNivelesBarPais(s.niveles) })),
+        })),
+      },
+      {
+        titulo: "Barreras por jerarquía normativa",
+        chartLabel: "Barreras por jerarquía normativa",
+        categorias: cd.jerarquia.map(j => ({
+          nombre: j.nombre, total: j.total,
+          componentes: [
+            { nombre: "Crítico", valor: j.n4 }, { nombre: "Alto", valor: j.n3 },
+            { nombre: "Mediano", valor: j.n2 }, { nombre: "Bajo", valor: j.n1 },
+          ],
+        })),
+      },
+      {
+        titulo: "Canales de transmisión económica",
+        chartLabel: "Canales de transmisión económica",
+        categorias: canalesBarrerasPais.map(f => ({ nombre: f.nombre, total: f.valor, componentes: [{ nombre: f.nombre, valor: f.valor }] })),
+      },
+    ],
+    accionesAMR: {
+      titulo: "Barreras por acción de mejora sugerida",
+      items: accionMejoraBarrerasPais.map(f => ({ verbo: f.nombre, desc: `${f.valor} barrera(s) con esta acción sugerida en ${country}.` })),
+    },
+    hallazgosDestacados: {
+      titulo: "Top barreras",
+      intro: `Barreras reales del conjunto ya filtrado en ${countryLabelBar}.`,
+      items: tablaFilas.slice(0, 2).map(b => ({
+        categoria: "Distorsión",
+        entidad: (b as { entidad?: string }).entidad,
+        titulo: b.titulo,
+        cita: b.instrumento,
+        severidad: IRR_LABELS[b.irr],
+      })),
+    },
+  };
+
   return (
     <div className="p-4 md:p-8 overflow-y-auto h-full">
       {(() => {
         const countryLabel = country === "Todos" ? "5 países" : country;
-        const activeFilters: string[] = [];
-        if (sector) activeFilters.push(`Sector: ${sector}`);
-        if (entidad) activeFilters.push(`Entidad: ${entidad}`);
-        if (clasificacion) activeFilters.push(`Clasificación: ${clasificacion}`);
-        if (subdimension) activeFilters.push(`Subdimensión: ${subdimension}`);
-        if (jerarquia) activeFilters.push(`Jerarquía: ${jerarquia}`);
-        if (severidadFil) activeFilters.push(`Severidad: ${severidadFil}`);
-        const exportCtx = JSON.stringify({ tipo: "distorsion", pais: countryLabel, sector: sector || "Todos los sectores", filtros: activeFilters, registros: `${filtered.length} de ${BARRERAS_NIVEL4_LIST.length} barreras`, fecha: new Date().toLocaleString("es-BO"), periodo: periodoTextoBarreras });
-        const cd = COUNTRY_BARRERAS_DATA[country] ?? COUNTRY_BARRERAS_DATA["Bolivia"];
         const reportesPrefill: ReportesPrefill = {
           tipoHallazgo: "distorsion",
           pais: country,
@@ -4689,12 +5074,15 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
                 <>
                   {/* Mismo botón/destino ya corregido en Barreras Regional (screen "documentacion" -> "Metodología" del sidebar). */}
                   <button style={HDR_BTN_PILL} onClick={() => onNavigate({ screen: "documentacion" })}>Ver metodología</button>
-                  <button style={HDR_BTN_SECONDARY} onClick={() => onNavigate({ screen: "reporte-pdf", context: exportCtx })}>
-                    <Download size={13} /><span className="hidden sm:inline">Exportar PDF</span><span className="sm:hidden">PDF</span>
-                  </button>
                   <button style={HDR_BTN_PRIMARY} onClick={() => onNavigate({ screen: "reportes", prefill: reportesPrefill })}>
                     <ExternalLink size={13} /><span className="hidden sm:inline">Generar reporte</span><span className="sm:hidden">Reporte</span>
                   </button>
+                  <DescargarDropdown
+                    hojas={[hojaResumenBarPais, hojaClasificacionBarPais, hojaJerarquiaBarPais, hojaCanalesBarPais, hojaAccionMejoraBarPais, hojaTopBarrerasPais]}
+                    filtrosActivos={filtrosActivosBarPais}
+                    nombreArchivoBase="barreras_pais"
+                    estrategicoData={estrategicoDataBarPais}
+                  />
                 </>
               }
             />
@@ -4844,17 +5232,10 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
         onSegmentClick={(nivel, estructura) => onNavigate({ screen: "hallazgos-filtrados", filtros: { jerarquia: nivel, estructura } })}
       />
 
-      {/* Top 3 barreras según IRR */}
+      {/* Top 3 barreras según IRR -- esBolivia/tablaFilas ya vienen hoisted
+          arriba (las usa también el Reporte Estratégico del header, ver
+          estrategicoDataBarPais), no una copia recalculada acá. */}
       {(() => {
-        const esBolivia = country === "Bolivia";
-        const tablaFilas = esBolivia
-          ? pageItems.map((b, i) => ({
-              ...b,
-              canal: CANAL_POR_SUBDIMENSION_MUESTRA[b.subdimension] ?? "Modelo de negocio",
-              estadoHitl: (["Publicado", "Por decidir", "Etapa 3"] as const)[i % 3] as EstadoHitl,
-            }))
-          : TOP_BARRERAS_PAIS_TABLA[country as Exclude<Country, "Todos">] ?? TOP_BARRERAS_PAIS_TABLA["Bolivia"];
-
         return (
           <div className="rounded-lg" style={{ backgroundColor: C.card }}>
             <div className="p-5 border-b flex items-center justify-between" style={{ borderColor: C.border }}>
@@ -5342,11 +5723,6 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
   // estaban hardcodeadas sin importar el país seleccionado.
   const td = COUNTRY_TRAMITES_DATA[country] ?? COUNTRY_TRAMITES_DATA["Bolivia"];
 
-  // Contenedor raíz -- lo captura DescargarDropdown para el PDF (filtros +
-  // gráficas tal como se ven en pantalla). Un solo ref para los 2 branches
-  // (Regional/por país) de este componente, ya que solo uno se monta a la vez.
-  const containerRef = useRef<HTMLDivElement>(null);
-
   // ── Panel regional (país === "Todos") ───────────────────────────────────────
   if (country === "Todos") {
     const paisesRow1 = COUNTRIES.slice(0, 3);
@@ -5474,8 +5850,82 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
       })),
     };
 
+    // ── Reporte Estratégico (PDF) -- mismos datos ya filtrados/calculados
+    // arriba. accionesAMR sale de agrupar `.accion` de tramitesPrioritariosFilas
+    // (dato real de esta pantalla, no una fórmula porcentual inventada);
+    // hallazgos destacados son los primeros 2 registros reales de ese mismo
+    // conjunto (sin catálogo de distorsión disponible acá, esa mitad queda
+    // vacía).
+    const accionesAgrupadasReg = (() => {
+      const counts = new Map<string, number>();
+      for (const t of tramitesPrioritariosFilas) counts.set(t.accion, (counts.get(t.accion) ?? 0) + 1);
+      return Array.from(counts.entries())
+        .sort((a, b) => b[1] - a[1])
+        .map(([verbo, n]) => ({ verbo, desc: `${n} trámite${n !== 1 ? "s" : ""} del conjunto filtrado sugieren esta acción.` }));
+    })();
+    const estrategicoData: ReporteEstrategicoData = {
+      paisLabel: "Regional (5 países)",
+      isRegional: true,
+      codigo: "RegLAC-REG-TRAM-2026-001",
+      sectorLabel: "Todos los sectores",
+      fechaCorte: "Marzo 2026",
+      filtrosActivos: [],
+      mensajes: { titulo: "", items: [] },
+      bloquesKpi: [
+        {
+          titulo: "Trámites con potencial de mejora",
+          variante: "panorama",
+          items: [
+            { label: "Total de trámites identificados", val: td.total.toLocaleString("es-BO") },
+            { label: "Costo estimado SCM", val: `USD ${(td.costoEstimadoUSD / 1_000_000).toFixed(1)} M` },
+            { label: "Trámites críticos", val: String(td.criticos) },
+            { label: "% Validado HITL", val: `${TRAMITES_VALIDADO_HITL_MUESTRA["Todos"]}%` },
+          ],
+        },
+      ],
+      graficas: [
+        {
+          titulo: "Trámites por país",
+          chartLabel: "Trámites por país",
+          categorias: COUNTRIES.map(pais => ({
+            nombre: pais, total: COUNTRY_TRAMITES_DATA[pais].total,
+            componentes: [{ nombre: pais, valor: COUNTRY_TRAMITES_DATA[pais].total }],
+          })),
+        },
+        {
+          titulo: "Tipo de usuario",
+          chartLabel: "Tipo de usuario",
+          categorias: [
+            { nombre: "Empresarial", total: td.tipoUsuario.empresarial, componentes: [{ nombre: "Empresarial", valor: td.tipoUsuario.empresarial }] },
+            { nombre: "Ciudadano", total: td.tipoUsuario.ciudadano, componentes: [{ nombre: "Ciudadano", valor: td.tipoUsuario.ciudadano }] },
+            { nombre: "Mixto", total: td.tipoUsuario.mixto, componentes: [{ nombre: "Mixto", valor: td.tipoUsuario.mixto }] },
+          ],
+        },
+        {
+          titulo: "Top 10 entidades por número de trámites",
+          chartLabel: "Top 10 entidades",
+          categorias: td.topEntidades.map(e => ({ nombre: e.name, total: e.value, componentes: [{ nombre: e.name, valor: e.value }] })),
+        },
+      ],
+      accionesAMR: { titulo: "Acciones sugeridas en el conjunto filtrado", items: accionesAgrupadasReg },
+      hallazgosDestacados: {
+        titulo: "Trámites prioritarios",
+        intro: "Trámites reales del conjunto filtrado en esta pantalla.",
+        items: tramitesPrioritariosFilas.slice(0, 2).map(t => ({
+          categoria: "Carga",
+          entidad: t.entidad,
+          titulo: t.tramite,
+          cita: ALL_TRAMITES.find(at => at.id === t.id)?.diagnostico,
+          severidad: t.severidad,
+          etiqueta: t.tipoUsuario,
+          accion: t.accion,
+          costoLabel: t.costo,
+        })),
+      },
+    };
+
     return (
-      <div ref={containerRef} className="p-4 md:p-8 overflow-y-auto h-full">
+      <div className="p-4 md:p-8 overflow-y-auto h-full">
         <Header
           breadcrumb="Trámites con potencial de mejora"
           title="Trámites con potencial de mejora"
@@ -5491,7 +5941,7 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
                 hojas={[hojaResumen, hojaTramitesPorPais, hojaEntradaPorPais, hojaTipoUsuario, hojaPorEntidad, hojaTramitesPrioritarios]}
                 filtrosActivos={[]}
                 nombreArchivoBase="tramites_regional"
-                containerRef={containerRef}
+                estrategicoData={estrategicoData}
               />
             </>
           }
@@ -5758,7 +6208,7 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
   };
 
   return (
-    <div ref={containerRef} className="p-4 md:p-8 overflow-y-auto h-full">
+    <div className="p-4 md:p-8 overflow-y-auto h-full">
       {(() => {
         const activeFilters: string[] = [];
         if (sector) activeFilters.push(`Sector: ${sector}`);
@@ -5792,6 +6242,81 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
           ...(tamano ? [{ label: "Tamaño", value: tamano }] : []),
           ...(ano ? [{ label: "Año", value: ano }] : []),
         ];
+
+        // ── Reporte Estratégico (PDF) -- mismos filtrosActivosExcel/filasPais
+        // ya calculados arriba para este país. accionesAMR reusa
+        // TRAMITES_ACCION_MEJORA_MUESTRA[país] -- el mismo desglose real que
+        // ya se muestra en pantalla en el panel "Acciones de mejora en
+        // trámites" -- en vez de inventar una fórmula nueva.
+        const accionesMejoraPais = TRAMITES_ACCION_MEJORA_MUESTRA[country as Exclude<Country, "Todos">] ?? TRAMITES_ACCION_MEJORA_MUESTRA["Bolivia"];
+        const estrategicoData: ReporteEstrategicoData = {
+          paisLabel: country,
+          isRegional: false,
+          codigo: `RegLAC-${(country as string).slice(0, 3).toUpperCase()}-TRAM-2026-001`,
+          sectorLabel: sector || "Todos los sectores",
+          fechaCorte: "Marzo 2026",
+          filtrosActivos: filtrosActivosExcel,
+          mensajes: { titulo: "", items: [] },
+          bloquesKpi: [
+            {
+              titulo: "Trámites con potencial de mejora",
+              variante: "panorama",
+              items: [
+                { label: "Total trámites", val: td.total.toLocaleString("es-BO"), sub: countryLabel },
+                { label: "Costo estimado de trámites", val: `USD ${(td.costoEstimadoUSD / 1_000_000).toFixed(1)} M`, sub: "simulado · anual" },
+                { label: "Empresariales", val: String(td.tipoUsuario.empresarial) },
+                { label: "Ciudadanos", val: String(td.tipoUsuario.ciudadano) },
+                { label: "Cargas críticas", val: String(td.criticos), sub: "nivel 4" },
+              ],
+            },
+          ],
+          graficas: [
+            {
+              titulo: "Carga por eje",
+              chartLabel: "Carga por eje",
+              categorias: ["Accesibilidad", "Certidumbre", "Cumplimiento", "Proporcionalidad"].flatMap(tipo => {
+                const dato = td.cargaPorTipo[tipo];
+                if (!dato) return [];
+                const total = dato.niveles.n4 + dato.niveles.n3 + dato.niveles.n2 + dato.niveles.n1;
+                return [{ nombre: tipo, total, componentes: [{ nombre: tipo, valor: total }] }];
+              }),
+            },
+            {
+              titulo: "Top 10 entidades por número de trámites",
+              chartLabel: "Top 10 entidades",
+              categorias: td.topEntidades.map(e => ({ nombre: e.name, total: e.value, componentes: [{ nombre: e.name, valor: e.value }] })),
+            },
+            {
+              titulo: "Etapa del ciclo empresarial",
+              chartLabel: "Etapa del ciclo empresarial",
+              categorias: (ETAPA_CICLO_MUESTRA[country as Exclude<Country, "Todos">] ?? ETAPA_CICLO_MUESTRA["Bolivia"]).map(f => ({ nombre: f.nombre, total: f.valor, componentes: [{ nombre: f.nombre, valor: f.valor }] })),
+            },
+            {
+              titulo: "Afectación MIPYME",
+              chartLabel: "Afectación MIPYME",
+              categorias: (MIPYME_MUESTRA[country as Exclude<Country, "Todos">] ?? MIPYME_MUESTRA["Bolivia"]).map(f => ({ nombre: f.nombre, total: f.valor, componentes: [{ nombre: f.nombre, valor: f.valor }] })),
+            },
+          ],
+          accionesAMR: {
+            titulo: "Acciones de mejora en trámites",
+            items: accionesMejoraPais.map(f => ({ verbo: f.nombre, desc: `${f.valor} trámite(s) con esta acción sugerida en ${country}.` })),
+          },
+          hallazgosDestacados: {
+            titulo: "Trámites prioritarios",
+            intro: `Trámites reales del conjunto filtrado en ${countryLabel}.`,
+            items: filasPais.slice(0, 2).map(t => ({
+              categoria: "Carga",
+              entidad: t.entidad,
+              titulo: t.tramite,
+              cita: ALL_TRAMITES.find(at => at.id === t.id)?.diagnostico,
+              severidad: t.severidad,
+              etiqueta: t.tipoUsuario,
+              accion: t.accion,
+              costoLabel: t.costo,
+            })),
+          },
+        };
+
         return (
           <Header
             breadcrumb="Regulaciones › Trámites"
@@ -5808,7 +6333,7 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
                   hojas={[hojaResumen, hojaCargaPorEje, hojaTopEntidades, hojaEtapaCiclo, hojaMipyme, hojaTipoUsuario, hojaAccionMejora, hojaAfectaciones, hojaTramitesPrioritarios]}
                   filtrosActivos={filtrosActivosExcel}
                   nombreArchivoBase="tramites_pais"
-                  containerRef={containerRef}
+                  estrategicoData={estrategicoData}
                 />
               </>
             }
@@ -8669,6 +9194,83 @@ function ReportesScreen({ prefill, onNavigate }: { prefill?: ReportesPrefill; on
 }
 
 // ─── Reporte Estratégico ──────────────────────────────────────────────────────
+// ─── Reporte Estratégico — contrato de datos ────────────────────────────────
+// Todo lo que ReporteEstrategicoPaper necesita para pintar el documento, ya
+// resuelto/filtrado por quien arma este objeto (hoy: ReporteEstrategicoScreen
+// a partir de `pais`; a futuro: cada dashboard con sus propios filtros). El
+// Paper NUNCA recalcula nada a partir de país -- solo pinta lo que recibe.
+// Tipos "legacy" -- forma en la que ReporteEstrategicoScreen arma sus pools
+// de hallazgos (DIST_POOL/CARGA_POOL, más abajo). Cada pantalla nueva que
+// alimenta a ReporteEstrategicoPaper con SUS PROPIOS datos filtrados no
+// necesariamente tiene los 6 campos completos (p.ej. BARRERAS_NIVEL4_LIST no
+// trae `cita` ni `accion`) -- por eso ReporteEstrategicoHallazgo (el tipo que
+// de verdad consume el Paper, más abajo) los vuelve opcionales.
+export type ReporteEstrategicoHallazgoDistorsion = {
+  entidad: string; titulo: string; cita: string; severidad: string; accion: string; costo: number;
+};
+export type ReporteEstrategicoHallazgoCarga = {
+  entidad: string; tramite: string; cita: string; tipo: string; accion: string; costo: string;
+};
+
+// ─── Contrato de datos de ReporteEstrategicoPaper ──────────────────────────
+// Generalizado para que CUALQUIER pantalla (no solo ReporteEstrategicoScreen)
+// pueda alimentar el mismo documento con sus propios KPIs/gráficas/hallazgos
+// ya filtrados, sin forzarlos a encajar en la forma específica (distorsión +
+// carga) que tenía el reporte original. Cada bloque es una lista de 0..N
+// entradas -- el Paper se salta por completo cualquier bloque vacío (ninguna
+// pantalla nueva tiene que fabricar contenido que no tiene) y numera "Sección
+// N" de forma dinámica según lo que realmente se termina renderizando.
+export type ReporteEstrategicoKpi = { label: string; val: string; sub?: string };
+export type ReporteEstrategicoKpiBloque = {
+  titulo: string;
+  // "cobertura": 3 columnas, valor 30px, con `sub` debajo (estilo S2 original).
+  // "panorama": 4 columnas, valor 26px con color rotado, `sub` opcional
+  // (estilo S3 original). Cada pantalla usa la variante que más se parezca a
+  // cómo ya muestra esos KPIs en pantalla.
+  variante: "cobertura" | "panorama";
+  items: ReporteEstrategicoKpi[];
+  // Barra de distribución por severidad -- solo BARRERAS tiene hoy un
+  // desglose de 4 niveles listo para esto (ver ReporteEstrategicoScreen);
+  // el resto de pantallas la omite en vez de inventarla.
+  severidad?: { total: number; segmentos: { label: string; val: number }[] };
+};
+export type ReporteEstrategicoGrafica = {
+  titulo: string;
+  intro?: string;
+  chartLabel: string;
+  totalLabel?: string;
+  categorias: BarrasComposicionCategoria[];
+};
+// Tarjeta de hallazgo destacado -- unifica "distorsión" y "carga" en un solo
+// tipo porque los datos reales filtrados de cada pantalla no siempre traen
+// los mismos campos que sí tenían los pools fijos originales (p.ej. ningún
+// registro real de barreras/trámites trae una `cita` textual). Todo lo que
+// no sea `categoria`/`entidad`/`titulo` es opcional; el Paper solo pinta lo
+// que efectivamente viene, sin rellenar con texto inventado.
+export type ReporteEstrategicoHallazgo = {
+  categoria: "Distorsión" | "Carga";
+  entidad?: string;
+  titulo: string;
+  cita?: string;
+  severidad?: string;
+  etiqueta?: string;
+  accion?: string;
+  costoLabel?: string;
+};
+export type ReporteEstrategicoData = {
+  paisLabel: string;
+  isRegional: boolean;
+  codigo: string;
+  sectorLabel: string;
+  fechaCorte: string;
+  filtrosActivos: { label: string; value: string }[];
+  mensajes: { titulo: string; items: string[] };
+  bloquesKpi: ReporteEstrategicoKpiBloque[];
+  graficas: ReporteEstrategicoGrafica[];
+  accionesAMR: { titulo: string; items: { verbo: string; desc: string }[] };
+  hallazgosDestacados: { titulo: string; intro?: string; items: ReporteEstrategicoHallazgo[] };
+};
+
 function ReporteEstrategicoScreen({ pais: rawPais, onNavigate }: {
   pais?: string; onNavigate: (v: View) => void;
 }) {
@@ -8767,30 +9369,78 @@ function ReporteEstrategicoScreen({ pais: rawPais, onNavigate }: {
     { verbo: "Armonizar",        desc: `Alineación de marcos normativos con estándares regionales comparables en ${cd.sectores} sectores para reducir cargas de cumplimiento diferencial.` },
   ];
 
-  // ── Sub-components ──────────────────────────────────────────────────────────
-  const SecLabel = ({ num, title }: { num: string; title: string }) => (
-    <div className="mb-5">
-      <p className="text-[10px] uppercase tracking-widest mb-1" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Sección {num}</p>
-      <h2 className="text-[20px] font-semibold leading-tight" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>{title}</h2>
-    </div>
-  );
-  const Div = () => <div className="my-8" style={{ borderTop: `1px solid ${C.border}` }} />;
-
-  const AMRBadge = ({ label }: { label: string }) => (
-    <span className="inline-flex items-center px-2.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide flex-shrink-0"
-      style={{ backgroundColor: C.steel4 + "12", color: C.steel4, border: `1px solid ${C.steel4}25`, fontFamily: "Space Grotesk, sans-serif" }}>
-      {label}
-    </span>
-  );
-
-  const SevBadge = ({ nivel }: { nivel: string }) => {
-    const col = nivel === "Crítico" ? C.critico : nivel === "Alto" ? C.alto : nivel === "Mediano" ? C.mediano : C.bajo;
-    return (
-      <span className="inline-flex items-center px-2.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide flex-shrink-0"
-        style={{ backgroundColor: col + "18", color: col, border: `1px solid ${col}30`, fontFamily: "Space Grotesk, sans-serif" }}>
-        {nivel}
-      </span>
-    );
+  // ── Ensamblar el contrato de datos ──────────────────────────────────────────
+  const data: ReporteEstrategicoData = {
+    paisLabel,
+    isRegional,
+    codigo,
+    sectorLabel: `Todos los sectores (${cd.sectores})`,
+    fechaCorte: "Marzo 2026",
+    filtrosActivos: [
+      { label: "País", value: paisLabel },
+      { label: "Sector", value: `Todos los sectores (${cd.sectores})` },
+    ],
+    mensajes: { titulo: "Mensajes principales", items: mensajes },
+    bloquesKpi: [
+      {
+        titulo: "Cobertura del análisis",
+        variante: "cobertura",
+        items: [
+          { label: "Instrumentos normativos analizados", val: instrTotal.toLocaleString(), sub: "analizados" },
+          { label: "Sectores económicos cubiertos",      val: cd.sectores.toString(),       sub: "cubiertos" },
+          { label: "Período de análisis",               val: "2015–2026",                  sub: "horizonte temporal" },
+        ],
+      },
+      {
+        titulo: "Panorama general",
+        variante: "panorama",
+        items: [
+          { label: "Normas encontradas",               val: cd.total.toLocaleString() },
+          { label: "Trámites con potencial de mejora",  val: cargaCd.total.toString() },
+          { label: "Entidades involucradas",            val: entidadesTotal.toString() },
+          { label: "Sectores principales afectados",    val: cd.sectores.toString() },
+        ],
+        severidad: {
+          total: cd.total,
+          segmentos: [
+            { label: "Crítico", val: sevCritico },
+            { label: "Alto",    val: sevAlto },
+            { label: "Mediano", val: sevMediano },
+            { label: "Bajo",    val: sevBajo },
+          ],
+        },
+      },
+    ],
+    graficas: [
+      {
+        titulo: "Principales distorsiones regulatorias",
+        intro: "Distribución de hallazgos de distorsión por eje y subdimensión.",
+        chartLabel: "Barreras por eje regulatorio",
+        categorias: distorsionesData,
+      },
+      {
+        titulo: "Carga regulatoria",
+        intro: "Trámites que requieren ajuste, por tipo de carga.",
+        chartLabel: "Hallazgos de carga por tipo",
+        totalLabel: `${cargaTotal.toLocaleString()} en total.`,
+        categorias: cargaBarrasData,
+      },
+    ],
+    accionesAMR: { titulo: "Principales acciones de mejora regulatoria", items: accionesAMR },
+    hallazgosDestacados: {
+      titulo: "Ejemplos de hallazgos",
+      intro: "Los hallazgos con mayor impacto económico estimado del universo analizado. La ficha completa está disponible en el Reporte Operativo.",
+      items: [
+        ...distHallazgos.map((h): ReporteEstrategicoHallazgo => ({
+          categoria: "Distorsión", entidad: h.entidad, titulo: h.titulo, cita: h.cita,
+          severidad: h.severidad, accion: h.accion, costoLabel: `USD ${h.costo}M`,
+        })),
+        ...cargaHallazgos.map((h): ReporteEstrategicoHallazgo => ({
+          categoria: "Carga", entidad: h.entidad, titulo: h.tramite, cita: h.cita,
+          etiqueta: h.tipo, accion: h.accion, costoLabel: h.costo,
+        })),
+      ],
+    },
   };
 
   return (
@@ -8815,109 +9465,144 @@ function ReporteEstrategicoScreen({ pais: rawPais, onNavigate }: {
       </div>
 
       {/* Paper */}
-      <div className="max-w-[820px] mx-auto my-4 md:my-8 shadow-xl rounded-xl overflow-hidden" style={{ marginLeft: "auto", marginRight: "auto" }}>
+      <ReporteEstrategicoPaper data={data} />
+    </div>
+  );
+}
 
-        {/* ── PORTADA ── */}
-        <div className="px-10 md:px-16 py-14 md:py-16 flex flex-col" style={{ backgroundColor: C.steel4, minHeight: 520 }}>
-          <div className="flex items-center gap-4 mb-auto">
-            <span className="text-[22px] tracking-[4px]" style={{ fontFamily: "Space Grotesk, sans-serif", fontWeight: 500, color: "white" }}>RegLAC</span>
-          </div>
+// ─── Reporte Estratégico — documento (portada + secciones) ─────────────────
+// Pinta EXCLUSIVAMENTE a partir de ReporteEstrategicoData -- no conoce país,
+// filtros ni ningún pool de hallazgos. Quien llama (hoy solo
+// ReporteEstrategicoScreen) ya resolvió todo eso.
+// pdf-block: mismo contrato que exportarReportePdf ya usa para el Reporte
+// Operativo (ver comentario junto a esa función) -- CUALQUIER contenido que
+// no esté dentro de un elemento ".pdf-block" queda invisible en el PDF
+// exportado (exportarReportePdf solo itera querySelectorAll(".pdf-block")),
+// así que cada pieza visible del documento (portada, cada sección, cada
+// tarjeta de hallazgo, el pie de página) tiene que llevar la clase. El
+// primer ".pdf-block" en el DOM es tratado como portada (fondo a color
+// completo); el resto son "fichas" que nunca se cortan entre páginas
+// (exportarReportePdf las reduce de escala si no entran en una sola página,
+// en vez de partirlas).
+function ReporteEstrategicoPaper({ data }: { data: ReporteEstrategicoData }) {
+  const SecLabel = ({ num, title }: { num: number; title: string }) => (
+    <div className="mb-5">
+      <p className="text-[10px] uppercase tracking-widest mb-1" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Sección {num}</p>
+      <h2 className="text-[20px] font-semibold leading-tight" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>{title}</h2>
+    </div>
+  );
+  const Div = () => <div className="my-8" style={{ borderTop: `1px solid ${C.border}` }} />;
 
-          <div className="mt-16">
-            <p className="text-[10px] uppercase tracking-[3px] mb-4" style={{ fontFamily: "Space Grotesk, sans-serif", color: "rgba(255,255,255,0.42)" }}>
-              Informe de Inteligencia Regulatoria
-            </p>
-            <h1 className="text-[36px] font-semibold leading-tight mb-8" style={{ fontFamily: "Space Grotesk, sans-serif", color: "white" }}>
-              Panorama Regulatorio<br />y Agenda de Reforma
-            </h1>
-            <div className="grid grid-cols-2 gap-x-12 gap-y-4 mb-10">
-              {[
-                { label: "País / Alcance",    val: paisLabel },
-                { label: "Fecha de corte",    val: "Marzo 2026" },
-                { label: "Sector",            val: `Todos los sectores (${cd.sectores})` },
-                { label: "Código de informe", val: codigo },
-              ].map(({ label, val }) => (
-                <div key={label}>
-                  <p className="text-[10px] uppercase tracking-wider mb-1" style={{ fontFamily: "Space Grotesk, sans-serif", color: "rgba(255,255,255,0.36)" }}>{label}</p>
-                  <p className="text-[13px] font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: "white" }}>{val}</p>
-                </div>
-              ))}
-            </div>
-            <div className="pt-6" style={{ borderTop: "1px solid rgba(255,255,255,0.1)" }}>
-              <p className="text-[11px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: "rgba(255,255,255,0.3)" }}>
-                Banco Interamericano de Desarrollo · Plataforma RegLAC · © 2026
-              </p>
-            </div>
-          </div>
-        </div>
+  // Nota: a diferencia del pool fijo original (siempre un solo verbo corto:
+  // "Simplificar", "Eliminar"...), la `accion` de un hallazgo real de
+  // trámites/barreras puede ser una oración larga ("Habilitar evaluación
+  // ambiental expedita para ampliaciones menores...") -- sin flex-shrink-0 y
+  // con min-w-0, el badge se achica y envuelve el texto en vez de desbordar
+  // la tarjeta cuando no entra en una sola línea.
+  const AMRBadge = ({ label }: { label: string }) => (
+    <span className="inline-flex items-center px-2.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide min-w-0"
+      style={{ backgroundColor: C.steel4 + "12", color: C.steel4, border: `1px solid ${C.steel4}25`, fontFamily: "Space Grotesk, sans-serif" }}>
+      {label}
+    </span>
+  );
 
-        {/* ── BODY ── */}
-        <div className="px-8 md:px-14 py-10" style={{ backgroundColor: "white" }}>
+  const SevBadge = ({ nivel }: { nivel: string }) => {
+    const col = nivel === "Crítico" ? C.critico : nivel === "Alto" ? C.alto : nivel === "Mediano" ? C.mediano : C.bajo;
+    return (
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide flex-shrink-0"
+        style={{ backgroundColor: col + "18", color: col, border: `1px solid ${col}30`, fontFamily: "Space Grotesk, sans-serif" }}>
+        {nivel}
+      </span>
+    );
+  };
 
-          {/* S1 — Mensajes principales */}
-          <SecLabel num="1" title="Mensajes principales" />
-          <div className="flex flex-col gap-3">
-            {mensajes.map((txt, i) => (
-              <div key={i} className="flex items-start gap-4 p-4 rounded-xl" style={{ backgroundColor: C.canvas, border: `1px solid ${C.border}` }}>
-                <div className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-[12px] font-bold"
-                  style={{ backgroundColor: C.steel4, color: "white", fontFamily: "Space Grotesk, sans-serif" }}>
-                  {i + 1}
-                </div>
-                <p className="text-[12px] leading-relaxed pt-0.5" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text }}>{txt}</p>
+  const kpiPanoramaColors = [C.text, C.steel3, C.steel4, C.alto];
+  const sevColorFor = (label: string) =>
+    label === "Crítico" ? C.critico : label === "Alto" ? C.alto : label === "Mediano" ? C.mediano : C.bajo;
+
+  // ── Ensamblar bloques dinámicamente ─────────────────────────────────────────
+  // Cada pantalla que llama a este componente puede traer 0..N entradas por
+  // bloque (una pantalla sin desglose de severidad, sin gráfica de carga, o
+  // sin hallazgos reales para mostrar simplemente no manda esos datos) -- acá
+  // se arma la lista de bloques que SÍ tienen contenido, numerando "Sección
+  // N" en el orden real en que terminan apareciendo, y se intercala un <Div/>
+  // (solo visual, no ".pdf-block") entre los que sí se renderizan.
+  let secNum = 0;
+  const blocks: React.ReactNode[] = [];
+  const pushBlock = (node: React.ReactNode) => {
+    if (blocks.length > 0) blocks.push(<Div key={`div-${blocks.length}`} />);
+    blocks.push(node);
+  };
+
+  if (data.mensajes.items.length > 0) {
+    secNum++;
+    pushBlock(
+      <div key="mensajes" className="pdf-block" style={{ pageBreakInside: "avoid" }}>
+        <SecLabel num={secNum} title={data.mensajes.titulo} />
+        <div className="flex flex-col gap-3">
+          {data.mensajes.items.map((txt, i) => (
+            <div key={i} className="flex items-start gap-4 p-4 rounded-xl" style={{ backgroundColor: C.canvas, border: `1px solid ${C.border}` }}>
+              <div className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-[12px] font-bold"
+                style={{ backgroundColor: C.steel4, color: "white", fontFamily: "Space Grotesk, sans-serif" }}>
+                {i + 1}
               </div>
-            ))}
-          </div>
+              <p className="text-[12px] leading-relaxed pt-0.5" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text }}>{txt}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
-          <Div />
-
-          {/* S2 — Cobertura */}
-          <SecLabel num="2" title="Cobertura del análisis" />
+  data.bloquesKpi.forEach((bloque, bi) => {
+    if (bloque.items.length === 0) return;
+    secNum++;
+    const n = secNum;
+    pushBlock(
+      <div
+        key={`kpi-${bi}`}
+        className="pdf-block"
+        style={{ pageBreakInside: "avoid" }}
+        // Marca SOLO este bloque para el colchón vertical extra en la
+        // captura (ver exportarReportePdf) -- únicamente cuando trae la
+        // barra de severidad al final (su última línea, la leyenda con los
+        // valores, es la que html2canvas corta si no se le da margen). Sin
+        // este data-attribute, exportarReportePdf no le pasa height/
+        // windowHeight a html2canvas -- eso rompía la portada y las fichas
+        // de hallazgo (bloques que NO necesitan el colchón) al aplicarse a
+        // los .pdf-block por igual.
+        data-pdf-colchon={bloque.severidad ? "1" : undefined}
+      >
+        <SecLabel num={n} title={bloque.titulo} />
+        {bloque.variante === "cobertura" ? (
           <div className="grid grid-cols-3 gap-4">
-            {[
-              { label: "Instrumentos normativos analizados", val: instrTotal.toLocaleString(), sub: "analizados" },
-              { label: "Sectores económicos cubiertos",      val: cd.sectores.toString(),       sub: "cubiertos" },
-              { label: "Período de análisis",               val: "2015–2026",                  sub: "horizonte temporal" },
-            ].map(kpi => (
+            {bloque.items.map(kpi => (
               <div key={kpi.label} className="rounded-xl p-5 flex flex-col gap-1" style={{ backgroundColor: C.canvas, border: `1px solid ${C.border}` }}>
                 <p className="text-[10px] uppercase tracking-widest leading-tight" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>{kpi.label}</p>
                 <p className="text-[30px] font-semibold leading-none mt-1" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.steel4 }}>{kpi.val}</p>
-                <p className="text-[11px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{kpi.sub}</p>
+                {kpi.sub && <p className="text-[11px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{kpi.sub}</p>}
               </div>
             ))}
           </div>
-
-          <Div />
-
-          {/* S3 — Panorama general */}
-          <SecLabel num="3" title="Panorama general" />
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-            {[
-              { label: "Normas encontradas",              val: cd.total.toLocaleString(),      color: C.text },
-              { label: "Trámites con potencial de mejora",val: cargaCd.total.toString(),       color: C.steel3 },
-              { label: "Entidades involucradas",          val: entidadesTotal.toString(),      color: C.steel4 },
-              { label: "Sectores principales afectados",  val: cd.sectores.toString(),         color: C.alto },
-            ].map(kpi => (
-              <div key={kpi.label} className="rounded-xl p-4" style={{ backgroundColor: C.canvas, border: `1px solid ${C.border}` }}>
-                <p className="text-[10px] uppercase tracking-widest mb-2 leading-tight" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>{kpi.label}</p>
-                <p className="text-[26px] font-semibold leading-none" style={{ fontFamily: "Space Grotesk, sans-serif", color: kpi.color }}>{kpi.val}</p>
-              </div>
-            ))}
-          </div>
-          {/* Severity bar */}
-          <p className="text-[11px] font-medium mb-3" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>
-            Distribución por severidad · Total {cd.total.toLocaleString()} barreras
-          </p>
-          <div>
-            {(() => {
-              const segs = [
-                { label: "Crítico", val: sevCritico, color: C.critico },
-                { label: "Alto",    val: sevAlto,    color: C.alto },
-                { label: "Mediano", val: sevMediano, color: C.mediano },
-                { label: "Bajo",    val: sevBajo,    color: C.bajo },
-              ];
+        ) : (
+          <>
+            <div className={`grid grid-cols-2 sm:grid-cols-4 gap-4${bloque.severidad ? " mb-6" : ""}`}>
+              {bloque.items.map((kpi, i) => (
+                <div key={kpi.label} className="rounded-xl p-4" style={{ backgroundColor: C.canvas, border: `1px solid ${C.border}` }}>
+                  <p className="text-[10px] uppercase tracking-widest mb-2 leading-tight" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>{kpi.label}</p>
+                  <p className="text-[26px] font-semibold leading-none" style={{ fontFamily: "Space Grotesk, sans-serif", color: kpiPanoramaColors[i % kpiPanoramaColors.length] }}>{kpi.val}</p>
+                  {kpi.sub && <p className="text-[11px] mt-1" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{kpi.sub}</p>}
+                </div>
+              ))}
+            </div>
+            {bloque.severidad && (() => {
+              const segs = bloque.severidad.segmentos.map(s => ({ ...s, color: sevColorFor(s.label) }));
               const tot = segs.reduce((s, x) => s + x.val, 0);
               return (
                 <>
+                  <p className="text-[11px] font-medium mb-3" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>
+                    Distribución por severidad · Total {bloque.severidad.total.toLocaleString()} barreras
+                  </p>
                   <div className="flex h-5 rounded-lg overflow-hidden mb-3">
                     {segs.map(s => (
                       <div key={s.label} style={{ width: `${(s.val / tot) * 100}%`, backgroundColor: s.color }} title={`${s.label}: ${s.val}`} />
@@ -8936,118 +9621,168 @@ function ReporteEstrategicoScreen({ pais: rawPais, onNavigate }: {
                 </>
               );
             })()}
-          </div>
+          </>
+        )}
+      </div>
+    );
+  });
 
-          <Div />
+  data.graficas.forEach((g, gi) => {
+    if (g.categorias.length === 0) return;
+    secNum++;
+    const n = secNum;
+    pushBlock(
+      <div key={`grafica-${gi}`} className="pdf-block" style={{ pageBreakInside: "avoid" }}>
+        <SecLabel num={n} title={g.titulo} />
+        {g.intro && (
+          <p className="text-[12px] mb-5 leading-relaxed" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{g.intro}</p>
+        )}
+        {g.totalLabel && (
+          <p className="text-[12px] font-semibold mb-5" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>{g.totalLabel}</p>
+        )}
+        <BarrasComposicion
+          label={g.chartLabel}
+          total={g.categorias.reduce((s, c) => s + c.total, 0)}
+          categorias={g.categorias}
+        />
+      </div>
+    );
+  });
 
-          {/* S4 — Distorsiones */}
-          <SecLabel num="4" title="Principales distorsiones regulatorias" />
-          <p className="text-[12px] mb-5 leading-relaxed" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>
-            Distribución de hallazgos de distorsión por eje y subdimensión.
-          </p>
-          <BarrasComposicion
-            label="Barreras por eje regulatorio"
-            total={distorsionesData.reduce((s, c) => s + c.total, 0)}
-            categorias={distorsionesData}
-          />
+  if (data.accionesAMR.items.length > 0) {
+    secNum++;
+    const n = secNum;
+    pushBlock(
+      <div key="amr" className="pdf-block" style={{ pageBreakInside: "avoid" }}>
+        <SecLabel num={n} title={data.accionesAMR.titulo} />
+        <div className="flex flex-col gap-3">
+          {data.accionesAMR.items.map((a, i) => (
+            <div key={i} className="flex items-start gap-4 p-4 rounded-xl" style={{ backgroundColor: C.canvas, border: `1px solid ${C.border}` }}>
+              <span className="flex-shrink-0 px-3 py-1 rounded-md text-[11px] font-semibold uppercase tracking-wide mt-0.5"
+                style={{ backgroundColor: C.steel4, color: "white", fontFamily: "Space Grotesk, sans-serif", whiteSpace: "nowrap" }}>
+                {a.verbo}
+              </span>
+              <p className="text-[12px] leading-relaxed" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text }}>{a.desc}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
-          <Div />
-
-          {/* S5 — Carga */}
-          <SecLabel num="5" title="Carga regulatoria" />
+  if (data.hallazgosDestacados.items.length > 0) {
+    secNum++;
+    const n = secNum;
+    // Encabezado (título + intro) como bloque propio -- las tarjetas van
+    // cada una en el suyo, más abajo, para que ninguna se corte entre
+    // páginas ("tarjetas que nunca se cortan").
+    pushBlock(
+      <div
+        key="hallazgos-header"
+        className="pdf-block"
+        style={{ pageBreakInside: "avoid" }}
+        // Mismo criterio que el bloque KPI con severidad, arriba: solo pide
+        // el colchón vertical extra cuando trae el subtítulo (su última
+        // línea, la que queda cortada por abajo sin margen). Sin intro no
+        // hace falta -- el título solo nunca mostró el problema.
+        data-pdf-colchon={data.hallazgosDestacados.intro ? "1" : undefined}
+      >
+        <SecLabel num={n} title={data.hallazgosDestacados.titulo} />
+        {data.hallazgosDestacados.intro && (
           <p className="text-[12px] leading-relaxed" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>
-            Trámites que requieren ajuste, por tipo de carga.
+            {data.hallazgosDestacados.intro}
           </p>
-          <p className="text-[12px] font-semibold mb-5" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>
-            {cargaTotal.toLocaleString()} en total.
-          </p>
-          <BarrasComposicion
-            label="Hallazgos de carga por tipo"
-            total={cargaTotal}
-            categorias={cargaBarrasData}
-          />
-
-          <Div />
-
-          {/* S6 — Acciones AMR */}
-          <SecLabel num="6" title="Principales acciones de mejora regulatoria" />
-          <div className="flex flex-col gap-3">
-            {accionesAMR.map((a, i) => (
-              <div key={i} className="flex items-start gap-4 p-4 rounded-xl" style={{ backgroundColor: C.canvas, border: `1px solid ${C.border}` }}>
-                <span className="flex-shrink-0 px-3 py-1 rounded-md text-[11px] font-semibold uppercase tracking-wide mt-0.5"
-                  style={{ backgroundColor: C.steel4, color: "white", fontFamily: "Space Grotesk, sans-serif", whiteSpace: "nowrap" }}>
-                  {a.verbo}
+        )}
+      </div>
+    );
+    blocks.push(
+      <div key="hallazgos-grid" className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+        {data.hallazgosDestacados.items.map((h, i) => {
+          const headerBg = h.categoria === "Distorsión" ? C.steel4 : C.steel3;
+          return (
+            <div key={i} className="pdf-block rounded-xl overflow-hidden flex flex-col" style={{ border: `1px solid ${C.border}`, pageBreakInside: "avoid" }}>
+              <div className="px-4 py-3 flex items-center justify-between gap-2" style={{ backgroundColor: headerBg }}>
+                <span className="text-[11px] font-medium truncate" style={{ color: "rgba(255,255,255,0.85)", fontFamily: "Space Grotesk, sans-serif" }}>
+                  {h.entidad ? `${h.categoria} · ${h.entidad}` : h.categoria}
                 </span>
-                <p className="text-[12px] leading-relaxed" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text }}>{a.desc}</p>
-              </div>
-            ))}
-          </div>
-
-          <Div />
-
-          {/* S7 — Hallazgos destacados */}
-          <SecLabel num="7" title="Ejemplos de hallazgos" />
-          <p className="text-[12px] mb-6 leading-relaxed" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>
-            Los hallazgos con mayor impacto económico estimado del universo analizado. La ficha completa está disponible en el Reporte Operativo.
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Distorsión cards */}
-            {distHallazgos.map((h, i) => (
-              <div key={i} className="rounded-xl overflow-hidden flex flex-col" style={{ border: `1px solid ${C.border}` }}>
-                <div className="px-4 py-3 flex items-center justify-between gap-2" style={{ backgroundColor: C.steel4 }}>
-                  <span className="text-[11px] font-medium truncate" style={{ color: "rgba(255,255,255,0.85)", fontFamily: "Space Grotesk, sans-serif" }}>
-                    Distorsión · {h.entidad}
-                  </span>
+                {h.severidad ? (
                   <SevBadge nivel={h.severidad} />
-                </div>
-                <div className="p-4 flex flex-col gap-3 flex-1" style={{ backgroundColor: "white" }}>
-                  <p className="text-[13px] font-semibold leading-snug" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>{h.titulo}</p>
-                  <p className="text-[11px] italic leading-relaxed" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>
-                    "{h.cita}"
-                  </p>
-                  <div className="flex items-center justify-between gap-2 mt-auto pt-1">
-                    <AMRBadge label={h.accion} />
-                    <span className="text-[14px] font-semibold flex-shrink-0" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.steel4 }}>
-                      USD {h.costo}M
-                    </span>
-                  </div>
-                </div>
-              </div>
-            ))}
-            {/* Carga cards */}
-            {cargaHallazgos.map((h, i) => (
-              <div key={i} className="rounded-xl overflow-hidden flex flex-col" style={{ border: `1px solid ${C.border}` }}>
-                <div className="px-4 py-3 flex items-center justify-between gap-2" style={{ backgroundColor: C.steel3 }}>
-                  <span className="text-[11px] font-medium truncate" style={{ color: "rgba(255,255,255,0.85)", fontFamily: "Space Grotesk, sans-serif" }}>
-                    Carga · {h.entidad}
-                  </span>
+                ) : h.etiqueta ? (
                   <span className="text-[10px] px-2 py-0.5 rounded font-semibold uppercase flex-shrink-0"
                     style={{ backgroundColor: "rgba(255,255,255,0.2)", color: "white", fontFamily: "Space Grotesk, sans-serif" }}>
-                    {h.tipo}
+                    {h.etiqueta}
                   </span>
-                </div>
-                <div className="p-4 flex flex-col gap-3 flex-1" style={{ backgroundColor: "white" }}>
-                  <p className="text-[13px] font-semibold leading-snug" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>{h.tramite}</p>
+                ) : null}
+              </div>
+              <div className="p-4 flex flex-col gap-3 flex-1" style={{ backgroundColor: "white" }}>
+                <p className="text-[13px] font-semibold leading-snug" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>{h.titulo}</p>
+                {h.cita && (
                   <p className="text-[11px] italic leading-relaxed" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>
                     "{h.cita}"
                   </p>
-                  <div className="flex items-center justify-between gap-2 mt-auto pt-1">
-                    <AMRBadge label={h.accion} />
+                )}
+                <div className="flex items-center justify-between gap-2 mt-auto pt-1">
+                  {h.accion ? <AMRBadge label={h.accion} /> : <span />}
+                  {h.costoLabel && (
                     <span className="text-[14px] font-semibold flex-shrink-0" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.steel4 }}>
-                      {h.costo}
+                      {h.costoLabel}
                     </span>
-                  </div>
+                  )}
                 </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-[820px] mx-auto my-4 md:my-8 shadow-xl rounded-xl overflow-hidden" style={{ marginLeft: "auto", marginRight: "auto" }}>
+
+      {/* ── PORTADA ── */}
+      <div className="pdf-block px-10 md:px-16 py-14 md:py-16 flex flex-col" style={{ backgroundColor: C.steel4, minHeight: 520, pageBreakInside: "avoid" }}>
+        <div className="flex items-center gap-4 mb-auto">
+          <span className="text-[22px] tracking-[4px]" style={{ fontFamily: "Space Grotesk, sans-serif", fontWeight: 500, color: "white" }}>RegLAC</span>
+        </div>
+
+        <div className="mt-16">
+          <p className="text-[10px] uppercase tracking-[3px] mb-4" style={{ fontFamily: "Space Grotesk, sans-serif", color: "rgba(255,255,255,0.42)" }}>
+            Informe de Inteligencia Regulatoria
+          </p>
+          <h1 className="text-[36px] font-semibold leading-tight mb-8" style={{ fontFamily: "Space Grotesk, sans-serif", color: "white" }}>
+            Panorama Regulatorio<br />y Agenda de Reforma
+          </h1>
+          <div className="grid grid-cols-2 gap-x-12 gap-y-4 mb-10">
+            {[
+              { label: "País / Alcance",    val: data.paisLabel },
+              { label: "Fecha de corte",    val: data.fechaCorte },
+              { label: "Sector",            val: data.sectorLabel },
+              { label: "Código de informe", val: data.codigo },
+            ].map(({ label, val }) => (
+              <div key={label}>
+                <p className="text-[10px] uppercase tracking-wider mb-1" style={{ fontFamily: "Space Grotesk, sans-serif", color: "rgba(255,255,255,0.36)" }}>{label}</p>
+                <p className="text-[13px] font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: "white" }}>{val}</p>
               </div>
             ))}
           </div>
-
-          {/* Footer */}
-          <div className="mt-12 pt-6 text-center" style={{ borderTop: `1px solid ${C.border}` }}>
-            <p className="text-[10px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>
-              Banco Interamericano de Desarrollo · Plataforma RegLAC · Datos simulados · © 2026
+          <div className="pt-6" style={{ borderTop: "1px solid rgba(255,255,255,0.1)" }}>
+            <p className="text-[11px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: "rgba(255,255,255,0.3)" }}>
+              Banco Interamericano de Desarrollo · Plataforma RegLAC · © 2026
             </p>
           </div>
+        </div>
+      </div>
+
+      {/* ── BODY ── */}
+      <div className="px-8 md:px-14 py-10" style={{ backgroundColor: "white" }}>
+        {blocks}
+
+        {/* Footer */}
+        <div className="pdf-block mt-12 pt-6 text-center" style={{ borderTop: `1px solid ${C.border}`, pageBreakInside: "avoid" }}>
+          <p className="text-[10px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>
+            Banco Interamericano de Desarrollo · Plataforma RegLAC · Datos simulados · © 2026
+          </p>
         </div>
       </div>
     </div>
