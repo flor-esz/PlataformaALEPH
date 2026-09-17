@@ -2807,7 +2807,20 @@ export function buildTramitesAgregado(filtros: FiltrosTramitesAgregado, pais?: E
   for (const t of filtradas) entidadMap.set(entidadLimpia(t.entidad), (entidadMap.get(entidadLimpia(t.entidad)) ?? 0) + 1);
   const topEntidades = Array.from(entidadMap, ([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 10);
 
-  return { total, criticos, tipoUsuario, cargaPorTipo, topEntidades };
+  // topSectores: mismo criterio que topEntidades, agrupando por sector --
+  // usado por "Trámites por: Sector" (Trámites Regional).
+  const sectorMap = new Map<string, number>();
+  for (const t of filtradas) sectorMap.set(t.sector, (sectorMap.get(t.sector) ?? 0) + 1);
+  const topSectores = Array.from(sectorMap, ([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 10);
+
+  // tipoUsuarioBars: reshape de tipoUsuario a lista -- usado por
+  // "Trámites por: Tipo de usuario" (Trámites Regional).
+  const tipoUsuarioBars = [
+    { name: "Empresarial", value: tipoUsuario.empresarial },
+    { name: "Ciudadano", value: tipoUsuario.ciudadano },
+  ];
+
+  return { total, criticos, tipoUsuario, cargaPorTipo, topEntidades, topSectores, tipoUsuarioBars };
   // NO se toca costoEstimadoUSD -- se queda en COUNTRY_TRAMITES_DATA (mock).
   // Solo 3 de los 21 trámites reales tienen costo anual numérico
   // (TRAMITES_COST_MAP); no hay base real para el resto todavía. TODO:
@@ -6178,6 +6191,12 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
   const [page, setPage] = useState(0);
   const PAGE_SIZE = 10;
   const countryLabel = country === "Todos" ? "5 países" : country;
+  // Solo se usa en la rama Regional ("Trámites por: ..."), pero se declara
+  // acá arriba (no condicionado a country === "Todos") -- mismo criterio ya
+  // usado con modoBarrerasPorRegional en BarrerasScreen: un hook no puede
+  // llamarse condicionalmente sin romper las reglas de hooks si el usuario
+  // alterna entre Regional y País sin desmontar el componente.
+  const [modoTramitesPor, setModoTramitesPor] = useState<"entidad" | "sector" | "tipoUsuario" | "pais">("entidad");
 
   const filtrosTramitesAgregado: FiltrosTramitesAgregado = { sector, entidad, tipoUsuario, tipoCarga, subdimension, etapaCiclo, tamano, ano };
 
@@ -6254,7 +6273,27 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
     const prioritariosPageCount = Math.ceil(tramitesPrioritariosFilas.length / PAGE_SIZE);
     const prioritariosPageItems = tramitesPrioritariosFilas.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
-    const maxEntidad = Math.max(...td.topEntidades.map(e => e.value), 1);
+    // "Trámites por: ..." (card debajo de "Tipo de usuario") -- real desde
+    // ALL_TRAMITES (buildTramitesAgregado), ya no td.topEntidades
+    // (COUNTRY_TRAMITES_DATA["Todos"], mock) con un <select> decorativo sin
+    // lógica. "País" queda visible pero deshabilitado -- porPaisTramites ya
+    // sale calculado, listo para cuando se habilite esa comparación.
+    const tramitesAgregadoReg = buildTramitesAgregado(filtrosTramitesAgregado);
+    const porPaisTramites = COUNTRIES.map(pais => ({
+      name: pais,
+      value: buildTramitesAgregado(filtrosTramitesAgregado, pais as Exclude<Country, "Todos">).total,
+    }));
+    const TRAMITES_POR_MODO_LABEL: Record<typeof modoTramitesPor, string> = {
+      entidad: "Entidad", sector: "Sector", tipoUsuario: "Tipo de usuario", pais: "País",
+    };
+    const TRAMITES_POR_MODO_FILTRO_KEY: Record<typeof modoTramitesPor, string> = {
+      entidad: "entidad", sector: "sector", tipoUsuario: "tipoUsuario", pais: "pais",
+    };
+    const tramitesPorFilas = modoTramitesPor === "entidad" ? tramitesAgregadoReg.topEntidades
+      : modoTramitesPor === "sector" ? tramitesAgregadoReg.topSectores
+      : modoTramitesPor === "tipoUsuario" ? tramitesAgregadoReg.tipoUsuarioBars
+      : porPaisTramites;
+    const maxTramitesPor = Math.max(...tramitesPorFilas.map(e => e.value), 1);
 
     const SEV_LEGEND_TRAMITES = [
       { label: "Crítica", color: C.critico },
@@ -6516,29 +6555,35 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
             </div>
           </div>
 
-          {/* Trámites por: Entidad */}
+          {/* Trámites por: Entidad / Sector / Tipo de usuario / País */}
           <div className="rounded-xl flex flex-col h-full" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
             <div className="px-5 pt-4 pb-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${C.border}` }}>
-              <p className="text-[11px] uppercase tracking-widest font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Trámites por: Entidad</p>
+              <p className="text-[11px] uppercase tracking-widest font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Trámites por: {TRAMITES_POR_MODO_LABEL[modoTramitesPor]}</p>
               <select
-                defaultValue="entidad"
-                // TODO: sin lógica de cambio de dimensión todavía
+                value={modoTramitesPor}
+                onChange={e => setModoTramitesPor(e.target.value as typeof modoTramitesPor)}
                 style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 11, color: C.textMuted, backgroundColor: "transparent", border: `1px solid ${C.border}`, borderRadius: 6, padding: "3px 8px", cursor: "pointer" }}
               >
                 <option value="entidad">Entidad</option>
+                <option value="sector">Sector</option>
+                <option value="tipoUsuario">Tipo de usuario</option>
+                {/* Comparación entre países todavía sin resolver -- queda
+                    visible para que se sepa que existe, pero deshabilitada
+                    hasta entonces (porPaisTramites ya está calculado). */}
+                <option value="pais" disabled>País (pendiente)</option>
               </select>
             </div>
             <div className="px-5 pt-4 flex flex-col gap-2.5 flex-1">
-              {td.topEntidades.map(e => (
+              {tramitesPorFilas.map(e => (
                 <div
                   key={e.name}
                   className="flex items-center gap-3"
-                  onClick={() => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: { entidad: e.name } })}
+                  onClick={() => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: { [TRAMITES_POR_MODO_FILTRO_KEY[modoTramitesPor]]: e.name } })}
                   style={{ cursor: "pointer" }}
                 >
                   <span className="flex-shrink-0 leading-tight" style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 11, color: C.textMuted, width: 150 }}>{e.name}</span>
                   <div className="flex-1 rounded-full overflow-hidden" style={{ height: 10, backgroundColor: "#E6ECF3" }}>
-                    <div style={{ width: `${(e.value / maxEntidad) * 100}%`, height: "100%", backgroundColor: C.steel2 }} />
+                    <div style={{ width: `${(e.value / maxTramitesPor) * 100}%`, height: "100%", backgroundColor: C.steel2 }} />
                   </div>
                   <span className="flex-shrink-0 text-right" style={{ fontFamily: "Space Grotesk, sans-serif", fontSize: 12, fontWeight: 600, color: C.textMuted, width: 32 }}>{e.value}</span>
                 </div>
