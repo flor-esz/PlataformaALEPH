@@ -36,6 +36,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuCheckboxItem,
 } from "./components/ui/dropdown-menu";
 // C y los HDR_BTN_* viven en ./theme, que no importa nada de este archivo, y
 // no en App.tsx -- ver comentario junto a `export { C }` más abajo para el
@@ -2874,6 +2875,28 @@ const PANEL_CARGA_TIPO_DATA: Record<string, TipoDato> = {
 // Jerarquía data (Bolivia canonical; others scale proportionally from same shape)
 type JerarquiaBar = { nombre: string; total: number; n4: number; n3: number; n2: number; n1: number };
 
+// Mapeo posicional PROVISIONAL, pendiente de confirmar con Franco/Juanjo -- la
+// escala real de jerarquía en ALL_BARRERAS (Constitucional/Legal/Reglamentario/
+// Administrativo/Técnico o local) no es la escala oficial BID (N1 oculto,
+// N2-N6 visibles); se mapea 1 a 1 en el mismo orden jerárquico mientras se
+// define la correspondencia real. Nota: ninguna de las 17 barreras reales usa
+// "Constitucional" ni "Técnico o local" hoy, así que N2 Legislativo y N6
+// Procedimental/Trámites saldrán en 0 en todas las gráficas que usan este
+// mapeo hasta que haya datos reales en esos 2 niveles.
+const JERARQUIA_BARRERAS_A_N2N6: Record<string, string> = {
+  "Constitucional": "N2 Legislativo",
+  "Legal": "N3 Reglamentario",
+  "Reglamentario": "N4 Resolutivo / Agencias",
+  "Administrativo": "N5 Técnico-operativo",
+  "Técnico o local": "N6 Procedimental/Trámites",
+};
+// Inverso -- usado para traducir de vuelta a la escala vieja al navegar a
+// HallazgosFiltradosBarreras (barrera.jerarquia sigue usando esa escala ahí,
+// ver comentario junto a DocumentosEstructuraPanel en BarrerasScreen).
+const N2N6_A_JERARQUIA_BARRERAS: Record<string, string> = Object.fromEntries(
+  Object.entries(JERARQUIA_BARRERAS_A_N2N6).map(([vieja, n2n6]) => [n2n6, vieja]),
+);
+
 function scaleJerarquia(base: JerarquiaBar[], factor: number): JerarquiaBar[] {
   return base.map(b => ({
     nombre: b.nombre,
@@ -2928,6 +2951,200 @@ export const COUNTRY_BARRERAS_DATA: Record<Country, {
   }
   return result;
 })();
+
+// ─── Agregación real desde ALL_BARRERAS (BarrerasScreen — Regional y País) ────
+// Reemplaza a COUNTRY_BARRERAS_DATA[country] como fuente de `cd` en
+// BarrerasScreen: en vez de un total de muestra fijo por país, agrega en vivo
+// las 17 barreras con ficha completa de ALL_BARRERAS según los filtros
+// activos. Números más chicos que COUNTRY_BARRERAS_DATA (17 registros reales
+// contra los cientos de muestra) -- esperado, ver TODO en BarrerasScreen.
+export type FiltrosBarrerasAgregado = {
+  sector: string;
+  entidad: string;
+  clasificacion: string;
+  subdimension: string;
+  // Ya en escala N2-N6 (JERARQUIA_BARRERAS_A_N2N6), no la escala vieja de
+  // ALL_BARRERAS -- se traduce cada barrera antes de comparar.
+  jerarquia: string;
+  severidad: string;
+  estadoHitl: string[];
+};
+
+// "Crítica"/"Alta" -> "Crítico"/"Alto": ALL_BARRERAS hoy solo usa la forma
+// corta ("Crítico"), pero se normaliza por si algún registro futuro usa la
+// otra variante (como sí ocurre en ALL_TRAMITES).
+function normalizarSeveridadBarrera(severidad: string): string {
+  if (severidad === "Crítica") return "Crítico";
+  if (severidad === "Alta") return "Alto";
+  return severidad;
+}
+
+const SEVERIDAD_SCORE: Record<string, number> = { "Crítico": 4, "Alto": 3, "Mediano": 2, "Bajo": 1 };
+
+function nuevaJerarquiaBar(nombre: string): JerarquiaBar {
+  return { nombre, total: 0, n4: 0, n3: 0, n2: 0, n1: 0 };
+}
+
+function sumarSeveridadEnBar(bar: JerarquiaBar, severidad: string): void {
+  if (severidad === "Crítico") bar.n4++;
+  else if (severidad === "Alto") bar.n3++;
+  else if (severidad === "Mediano") bar.n2++;
+  else if (severidad === "Bajo") bar.n1++;
+  bar.total++;
+}
+
+export function buildBarrerasAgregado(
+  filtros: FiltrosBarrerasAgregado,
+  pais?: Exclude<Country, "Todos">,
+): {
+  total: number;
+  criticas: number;
+  irrPromedio: string;
+  sectoresAfectados: number;
+  validadoHitlPct: number;
+  clasificacion: Record<string, TipoDato>;
+  jerarquia: JerarquiaBar[];
+  porSector: JerarquiaBar[];
+  porEntidad: JerarquiaBar[];
+} {
+  const base = pais ? ALL_BARRERAS.filter(b => b.pais === pais) : ALL_BARRERAS;
+  const filtradas = base.filter(b => {
+    const severidad = normalizarSeveridadBarrera(b.severidad);
+    const jerarquiaN2N6 = JERARQUIA_BARRERAS_A_N2N6[b.jerarquia] ?? b.jerarquia;
+    if (filtros.sector && b.sector !== filtros.sector) return false;
+    if (filtros.entidad && b.entidad !== filtros.entidad) return false;
+    if (filtros.clasificacion && b.clasificacion !== filtros.clasificacion) return false;
+    if (filtros.subdimension && b.subdimension !== filtros.subdimension) return false;
+    if (filtros.jerarquia && jerarquiaN2N6 !== filtros.jerarquia) return false;
+    if (filtros.severidad && severidad !== filtros.severidad) return false;
+    if (filtros.estadoHitl.length > 0 && !filtros.estadoHitl.includes(b.validacion.estadoHitl)) return false;
+    return true;
+  });
+
+  const total = filtradas.length;
+  const criticas = filtradas.filter(b => normalizarSeveridadBarrera(b.severidad) === "Crítico").length;
+  const irrPromedio = total > 0
+    ? (filtradas.reduce((s, b) => s + (SEVERIDAD_SCORE[normalizarSeveridadBarrera(b.severidad)] ?? 0), 0) / total).toFixed(1)
+    : "0.0";
+  const sectoresAfectados = new Set(filtradas.map(b => b.sector)).size;
+  const publicadas = filtradas.filter(b => b.validacion.estadoHitl === "Publicado").length;
+  const validadoHitlPct = total > 0 ? Math.round((publicadas / total) * 100) : 0;
+
+  // clasificacion: reconstruida contando por (clasificacion, subdimensión)
+  // real -- Comercio solo aparece bajo "Entrada" y Innovación solo bajo
+  // "Operación" en los datos reales, así que no se fuerza el otro eje a 0.
+  const clasificacion: Record<string, TipoDato> = {};
+  for (const b of filtradas) {
+    const sev = normalizarSeveridadBarrera(b.severidad);
+    if (!clasificacion[b.clasificacion]) {
+      clasificacion[b.clasificacion] = { niveles: { n1: 0, n2: 0, n3: 0, n4: 0 }, subdimensiones: [] };
+    }
+    const dato = clasificacion[b.clasificacion];
+    if (sev === "Crítico") dato.niveles.n4++;
+    else if (sev === "Alto") dato.niveles.n3++;
+    else if (sev === "Mediano") dato.niveles.n2++;
+    else if (sev === "Bajo") dato.niveles.n1++;
+    let sub = dato.subdimensiones.find(s => s.nombre === b.subdimension);
+    if (!sub) {
+      sub = { nombre: b.subdimension, niveles: { n1: 0, n2: 0, n3: 0, n4: 0 } };
+      dato.subdimensiones.push(sub);
+    }
+    if (sev === "Crítico") sub.niveles.n4++;
+    else if (sev === "Alto") sub.niveles.n3++;
+    else if (sev === "Mediano") sub.niveles.n2++;
+    else if (sev === "Bajo") sub.niveles.n1++;
+  }
+
+  // jerarquia: 5 filas fijas N2->N6 (JERARQUIA_BARRERAS_A_N2N6), incluidas en
+  // 0 cuando no hay barreras en ese nivel.
+  const jerarquiaMap = new Map(JERARQUIA_N2N6_LABELS.map(n => [n, nuevaJerarquiaBar(n)]));
+  for (const b of filtradas) {
+    const nombre = JERARQUIA_BARRERAS_A_N2N6[b.jerarquia] ?? b.jerarquia;
+    const bar = jerarquiaMap.get(nombre);
+    if (bar) sumarSeveridadEnBar(bar, normalizarSeveridadBarrera(b.severidad));
+  }
+  const jerarquia = JERARQUIA_N2N6_LABELS.map(n => jerarquiaMap.get(n)!);
+
+  // porSector / porEntidad: top 5 por total descendente.
+  const buildTop5 = (campo: "sector" | "entidad"): JerarquiaBar[] => {
+    const map = new Map<string, JerarquiaBar>();
+    for (const b of filtradas) {
+      const nombre = b[campo];
+      if (!map.has(nombre)) map.set(nombre, nuevaJerarquiaBar(nombre));
+      sumarSeveridadEnBar(map.get(nombre)!, normalizarSeveridadBarrera(b.severidad));
+    }
+    return Array.from(map.values()).sort((a, b) => b.total - a.total).slice(0, 5);
+  };
+
+  return {
+    total, criticas, irrPromedio, sectoresAfectados, validadoHitlPct,
+    clasificacion, jerarquia, porSector: buildTop5("sector"), porEntidad: buildTop5("entidad"),
+  };
+}
+
+// ─── Métricas de instrumento por jerarquía (BarrerasPorJerarquiaCard, modos
+// "edadPromedio"/"palabras"/"longitudPromedio"/"complejidadLectura") ─────────
+// textNormativo suele ser el pasaje/artículo citado de la norma, no el
+// instrumento completo -- estas 4 métricas miden ese pasaje disponible, no el
+// documento real completo. N2 Legislativo y N6 Procedimental/Trámites van a
+// salir en 0 en las 4 (ver TODO junto a JERARQUIA_BARRERAS_A_N2N6): ninguna
+// de las 17 barreras con ficha completa tiene esos 2 niveles todavía.
+function calcularMetricasInstrumento(b: typeof ALL_BARRERAS[number]) {
+  const palabras = b.textNormativo.trim().split(/\s+/).filter(Boolean);
+  const oraciones = b.textNormativo.split(/[.;]+/).filter(s => s.trim().length > 0);
+  const promPalabrasPorOracion = palabras.length / Math.max(oraciones.length, 1);
+  return {
+    edad: 2026 - b.anio,
+    palabras: palabras.length,
+    // Heurística simple, no una fórmula de lecturabilidad validada: más
+    // palabras por oración -> mayor complejidad estimada.
+    complejidad: Math.min(100, Math.round((promPalabrasPorOracion / 40) * 100)),
+  };
+}
+
+export type MetricaBar = { nombre: string; valor: number };
+
+export function buildMetricasInstrumento(
+  filtros: { sector: string; entidad: string; clasificacion: string; severidad: string; estadoHitl: string[] },
+  pais?: Exclude<Country, "Todos">,
+): { edadPromedio: MetricaBar[]; palabras: MetricaBar[]; longitudPromedio: MetricaBar[]; complejidadLectura: MetricaBar[] } {
+  const base = pais ? ALL_BARRERAS.filter(b => b.pais === pais) : ALL_BARRERAS;
+  const filtradas = base.filter(b => {
+    const severidad = normalizarSeveridadBarrera(b.severidad);
+    if (filtros.sector && b.sector !== filtros.sector) return false;
+    if (filtros.entidad && b.entidad !== filtros.entidad) return false;
+    if (filtros.clasificacion && b.clasificacion !== filtros.clasificacion) return false;
+    if (filtros.severidad && severidad !== filtros.severidad) return false;
+    if (filtros.estadoHitl.length > 0 && !filtros.estadoHitl.includes(b.validacion.estadoHitl)) return false;
+    return true;
+  });
+
+  type Acumulador = { count: number; sumEdad: number; sumPalabras: number; sumComplejidad: number };
+  const acc = new Map<string, Acumulador>(JERARQUIA_N2N6_LABELS.map(n => [n, { count: 0, sumEdad: 0, sumPalabras: 0, sumComplejidad: 0 }]));
+  for (const b of filtradas) {
+    const nombre = JERARQUIA_BARRERAS_A_N2N6[b.jerarquia] ?? b.jerarquia;
+    const a = acc.get(nombre);
+    if (!a) continue;
+    const m = calcularMetricasInstrumento(b);
+    a.count++;
+    a.sumEdad += m.edad;
+    a.sumPalabras += m.palabras;
+    a.sumComplejidad += m.complejidad;
+  }
+
+  const buildBar = (pick: (a: Acumulador) => number): MetricaBar[] =>
+    JERARQUIA_N2N6_LABELS.map(nombre => {
+      const a = acc.get(nombre)!;
+      return { nombre, valor: a.count > 0 ? pick(a) : 0 };
+    });
+
+  return {
+    edadPromedio: buildBar(a => Math.round(a.sumEdad / a.count)),
+    palabras: buildBar(a => a.sumPalabras),
+    longitudPromedio: buildBar(a => Math.round(a.sumPalabras / a.count)),
+    complejidadLectura: buildBar(a => Math.round(a.sumComplejidad / a.count)),
+  };
+}
 
 // Mapea el IRR promedio (escala 1–4, string numérico) a una etiqueta
 // categórica de severidad — usado en el KPI "Severidad promedio" del Panel
@@ -4292,7 +4509,7 @@ function CountryDashboard({ country, onCountryChange, onNavigate }: { country: s
 // ─── BarraFiltrosBarreras ──────────────────────────────────────────────────────
 // Exportada: HallazgosFiltrados.tsx la reusa (mismo maquetado de 2 filas) en
 // vez de duplicar los 7 selects -- ver comentario junto a su import ahí.
-export function BarraFiltrosBarreras({ country, setCountry, sector, setSector, entidad, setEntidad, clasificacion, setClasificacion, subdimension, setSubdimension, jerarquia, setJerarquia, severidad, setSeveridad, sectors, entidades, jerarquiaOptions, twoRows }: {
+export function BarraFiltrosBarreras({ country, setCountry, sector, setSector, entidad, setEntidad, clasificacion, setClasificacion, subdimension, setSubdimension, jerarquia, setJerarquia, severidad, setSeveridad, estadoHitl, setEstadoHitl, sectors, entidades, jerarquiaOptions, twoRows }: {
   country: Country; setCountry: (c: Country) => void;
   sector: string; setSector: (v: string) => void;
   entidad: string; setEntidad: (v: string) => void;
@@ -4300,6 +4517,10 @@ export function BarraFiltrosBarreras({ country, setCountry, sector, setSector, e
   subdimension: string; setSubdimension: (v: string) => void;
   jerarquia: string; setJerarquia: (v: string) => void;
   severidad: string; setSeveridad: (v: string) => void;
+  // Opcional: solo BarrerasScreen (Regional/País) lo pasa hoy -- el resto de
+  // call sites (Panel País/Regional de Instrumentos, los 2 HallazgosFiltrados
+  // vía el shell) no lo reciben y el filtro simplemente no se renderiza.
+  estadoHitl?: string[]; setEstadoHitl?: (v: string[]) => void;
   sectors: string[];
   entidades: string[];
   // Override de las opciones del <select> de jerarquía -- por defecto son las
@@ -4383,14 +4604,48 @@ export function BarraFiltrosBarreras({ country, setCountry, sector, setSector, e
     </select>
   );
 
+  // Dropdown con checkboxes (no un <select> nativo, que no soporta
+  // multi-selección) -- mismas 3 opciones y colores que ESTADO_HITL_META,
+  // mismo criterio visual que el filtro "Estado HITL" de ReportesScreen.
+  const estadoHitlDropdown = estadoHitl !== undefined && setEstadoHitl ? (
+    <DropdownMenu key="estadoHitl">
+      <DropdownMenuTrigger asChild>
+        <button type="button" className="grow flex items-center justify-between gap-2" style={sel()}>
+          <span>{estadoHitl.length > 0 ? `Estado HITL (${estadoHitl.length})` : "Estado HITL"}</span>
+          <ChevronDown size={14} style={{ flexShrink: 0, color: C.textMuted }} />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="min-w-[190px]">
+        {(["Publicado", "Por decidir", "Etapa 3"] as const).map(opcion => {
+          const checked = estadoHitl.includes(opcion);
+          return (
+            <DropdownMenuCheckboxItem
+              key={opcion}
+              checked={checked}
+              onSelect={e => e.preventDefault()}
+              onCheckedChange={marcado => setEstadoHitl(marcado ? [...estadoHitl, opcion] : estadoHitl.filter(v => v !== opcion))}
+            >
+              <span
+                className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium"
+                style={{ backgroundColor: ESTADO_HITL_META[opcion].bg, color: ESTADO_HITL_META[opcion].color, fontFamily: "IBM Plex Sans, sans-serif" }}
+              >
+                {opcion}
+              </span>
+            </DropdownMenuCheckboxItem>
+          );
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  ) : null;
+
   if (twoRows) {
     return (
       <div className="flex flex-col gap-2 mb-5">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
           {paisSelect}{sectorSelect}{entidadSelect}
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {clasificacionSelect}{subdimensionSelect}{jerarquiaSelect}{severidadSelect}
+        <div className={estadoHitlDropdown ? "grid grid-cols-2 sm:grid-cols-5 gap-2" : "grid grid-cols-2 sm:grid-cols-4 gap-2"}>
+          {clasificacionSelect}{subdimensionSelect}{jerarquiaSelect}{severidadSelect}{estadoHitlDropdown}
         </div>
       </div>
     );
@@ -4398,41 +4653,83 @@ export function BarraFiltrosBarreras({ country, setCountry, sector, setSector, e
 
   return (
     <div className="flex flex-wrap gap-2 mb-5 p-0 rounded-lg">
-      {paisSelect}{sectorSelect}{entidadSelect}{clasificacionSelect}{subdimensionSelect}{jerarquiaSelect}{severidadSelect}
+      {paisSelect}{sectorSelect}{entidadSelect}{clasificacionSelect}{subdimensionSelect}{jerarquiaSelect}{severidadSelect}{estadoHitlDropdown}
     </div>
   );
 }
 
 // ─── Barreras por jerarquía normativa (card) ───────────────────────────────────
 // Reutilizada por BarrerasScreen tanto en modo por país como en el panel
-// regional (country === "Todos") — solo cambia qué `cd` se le pasa y si lleva
-// `footer` (el panel regional agrega cobertura + % validado HITL debajo).
-function BarrerasPorJerarquiaCard({ cd, jerarquiaActiva, footer, onSegmentClick }: {
-  cd: { criticas: number; jerarquia: JerarquiaBar[] };
+// regional (country === "Todos") — solo cambia qué `cd`/`metricas` se le pasa
+// y si lleva `footer` (el panel regional agrega cobertura + % validado HITL
+// debajo). El header pasó de título fijo a un <select> "BARRERAS POR:" con 7
+// modos: 3 segmentados por severidad (sector/entidad/jerarquía, sobre `cd`) y
+// 4 de un solo color (edad/palabras/longitud/complejidad de instrumento,
+// sobre `metricas`) -- ver buildBarrerasAgregado/buildMetricasInstrumento.
+export type BarrerasPorModo = "sector" | "entidad" | "jerarquia" | "edadPromedio" | "palabras" | "longitudPromedio" | "complejidadLectura";
+
+const BARRERAS_POR_MODO_LABELS: Record<BarrerasPorModo, string> = {
+  sector: "Sector",
+  entidad: "Entidad emisora",
+  jerarquia: "Jerarquía normativa",
+  edadPromedio: "Edad promedio de las normas",
+  palabras: "Cantidad de palabras del universo regulatorio",
+  longitudPromedio: "Longitud promedio de los instrumentos",
+  complejidadLectura: "Complejidad estimada de la lectura por tipo de instrumento",
+};
+const BARRERAS_POR_MODO_ORDEN: BarrerasPorModo[] = ["sector", "entidad", "jerarquia", "edadPromedio", "palabras", "longitudPromedio", "complejidadLectura"];
+const MODOS_SEGMENTADOS: BarrerasPorModo[] = ["sector", "entidad", "jerarquia"];
+
+function BarrerasPorJerarquiaCard({ cd, metricas, modo, onModoChange, jerarquiaActiva, footer, onSegmentClick, onRowClick }: {
+  cd: { criticas: number; jerarquia: JerarquiaBar[]; porSector: JerarquiaBar[]; porEntidad: JerarquiaBar[] };
+  metricas: { edadPromedio: MetricaBar[]; palabras: MetricaBar[]; longitudPromedio: MetricaBar[]; complejidadLectura: MetricaBar[] };
+  modo: BarrerasPorModo;
+  onModoChange: (m: BarrerasPorModo) => void;
   jerarquiaActiva?: string;
   footer?: React.ReactNode;
-  // Si se pasa, cada segmento de severidad dentro de cada fila se vuelve
-  // clicable, con el nombre de esa jerarquía y la severidad de ese segmento.
-  onSegmentClick?: (jerarquia: string, severidad: string) => void;
+  // Modos segmentados (sector/entidad/jerarquia) -- cada segmento de
+  // severidad dentro de cada fila se vuelve clicable, con el modo (para
+  // armar la llave de filtro correcta), el nombre de la fila y la severidad
+  // de ese segmento.
+  onSegmentClick?: (modo: "sector" | "entidad" | "jerarquia", nombre: string, severidad: string) => void;
+  // Modos de un solo color (edad/palabras/longitud/complejidad) -- cada fila
+  // completa se vuelve clicable, con el nivel N2-N6 de esa fila.
+  onRowClick?: (nivel: string) => void;
 }) {
-  const JERARQUIA_BARS = cd.jerarquia;
-  const maxTotal = Math.max(...JERARQUIA_BARS.map(b => b.total), 1);
+  const esSegmentado = MODOS_SEGMENTADOS.includes(modo);
+  const JERARQUIA_BARS: JerarquiaBar[] = modo === "sector" ? cd.porSector : modo === "entidad" ? cd.porEntidad : cd.jerarquia;
+  const METRICA_BARS: MetricaBar[] = !esSegmentado ? metricas[modo] : [];
+  const maxTotal = esSegmentado
+    ? Math.max(...JERARQUIA_BARS.map(b => b.total), 1)
+    : Math.max(...METRICA_BARS.map(b => b.valor), 1);
   const SEV_COLORS = ["#C75450", "#26456B", "#3E6E9E", "#7FA8D4"] as const;
   return (
     <div className="rounded-xl flex flex-col h-full" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
       {/* Card header */}
-      <div className="px-5 pt-4 pb-0" style={{ borderBottom: `1px solid ${C.border}` }}>
+      <div className="px-5 pt-4 pb-0 flex items-center justify-between gap-3 flex-wrap" style={{ borderBottom: `1px solid ${C.border}` }}>
         <p className="text-[11px] uppercase tracking-widest font-medium pb-4" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>
-          Barreras por jerarquía normativa
+          Barreras por:
         </p>
+        <select
+          value={modo}
+          onChange={e => onModoChange(e.target.value as BarrerasPorModo)}
+          className="mb-4"
+          style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 11, color: C.textMuted, backgroundColor: "transparent", border: `1px solid ${C.border}`, borderRadius: 6, padding: "3px 8px", cursor: "pointer", maxWidth: "100%" }}
+        >
+          {BARRERAS_POR_MODO_ORDEN.map(m => (
+            <option key={m} value={m}>{BARRERAS_POR_MODO_LABELS[m]}</option>
+          ))}
+        </select>
       </div>
 
       <div className="px-5 pt-4 pb-5 flex flex-col flex-1">
-        {/* Context line */}
-        {(() => {
+        {/* Context line — solo aplica al modo "jerarquia" (compara niveles
+            normativos entre sí); en el resto de modos no hay una lectura
+            equivalente sobre sector/entidad/métricas de instrumento. */}
+        {modo === "jerarquia" && (() => {
           const n4Total = JERARQUIA_BARS.reduce((s, b) => s + b.n4, 0);
           const n4Reformable = JERARQUIA_BARS
-            .filter(b => ["Reglamentario", "Administrativo", "Técnico o local"].includes(b.nombre))
+            .filter(b => [JERARQUIA_BARRERAS_A_N2N6["Reglamentario"], JERARQUIA_BARRERAS_A_N2N6["Administrativo"], JERARQUIA_BARRERAS_A_N2N6["Técnico o local"]].includes(b.nombre))
             .reduce((s, b) => s + b.n4, 0);
           const totalCriticas = cd.criticas;
           const reformable = n4Total > 0 ? Math.round(n4Reformable / n4Total * totalCriticas) : 0;
@@ -4452,7 +4749,7 @@ function BarrerasPorJerarquiaCard({ cd, jerarquiaActiva, footer, onSegmentClick 
 
         {/* Bars — flex-1, justified to fill height */}
         <div className="flex flex-col flex-1 justify-between">
-          {JERARQUIA_BARS.map(bar => {
+          {esSegmentado ? JERARQUIA_BARS.map(bar => {
             const active = !jerarquiaActiva || jerarquiaActiva === bar.nombre;
             const pct = (bar.total / maxTotal) * 100;
             const segs = [
@@ -4469,13 +4766,30 @@ function BarrerasPorJerarquiaCard({ cd, jerarquiaActiva, footer, onSegmentClick 
                     {segs.map((s, si) => (
                       <div
                         key={si}
-                        onClick={onSegmentClick ? () => onSegmentClick(bar.nombre, s.severidad) : undefined}
+                        onClick={onSegmentClick ? () => onSegmentClick(modo as "sector" | "entidad" | "jerarquia", bar.nombre, s.severidad) : undefined}
                         style={{ flex: s.v, backgroundColor: s.color, minWidth: s.v > 0 ? 2 : 0, cursor: onSegmentClick ? "pointer" : undefined }}
                       />
                     ))}
                   </div>
                 </div>
                 <span className="flex-shrink-0 text-right" style={{ fontFamily: "Space Grotesk, sans-serif", fontSize: 12, fontWeight: 600, color: C.textMuted, width: 28 }}>{bar.total}</span>
+              </div>
+            );
+          }) : METRICA_BARS.map(bar => {
+            const active = !jerarquiaActiva || jerarquiaActiva === bar.nombre;
+            const pct = (bar.valor / maxTotal) * 100;
+            return (
+              <div
+                key={bar.nombre}
+                className="flex items-center gap-3"
+                style={{ opacity: active ? 1 : 0.28, transition: "opacity 0.2s", cursor: onRowClick ? "pointer" : undefined }}
+                onClick={onRowClick ? () => onRowClick(bar.nombre) : undefined}
+              >
+                <span className="flex-shrink-0" style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 11, color: C.textMuted, width: 116, lineHeight: 1.3 }}>{bar.nombre}</span>
+                <div className="flex-1 rounded-full overflow-hidden" style={{ height: 14, backgroundColor: "#E6ECF3" }}>
+                  <div style={{ width: `${pct}%`, height: "100%", backgroundColor: C.steel3, borderRadius: 999 }} />
+                </div>
+                <span className="flex-shrink-0 text-right" style={{ fontFamily: "Space Grotesk, sans-serif", fontSize: 12, fontWeight: 600, color: C.textMuted, width: 40 }}>{bar.valor.toLocaleString("es")}</span>
               </div>
             );
           })}
@@ -4568,11 +4882,21 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
   const [subdimension, setSubdimension] = useState("");
   const [jerarquia, setJerarquia] = useState("");
   const [severidadFil, setSeveridadFil] = useState("");
+  const [estadoHitlFil, setEstadoHitlFil] = useState<string[]>([]);
   const [page, setPage] = useState(0);
   const PAGE_SIZE = 10;
+  // Un estado por rama (no compartido) -- Regional y País pueden mostrar un
+  // modo distinto del dropdown "BARRERAS POR:" al mismo tiempo, sin pisarse
+  // al cambiar de país (ambos useState viven siempre montados, solo se usa
+  // el de la rama que efectivamente renderiza más abajo).
+  const [modoBarrerasPorRegional, setModoBarrerasPorRegional] = useState<BarrerasPorModo>("jerarquia");
+  const [modoBarrerasPorPais, setModoBarrerasPorPais] = useState<BarrerasPorModo>("jerarquia");
 
-  const sectors = Array.from(new Set(BARRERAS_NIVEL4_LIST.map(b => b.sector)));
-  const entidades = Array.from(new Set(BARRERAS_NIVEL4_LIST.map(b => b.entidad).filter(Boolean))).sort();
+  // Opciones de sector/entidad del filtro: ALL_BARRERAS (17 barreras con
+  // ficha completa), no BARRERAS_NIVEL4_LIST (que solo cubre Bolivia) --
+  // mismo criterio que HallazgosFiltradosBarreras.tsx.
+  const sectors = Array.from(new Set(ALL_BARRERAS.map(b => b.sector))).sort();
+  const entidades = Array.from(new Set(ALL_BARRERAS.map(b => b.entidad))).sort();
 
   const filtered = BARRERAS_NIVEL4_LIST
     .filter(b => !sector || b.sector === sector)
@@ -4586,14 +4910,29 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
   const pageItems = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   const reset = (fn: (v: string) => void) => (v: string) => { fn(v); setPage(0); };
+  const resetEstadoHitl = (v: string[]) => { setEstadoHitlFil(v); setPage(0); };
 
   // ── Panel regional (país === "Todos") ───────────────────────────────────────
   // Si country !== "Todos", cae al layout por país de siempre (sin cambios,
-  // ver el return más abajo).
-  const cd = COUNTRY_BARRERAS_DATA[country] ?? COUNTRY_BARRERAS_DATA["Bolivia"];
+  // ver el return más abajo). `cd` ya no es el total de muestra fijo de
+  // COUNTRY_BARRERAS_DATA -- es el agregado real de ALL_BARRERAS (17
+  // barreras con ficha completa) según los 7 filtros activos, así que los
+  // números son bastante más chicos que antes (esperado, ver TODO en Tarea 1
+  // del prompt de Barreras).
+  const filtrosBarrerasAgregado: FiltrosBarrerasAgregado = { sector, entidad, clasificacion, subdimension, jerarquia, severidad: severidadFil, estadoHitl: estadoHitlFil };
+  const filtrosMetricasInstrumento = { sector, entidad, clasificacion, severidad: severidadFil, estadoHitl: estadoHitlFil };
+  const cd = country === "Todos"
+    ? buildBarrerasAgregado(filtrosBarrerasAgregado)
+    : buildBarrerasAgregado(filtrosBarrerasAgregado, country as Exclude<Country, "Todos">);
+  const metricasInstrumento = country === "Todos"
+    ? buildMetricasInstrumento(filtrosMetricasInstrumento)
+    : buildMetricasInstrumento(filtrosMetricasInstrumento, country as Exclude<Country, "Todos">);
   if (country === "Todos") {
     const severidadPromedio = severidadLabel(parseFloat(cd.irrPromedio));
-    const validadoHitlRegional = VALIDADO_HITL_MUESTRA["Todos"];
+    // Reactivo a los filtros (cd.validadoHitlPct) -- distinto de
+    // VALIDADO_HITL_MUESTRA["Todos"], que se sigue usando SOLO en el footer
+    // fijo de BarrerasPorJerarquiaCard (no cambia con filtros, ver Tarea 3).
+    const validadoHitlRegional = cd.validadoHitlPct;
     const paisesRow1 = COUNTRIES.slice(0, 3);
     const paisesRow2 = COUNTRIES.slice(3);
 
@@ -4663,6 +5002,7 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
       ...(subdimension ? [{ label: "Subdimensión", value: subdimension }] : []),
       ...(jerarquia ? [{ label: "Jerarquía", value: jerarquia }] : []),
       ...(severidadFil ? [{ label: "Severidad", value: severidadFil }] : []),
+      ...(estadoHitlFil.length > 0 ? [{ label: "Estado HITL", value: estadoHitlFil.join(", ") }] : []),
     ];
     const hojaResumenBar: HojaExcel = {
       nombre: "Resumen",
@@ -4670,7 +5010,7 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
         { Indicador: "Hallazgos de barreras", Valor: cd.total },
         { Indicador: "Hallazgos críticos", Valor: cd.criticas },
         { Indicador: "Severidad promedio", Valor: severidadPromedio },
-        { Indicador: "Sectores afectados", Valor: cd.sectores },
+        { Indicador: "Sectores afectados", Valor: cd.sectoresAfectados },
         { Indicador: "% Validado HITL", Valor: validadoHitlRegional },
       ],
     };
@@ -4693,7 +5033,7 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
       paisLabel: "Regional (5 países)",
       isRegional: true,
       codigo: "RegLAC-REG-BAR-2026-001",
-      sectorLabel: `Todos los sectores (${cd.sectores})`,
+      sectorLabel: `Todos los sectores (${cd.sectoresAfectados})`,
       fechaCorte: "Marzo 2026",
       filtrosActivos: filtrosActivosBarreras,
       mensajes: { titulo: "", items: [] },
@@ -4705,7 +5045,7 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
             { label: "Hallazgos de barreras", val: cd.total.toLocaleString("es-BO") },
             { label: "Hallazgos críticos", val: String(cd.criticas) },
             { label: "Severidad promedio", val: severidadPromedio, sub: `IDR ${cd.irrPromedio}/4` },
-            { label: "Sectores afectados", val: String(cd.sectores) },
+            { label: "Sectores afectados", val: String(cd.sectoresAfectados) },
             { label: "% Validado HITL", val: `${validadoHitlRegional}%` },
           ],
           severidad: {
@@ -4787,8 +5127,10 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
           subdimension={subdimension} setSubdimension={reset(setSubdimension)}
           jerarquia={jerarquia} setJerarquia={reset(setJerarquia)}
           severidad={severidadFil} setSeveridad={reset(setSeveridadFil)}
+          estadoHitl={estadoHitlFil} setEstadoHitl={resetEstadoHitl}
           sectors={sectors}
           entidades={entidades}
+          jerarquiaOptions={JERARQUIA_N2N6_LABELS}
           twoRows
         />
 
@@ -4806,7 +5148,7 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
               notaCalculo: notaSeveridadPromedio("Severidad promedio", "Todos", periodoTextoBarreras),
             })}
           />
-          <KpiCard label="Sectores afectados" value={String(cd.sectores)} />
+          <KpiCard label="Sectores afectados" value={String(cd.sectoresAfectados)} />
           <KpiCard
             label="% Validado HITL"
             value={String(validadoHitlRegional)}
@@ -4846,12 +5188,23 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
         <div className="mt-6 mb-6">
           <BarrerasPorJerarquiaCard
             cd={cd}
+            metricas={metricasInstrumento}
+            modo={modoBarrerasPorRegional}
+            onModoChange={setModoBarrerasPorRegional}
             jerarquiaActiva={jerarquia}
-            onSegmentClick={(jerarquia, severidad) => onNavigate({ screen: "hallazgos-filtrados-barreras", filtros: { jerarquia, severidad } })}
+            onSegmentClick={(modoSel, nombre, severidad) => {
+              // "jerarquia" viene ya traducida a N2-N6 (ver Tarea 0) -- se
+              // traduce de vuelta a la escala vieja para que el filtro real
+              // sobre barrera.jerarquia en HallazgosFiltradosBarreras siga
+              // encontrando resultados.
+              const valor = modoSel === "jerarquia" ? (N2N6_A_JERARQUIA_BARRERAS[nombre] ?? nombre) : nombre;
+              onNavigate({ screen: "hallazgos-filtrados-barreras", filtros: { [modoSel]: valor, severidad } });
+            }}
+            onRowClick={nivel => onNavigate({ screen: "hallazgos-filtrados", filtros: { jerarquia: nivel } })}
             footer={
               <div className="flex items-center justify-between">
                 <span style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 11, color: C.textMuted }}>Cobertura 91%</span>
-                <span style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 11, color: C.textMuted }}>{validadoHitlRegional}% validado HITL</span>
+                <span style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 11, color: C.textMuted }}>{VALIDADO_HITL_MUESTRA["Todos"]}% validado HITL</span>
               </div>
             }
           />
@@ -4937,7 +5290,12 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
     ...(subdimension ? [{ label: "Subdimensión", value: subdimension }] : []),
     ...(jerarquia ? [{ label: "Jerarquía", value: jerarquia }] : []),
     ...(severidadFil ? [{ label: "Severidad", value: severidadFil }] : []),
+    ...(estadoHitlFil.length > 0 ? [{ label: "Estado HITL", value: estadoHitlFil.join(", ") }] : []),
   ];
+  // Reactivo a los filtros (cd.validadoHitlPct) -- distinto de
+  // VALIDADO_HITL_MUESTRA[country], que se sigue usando SOLO en el footer
+  // fijo de BarrerasPorJerarquiaCard (no cambia con filtros, ver Tarea 3).
+  const validadoHitlPais = cd.validadoHitlPct;
   const totalNivelesBarPais = (n: { n4: number; n3: number; n2: number; n1: number }) => n.n4 + n.n3 + n.n2 + n.n1;
   const sevAggPais = Object.values(cd.clasificacion).reduce(
     (acc, dato) => ({ n4: acc.n4 + dato.niveles.n4, n3: acc.n3 + dato.niveles.n3, n2: acc.n2 + dato.niveles.n2, n1: acc.n1 + dato.niveles.n1 }),
@@ -4951,8 +5309,8 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
       { Indicador: "Total barreras", Valor: cd.total },
       { Indicador: "Barreras críticas", Valor: cd.criticas },
       { Indicador: "IDR promedio", Valor: cd.irrPromedio },
-      { Indicador: "Sectores afectados", Valor: cd.sectores },
-      { Indicador: "% Validado HITL", Valor: VALIDADO_HITL_MUESTRA[country] },
+      { Indicador: "Sectores afectados", Valor: cd.sectoresAfectados },
+      { Indicador: "% Validado HITL", Valor: validadoHitlPais },
     ],
   };
   const hojaClasificacionBarPais: HojaExcel = {
@@ -4982,7 +5340,7 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
     paisLabel: country,
     isRegional: false,
     codigo: `RegLAC-${(country as string).slice(0, 3).toUpperCase()}-BAR-2026-001`,
-    sectorLabel: sector || `Todos los sectores (${cd.sectores})`,
+    sectorLabel: sector || `Todos los sectores (${cd.sectoresAfectados})`,
     fechaCorte: "Marzo 2026",
     filtrosActivos: filtrosActivosBarPais,
     mensajes: { titulo: "", items: [] },
@@ -4994,8 +5352,8 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
           { label: "Total barreras", val: cd.total.toLocaleString("es-BO"), sub: countryLabelBar },
           { label: "Barreras críticas", val: String(cd.criticas), sub: "nivel 4 · atención prioritaria" },
           { label: "IDR promedio", val: severidadLabel(Number(cd.irrPromedio)), sub: `IDR ${cd.irrPromedio}/4 · Escala 1 a 4` },
-          { label: "Sectores afectados", val: String(cd.sectores), sub: "con barreras registradas" },
-          { label: "% Validado HITL", val: `${VALIDADO_HITL_MUESTRA[country]}%` },
+          { label: "Sectores afectados", val: String(cd.sectoresAfectados), sub: "con barreras registradas" },
+          { label: "% Validado HITL", val: `${validadoHitlPais}%` },
         ],
         severidad: {
           total: cd.total,
@@ -5097,8 +5455,10 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
               subdimension={subdimension} setSubdimension={reset(setSubdimension)}
               jerarquia={jerarquia} setJerarquia={reset(setJerarquia)}
               severidad={severidadFil} setSeveridad={reset(setSeveridadFil)}
+              estadoHitl={estadoHitlFil} setEstadoHitl={resetEstadoHitl}
               sectors={sectors}
               entidades={entidades}
+              jerarquiaOptions={JERARQUIA_N2N6_LABELS}
             />
 
             {/* TODO: confirmar con Franco si este panel pertenece a Barreras o
@@ -5130,15 +5490,15 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
                   notaCalculo: notaSeveridadPromedio("IDR promedio", country, periodoTextoBarreras),
                 })}
               />
-              <KpiCard label="Sectores afectados" value={String(cd.sectores)} sub="con barreras registradas" />
+              <KpiCard label="Sectores afectados" value={String(cd.sectoresAfectados)} sub="con barreras registradas" />
               <KpiCard
                 label="% Validado HITL"
-                value={String(VALIDADO_HITL_MUESTRA[country])}
+                value={String(validadoHitlPais)}
                 valueSuffix="%"
                 onClick={() => onNavigate({
                   screen: "hallazgos-filtrados-barreras",
                   filtros: { pais: country },
-                  notaCalculo: notaValidadoHitl(VALIDADO_HITL_MUESTRA[country], "barreras", country),
+                  notaCalculo: notaValidadoHitl(validadoHitlPais, "barreras", country),
                 })}
               />
             </div>
@@ -5148,7 +5508,6 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
 
       {/* IRR por clasificación · Matriz regional */}
       {(() => {
-        const cd = COUNTRY_BARRERAS_DATA[country] ?? COUNTRY_BARRERAS_DATA["Bolivia"];
         return (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4" style={{ alignItems: "stretch" }}>
             <PanelTipoSubdimension
@@ -5169,14 +5528,23 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
 
       {/* Barreras por jerarquía normativa · Canales de transmisión económica */}
       {(() => {
-        const cd = COUNTRY_BARRERAS_DATA[country] ?? COUNTRY_BARRERAS_DATA["Bolivia"];
         const coberturaPais = COBERTURA_MUESTRA[country as Exclude<Country, "Todos">] ?? COBERTURA_MUESTRA["Bolivia"];
         return (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4" style={{ alignItems: "stretch" }}>
             <BarrerasPorJerarquiaCard
               cd={cd}
+              metricas={metricasInstrumento}
+              modo={modoBarrerasPorPais}
+              onModoChange={setModoBarrerasPorPais}
               jerarquiaActiva={jerarquia}
-              onSegmentClick={(jerarquia, severidad) => onNavigate({ screen: "hallazgos-filtrados-barreras", filtros: { pais: country, jerarquia, severidad } })}
+              onSegmentClick={(modoSel, nombre, severidad) => {
+                // Mismo criterio que en la rama Regional: "jerarquia" viene en
+                // N2-N6, se traduce de vuelta a la escala vieja para que el
+                // filtro real sobre barrera.jerarquia siga funcionando.
+                const valor = modoSel === "jerarquia" ? (N2N6_A_JERARQUIA_BARRERAS[nombre] ?? nombre) : nombre;
+                onNavigate({ screen: "hallazgos-filtrados-barreras", filtros: { pais: country, [modoSel]: valor, severidad } });
+              }}
+              onRowClick={nivel => onNavigate({ screen: "hallazgos-filtrados", filtros: { jerarquia: nivel } })}
               footer={
                 <p style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 11, color: C.textMuted }}>
                   Cobertura {coberturaPais}% · {VALIDADO_HITL_MUESTRA[country]}% validado HITL
