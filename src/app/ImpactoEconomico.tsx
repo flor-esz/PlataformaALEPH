@@ -41,10 +41,14 @@ function formatUSD(v: number): string {
 const MIPYME_NIVEL_COLOR: Record<string, string> = { Alta: C.steel4, Media: C.steel3, Baja: C.steel1 };
 
 // ─── "Costo estimado por: [dimensión]" — País y Trámite son reales (ver
-// costoPorPaisFilas/costoPorTramiteDimFilas más abajo); las 6 restantes son
-// dato de muestra, coherente en escala con el costo total mock
-// (COUNTRY_TRAMITES_DATA[país].costoEstimadoUSD) -- no hay desglose real
-// detrás todavía.
+// costoPorPaisFilas/costoPorTramiteDimFilas dentro del componente, más
+// abajo); las 6 restantes son dato de muestra, coherente en escala con el
+// costo total mock (COUNTRY_TRAMITES_DATA[país].costoEstimadoUSD) -- no hay
+// desglose real detrás todavía. COSTO_POR_ENTIDAD_PCT también vive dentro
+// del componente (depende de ALL_TRAMITES en tiempo de evaluación -- a nivel
+// de módulo reabre el ciclo de import ImpactoEconomico.tsx <-> App.tsx, ver
+// comentario junto a theme.ts); las 5 de acá abajo no dependen de
+// ALL_TRAMITES, así que se quedan a nivel de módulo.
 const COSTO_POR_SECTOR_PCT: Record<string, number> = {
   "Comercio exterior": 0.28, "Manufactura": 0.22, "Agroindustria": 0.18,
   "Servicios financieros": 0.16, "Construcción": 0.10, "Otros": 0.06,
@@ -61,35 +65,11 @@ const COSTO_POR_TIEMPO_PCT: Record<string, number> = {
 const COSTO_POR_PASOS_PCT: Record<string, number> = {
   "1-3 pasos": 0.22, "4-6 pasos": 0.38, "7-9 pasos": 0.28, "10 o más pasos": 0.12,
 };
-// Entidad: top 6 más frecuentes de ALL_TRAMITES (mismo criterio de limpieza
-// de nombre -- "entidadLimpia" -- ya usado en Trámites), con porcentajes de
-// muestra en la misma escala que las dimensiones de arriba.
-const COSTO_POR_ENTIDAD_PCT: Record<string, number> = (() => {
-  const entidadLimpia = (e: string) => e.split("—")[0].split("/")[0].trim();
-  const counts = new Map<string, number>();
-  for (const t of ALL_TRAMITES) counts.set(entidadLimpia(t.entidad), (counts.get(entidadLimpia(t.entidad)) ?? 0) + 1);
-  const topNombres = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([nombre]) => nombre);
-  const pcts = [0.26, 0.21, 0.18, 0.15, 0.12, 0.08];
-  const result: Record<string, number> = {};
-  topNombres.forEach((nombre, i) => { result[nombre] = pcts[i] ?? 0; });
-  return result;
-})();
-
 function buildCostoPorDimension(pct: Record<string, number>, totalUSD: number) {
   return Object.entries(pct)
     .map(([nombre, p]) => ({ nombre, valor: Math.round(totalUSD * p) }))
     .sort((a, b) => b.valor - a.valor);
 }
-
-// "Trámite" -- real, no dato de muestra: solo 3 de los 21 trámites reales
-// tienen costo anual numérico (TRAMITES_COST_MAP); el resto no entra en esta
-// barra comparativa, mismo criterio ya usado en otras partes de la app para
-// no fabricar un valor donde no existe. No depende de `country` (son solo 3
-// registros en total, repartirlos más por país los dejaría casi vacíos).
-const costoPorTramiteDimFilas = ALL_TRAMITES
-  .filter(t => TRAMITES_COST_MAP[t.id] !== undefined)
-  .map(t => ({ nombre: t.nombre, valor: TRAMITES_COST_MAP[t.id] }))
-  .sort((a, b) => b.valor - a.valor);
 
 type ModoCostoPor = "pais" | "sector" | "entidad" | "tramite" | "usuario" | "frecuencia" | "tiempo" | "pasos";
 const COSTO_POR_MODO_LABEL: Record<ModoCostoPor, string> = {
@@ -134,6 +114,35 @@ function ImpactoEconomico({ country = "Todos", onCountryChange, onNavigate }: {
 
   const costoPorPaisFilas = COUNTRIES
     .map(pais => ({ nombre: pais, valor: COUNTRY_TRAMITES_DATA[pais].costoEstimadoUSD }))
+    .sort((a, b) => b.valor - a.valor);
+
+  // Entidad: top 6 más frecuentes de ALL_TRAMITES (mismo criterio de limpieza
+  // de nombre -- "entidadLimpia" -- ya usado en Trámites), con porcentajes de
+  // muestra en la misma escala que las demás dimensiones (COSTO_POR_*_PCT
+  // arriba). Depende de ALL_TRAMITES -- adentro del componente (no a nivel de
+  // módulo) para no revivir el ciclo de import ImpactoEconomico.tsx <-> App.tsx
+  // (mismo tipo de error ya resuelto antes, ver comentario junto a theme.ts).
+  const COSTO_POR_ENTIDAD_PCT: Record<string, number> = (() => {
+    const entidadLimpia = (e: string) => e.split("—")[0].split("/")[0].trim();
+    const counts = new Map<string, number>();
+    for (const t of ALL_TRAMITES) counts.set(entidadLimpia(t.entidad), (counts.get(entidadLimpia(t.entidad)) ?? 0) + 1);
+    const topNombres = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([nombre]) => nombre);
+    const pcts = [0.26, 0.21, 0.18, 0.15, 0.12, 0.08];
+    const result: Record<string, number> = {};
+    topNombres.forEach((nombre, i) => { result[nombre] = pcts[i] ?? 0; });
+    return result;
+  })();
+
+  // "Trámite" -- real, no dato de muestra: solo 3 de los 21 trámites reales
+  // tienen costo anual numérico (TRAMITES_COST_MAP); el resto no entra en esta
+  // barra comparativa, mismo criterio ya usado en otras partes de la app para
+  // no fabricar un valor donde no existe. No depende de `country` (son solo 3
+  // registros en total, repartirlos más por país los dejaría casi vacíos).
+  // Mismo motivo que COSTO_POR_ENTIDAD_PCT arriba para vivir adentro del
+  // componente en vez de a nivel de módulo.
+  const costoPorTramiteDimFilas = ALL_TRAMITES
+    .filter(t => TRAMITES_COST_MAP[t.id] !== undefined)
+    .map(t => ({ nombre: t.nombre, valor: TRAMITES_COST_MAP[t.id] }))
     .sort((a, b) => b.valor - a.valor);
 
   // "Costo estimado por: [dimensión]" -- País/Trámite reales, el resto dato
