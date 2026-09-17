@@ -2993,6 +2993,26 @@ function sumarSeveridadEnBar(bar: JerarquiaBar, severidad: string): void {
   bar.total++;
 }
 
+// Único lugar donde vive el filtrado de ALL_BARRERAS por los 7 filtros de
+// BarraFiltrosBarreras -- buildBarrerasAgregado y buildTopBarrerasFilas (más
+// abajo) comparten esta misma fuente de verdad, para que los KPIs/gráficas y
+// la tabla "Top barreras" nunca puedan desalinearse entre sí.
+function filtrarBarrerasParaAgregado(filtros: FiltrosBarrerasAgregado, pais?: Exclude<Country, "Todos">) {
+  const base = pais ? ALL_BARRERAS.filter(b => b.pais === pais) : ALL_BARRERAS;
+  return base.filter(b => {
+    const severidad = normalizarSeveridadBarrera(b.severidad);
+    const jerarquiaN2N6 = JERARQUIA_BARRERAS_A_N2N6[b.jerarquia] ?? b.jerarquia;
+    if (filtros.sector && b.sector !== filtros.sector) return false;
+    if (filtros.entidad && b.entidad !== filtros.entidad) return false;
+    if (filtros.clasificacion && b.clasificacion !== filtros.clasificacion) return false;
+    if (filtros.subdimension && b.subdimension !== filtros.subdimension) return false;
+    if (filtros.jerarquia && jerarquiaN2N6 !== filtros.jerarquia) return false;
+    if (filtros.severidad && severidad !== filtros.severidad) return false;
+    if (filtros.estadoHitl.length > 0 && !filtros.estadoHitl.includes(b.validacion.estadoHitl)) return false;
+    return true;
+  });
+}
+
 export function buildBarrerasAgregado(
   filtros: FiltrosBarrerasAgregado,
   pais?: Exclude<Country, "Todos">,
@@ -3007,19 +3027,7 @@ export function buildBarrerasAgregado(
   porSector: JerarquiaBar[];
   porEntidad: JerarquiaBar[];
 } {
-  const base = pais ? ALL_BARRERAS.filter(b => b.pais === pais) : ALL_BARRERAS;
-  const filtradas = base.filter(b => {
-    const severidad = normalizarSeveridadBarrera(b.severidad);
-    const jerarquiaN2N6 = JERARQUIA_BARRERAS_A_N2N6[b.jerarquia] ?? b.jerarquia;
-    if (filtros.sector && b.sector !== filtros.sector) return false;
-    if (filtros.entidad && b.entidad !== filtros.entidad) return false;
-    if (filtros.clasificacion && b.clasificacion !== filtros.clasificacion) return false;
-    if (filtros.subdimension && b.subdimension !== filtros.subdimension) return false;
-    if (filtros.jerarquia && jerarquiaN2N6 !== filtros.jerarquia) return false;
-    if (filtros.severidad && severidad !== filtros.severidad) return false;
-    if (filtros.estadoHitl.length > 0 && !filtros.estadoHitl.includes(b.validacion.estadoHitl)) return false;
-    return true;
-  });
+  const filtradas = filtrarBarrerasParaAgregado(filtros, pais);
 
   const total = filtradas.length;
   const criticas = filtradas.filter(b => normalizarSeveridadBarrera(b.severidad) === "Crítico").length;
@@ -3080,6 +3088,28 @@ export function buildBarrerasAgregado(
     total, criticas, irrPromedio, sectoresAfectados, validadoHitlPct,
     clasificacion, jerarquia, porSector: buildTop5("sector"), porEntidad: buildTop5("entidad"),
   };
+}
+
+// ─── Top N barreras según severidad, real y filtrado (tabla "Top barreras
+// según IDR" de BarrerasScreen, Regional y País) ────────────────────────────
+// Mismo filtrado que buildBarrerasAgregado (filtrarBarrerasParaAgregado), así
+// que la tabla nunca puede mostrar filas que los KPIs/gráficas de arriba no
+// cuenten. jerarquia ya viene traducida a N2-N6 (ver JERARQUIA_BARRERAS_A_N2N6).
+export function buildTopBarrerasFilas(filtros: FiltrosBarrerasAgregado, pais: Exclude<Country, "Todos"> | undefined, top: number) {
+  const filtradas = filtrarBarrerasParaAgregado(filtros, pais);
+  return [...filtradas]
+    .sort((a, b) => (SEVERIDAD_SCORE[normalizarSeveridadBarrera(b.severidad)] ?? 0)
+                   - (SEVERIDAD_SCORE[normalizarSeveridadBarrera(a.severidad)] ?? 0))
+    .slice(0, top)
+    .map(b => ({
+      id: b.id, titulo: b.titulo, pais: b.pais,
+      irr: SEVERIDAD_SCORE[normalizarSeveridadBarrera(b.severidad)] ?? 1,
+      clasificacion: b.clasificacion, subdimension: b.subdimension,
+      jerarquia: JERARQUIA_BARRERAS_A_N2N6[b.jerarquia] ?? b.jerarquia,
+      sector: b.sector, instrumento: b.instrumento,
+      canal: b.canalTransmision,
+      estadoHitl: b.validacion.estadoHitl,
+    }));
 }
 
 // ─── Métricas de instrumento por jerarquía (BarrerasPorJerarquiaCard, modos
@@ -4883,8 +4913,6 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
   const [jerarquia, setJerarquia] = useState("");
   const [severidadFil, setSeveridadFil] = useState("");
   const [estadoHitlFil, setEstadoHitlFil] = useState<string[]>([]);
-  const [page, setPage] = useState(0);
-  const PAGE_SIZE = 10;
   // Un estado por rama (no compartido) -- Regional y País pueden mostrar un
   // modo distinto del dropdown "BARRERAS POR:" al mismo tiempo, sin pisarse
   // al cambiar de país (ambos useState viven siempre montados, solo se usa
@@ -4898,19 +4926,8 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
   const sectors = Array.from(new Set(ALL_BARRERAS.map(b => b.sector))).sort();
   const entidades = Array.from(new Set(ALL_BARRERAS.map(b => b.entidad))).sort();
 
-  const filtered = BARRERAS_NIVEL4_LIST
-    .filter(b => !sector || b.sector === sector)
-    .filter(b => !entidad || b.entidad === entidad)
-    .filter(b => !clasificacion || b.clasificacion === clasificacion)
-    .filter(b => !subdimension || b.subdimension === subdimension)
-    .filter(b => !jerarquia || b.jerarquia === jerarquia)
-    .filter(b => severidadFil === "" || severidadFil === "Crítico");
-
-  const pageCount = Math.ceil(filtered.length / PAGE_SIZE);
-  const pageItems = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-
-  const reset = (fn: (v: string) => void) => (v: string) => { fn(v); setPage(0); };
-  const resetEstadoHitl = (v: string[]) => { setEstadoHitlFil(v); setPage(0); };
+  const reset = (fn: (v: string) => void) => (v: string) => fn(v);
+  const resetEstadoHitl = (v: string[]) => setEstadoHitlFil(v);
 
   // ── Panel regional (país === "Todos") ───────────────────────────────────────
   // Si country !== "Todos", cae al layout por país de siempre (sin cambios,
@@ -4948,9 +4965,10 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
       }));
     };
 
-    // TOP_BARRERAS_PAIS_TABLA ya trae "id" y "pais" por fila (ver más abajo,
-    // reutilizado tal cual — no se reconstruye la lista a mano acá).
-    const topBarrerasFilas = COUNTRIES.flatMap(pais => TOP_BARRERAS_PAIS_TABLA[pais as Exclude<Country, "Todos">] ?? []);
+    // Top 3 real por país (buildTopBarrerasFilas, misma fuente de verdad que
+    // cd/metricasInstrumento) -- ya no TOP_BARRERAS_PAIS_TABLA, que era un
+    // mock fijo sin relación con los 7 filtros activos.
+    const topBarrerasFilas = COUNTRIES.flatMap(pais => buildTopBarrerasFilas(filtrosBarrerasAgregado, pais as Exclude<Country, "Todos">, 3));
 
     const SEV_LEGEND = [
       { label: "4 · Crítico", color: "#C75450" },
@@ -4986,10 +5004,11 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
     // ninguno de los 2 cableado (el botón "Descargar" era un TODO sin
     // onClick). filtrosActivosBarreras es el mismo criterio ya usado en
     // Trámites/Impacto Económico (un chip por filtro activo de
-    // BarraFiltrosBarreras); `filtered` (BARRERAS_NIVEL4_LIST ya filtrada
-    // por esos mismos estados, arriba) alimenta los hallazgos destacados --
-    // no un pool fijo. La severidad del bloque KPI sale de sumar niveles
-    // reales por clasificación (cd.clasificacion), no de una interpolación.
+    // BarraFiltrosBarreras); `topBarrerasFilas` (buildTopBarrerasFilas sobre
+    // ALL_BARRERAS, ya filtrado por esos mismos 7 filtros) alimenta los
+    // hallazgos destacados -- no un pool fijo. La severidad del bloque KPI
+    // sale de sumar niveles reales por clasificación (cd.clasificacion), no
+    // de una interpolación.
     const totalNivelesBar = (n: { n4: number; n3: number; n2: number; n1: number }) => n.n4 + n.n3 + n.n2 + n.n1;
     const sevAgg = Object.values(cd.clasificacion).reduce(
       (acc, dato) => ({ n4: acc.n4 + dato.niveles.n4, n3: acc.n3 + dato.niveles.n3, n2: acc.n2 + dato.niveles.n2, n1: acc.n1 + dato.niveles.n1 }),
@@ -5084,9 +5103,12 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
       hallazgosDestacados: {
         titulo: "Hallazgos destacados",
         intro: "Hallazgos reales del conjunto ya filtrado en esta pantalla.",
-        items: filtered.slice(0, 2).map(b => ({
+        // topBarrerasFilas ya es real y filtrado (buildTopBarrerasFilas) --
+        // antes usaba `filtered` (BARRERAS_NIVEL4_LIST, solo Bolivia) incluso
+        // en la vista Regional de los 5 países.
+        items: topBarrerasFilas.slice(0, 2).map(b => ({
           categoria: "Distorsión",
-          entidad: b.entidad,
+          entidad: (b as { entidad?: string }).entidad,
           titulo: b.titulo,
           cita: b.instrumento,
           severidad: IRR_LABELS[b.irr],
@@ -5257,22 +5279,18 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
     );
   }
 
-  // "Top 3 barreras" -- Bolivia usa `filtered` (BARRERAS_NIVEL4_LIST YA
-  // filtrada por sector/entidad/clasificación/subdimensión/jerarquía/
-  // severidad, arriba); el resto de países cae a TOP_BARRERAS_PAIS_TABLA
-  // (catálogo de muestra propio, sin los mismos 7 filtros aplicados -- no
-  // hay registros individuales reales para esos países todavía). Hoisted
-  // acá (antes solo vivía dentro del IIFE de la tabla, más abajo) para que
-  // el Reporte Estratégico use EXACTAMENTE la misma fuente que la tabla en
-  // pantalla, no una copia recalculada aparte.
-  const esBolivia = country === "Bolivia";
-  const tablaFilas = esBolivia
-    ? pageItems.map((b, i) => ({
-        ...b,
-        canal: CANAL_POR_SUBDIMENSION_MUESTRA[b.subdimension] ?? "Modelo de negocio",
-        estadoHitl: (["Publicado", "Por decidir", "Etapa 3"] as const)[i % 3] as EstadoHitl,
-      }))
-    : TOP_BARRERAS_PAIS_TABLA[country as Exclude<Country, "Todos">] ?? TOP_BARRERAS_PAIS_TABLA["Bolivia"];
+  // "Top barreras" -- real y filtrado en los 5 países (buildTopBarrerasFilas,
+  // misma fuente de verdad que cd/metricasInstrumento), ya no un caso
+  // especial para Bolivia (BARRERAS_NIVEL4_LIST) con el resto de países
+  // cayendo a TOP_BARRERAS_PAIS_TABLA (mock fijo, sin los 7 filtros
+  // aplicados). Hoisted acá (antes solo vivía dentro del IIFE de la tabla,
+  // más abajo) para que el Reporte Estratégico use EXACTAMENTE la misma
+  // fuente que la tabla en pantalla, no una copia recalculada aparte.
+  // barrerasFiltradasPais es el TOTAL que cumple los filtros (para el badge
+  // de conteo); tablaFilas es ese mismo conjunto recortado a las 3 más
+  // severas (para la tabla).
+  const barrerasFiltradasPais = filtrarBarrerasParaAgregado(filtrosBarrerasAgregado, country as Exclude<Country, "Todos">);
+  const tablaFilas = buildTopBarrerasFilas(filtrosBarrerasAgregado, country as Exclude<Country, "Todos">, 3);
 
   // ── Excel + Reporte Estratégico (PDF) -- esta pantalla nunca tuvo Excel
   // cableado, y el PDF era una navegación aparte a reporte-pdf (Reporte
@@ -5600,19 +5618,19 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
         onSegmentClick={(nivel, estructura) => onNavigate({ screen: "hallazgos-filtrados", filtros: { jerarquia: nivel, estructura } })}
       />
 
-      {/* Top 3 barreras según IRR -- esBolivia/tablaFilas ya vienen hoisted
-          arriba (las usa también el Reporte Estratégico del header, ver
-          estrategicoDataBarPais), no una copia recalculada acá. */}
+      {/* Top 3 barreras según IRR -- tablaFilas/barrerasFiltradasPais ya
+          vienen hoisted arriba (las usa también el Reporte Estratégico del
+          header, ver estrategicoDataBarPais), no una copia recalculada acá. */}
       {(() => {
         return (
           <div className="rounded-lg" style={{ backgroundColor: C.card }}>
             <div className="p-5 border-b flex items-center justify-between" style={{ borderColor: C.border }}>
               <h3 className="text-[13px] uppercase tracking-widest font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>
                 Top 3 barreras según IDR{" "}
-                <span style={{ color: C.critico }}>({esBolivia ? (filtered.length < BARRERAS_NIVEL4_LIST.length ? filtered.length : 91) : tablaFilas.length})</span>
+                <span style={{ color: C.critico }}>({barrerasFiltradasPais.length})</span>
               </h3>
               <span style={{ fontSize: 12, color: C.textMuted, fontFamily: "IBM Plex Sans, sans-serif" }}>
-                {esBolivia ? `${filtered.length} registros filtrados` : `${tablaFilas.length} registros de muestra`}
+                {barrerasFiltradasPais.length} registros filtrados
               </span>
             </div>
             <div className="overflow-x-auto">
@@ -5636,7 +5654,7 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
                       <td className="px-4 py-3 text-[13px] font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text, maxWidth: 200 }}>{b.titulo}</td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <span style={{ fontFamily: "Space Grotesk, sans-serif", fontSize: 12, fontWeight: 600, color: C.critico }}>
-                          {b.irr} · Crítico
+                          {b.irr} · {IRR_LABELS[b.irr]}
                         </span>
                       </td>
                       <td className="px-4 py-3"><SeverityBadge level={IRR_LABELS[b.irr]} /></td>
@@ -5657,26 +5675,6 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
                 </tbody>
               </table>
             </div>
-            {esBolivia && pageCount > 1 && (
-              <div className="flex items-center justify-between px-5 py-3 border-t" style={{ borderColor: C.border }}>
-                <span style={{ fontSize: 12, color: C.textMuted, fontFamily: "IBM Plex Sans, sans-serif" }}>
-                  {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filtered.length)} de {filtered.length}
-                </span>
-                <div className="flex gap-2">
-                  {[...Array(pageCount)].map((_, i) => (
-                    <button key={i} onClick={() => setPage(i)}
-                      style={{
-                        width: 28, height: 28, borderRadius: 6, border: "none",
-                        backgroundColor: i === page ? C.steel4 : C.border,
-                        color: i === page ? "white" : C.textMuted,
-                        fontFamily: "Space Grotesk, sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer",
-                      }}>
-                      {i + 1}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         );
       })()}
