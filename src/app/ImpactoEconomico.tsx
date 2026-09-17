@@ -13,6 +13,7 @@ import {
   CANALES_TRANSMISION_TRAMITES_MUESTRA,
   TRAMITES_PRIORITARIOS_MUESTRA,
   ALL_TRAMITES,
+  TRAMITES_COST_MAP,
   usePeriodoAnalisis,
   periodoRegional,
   formatearPeriodo,
@@ -39,6 +40,63 @@ function formatUSD(v: number): string {
 // categórica aunque el nombre se parezca.
 const MIPYME_NIVEL_COLOR: Record<string, string> = { Alta: C.steel4, Media: C.steel3, Baja: C.steel1 };
 
+// ─── "Costo estimado por: [dimensión]" — País y Trámite son reales (ver
+// costoPorPaisFilas/costoPorTramiteDimFilas más abajo); las 6 restantes son
+// dato de muestra, coherente en escala con el costo total mock
+// (COUNTRY_TRAMITES_DATA[país].costoEstimadoUSD) -- no hay desglose real
+// detrás todavía.
+const COSTO_POR_SECTOR_PCT: Record<string, number> = {
+  "Comercio exterior": 0.28, "Manufactura": 0.22, "Agroindustria": 0.18,
+  "Servicios financieros": 0.16, "Construcción": 0.10, "Otros": 0.06,
+};
+const COSTO_POR_USUARIO_PCT: Record<string, number> = {
+  "Empresarial": 0.72, "Ciudadano": 0.23, "Mixto": 0.05,
+};
+const COSTO_POR_FRECUENCIA_PCT: Record<string, number> = {
+  "Alta (mensual o más)": 0.45, "Media (anual)": 0.35, "Baja (cada varios años)": 0.20,
+};
+const COSTO_POR_TIEMPO_PCT: Record<string, number> = {
+  "0-5 horas": 0.20, "6-10 horas": 0.30, "11-20 horas": 0.32, "Más de 20 horas": 0.18,
+};
+const COSTO_POR_PASOS_PCT: Record<string, number> = {
+  "1-3 pasos": 0.22, "4-6 pasos": 0.38, "7-9 pasos": 0.28, "10 o más pasos": 0.12,
+};
+// Entidad: top 6 más frecuentes de ALL_TRAMITES (mismo criterio de limpieza
+// de nombre -- "entidadLimpia" -- ya usado en Trámites), con porcentajes de
+// muestra en la misma escala que las dimensiones de arriba.
+const COSTO_POR_ENTIDAD_PCT: Record<string, number> = (() => {
+  const entidadLimpia = (e: string) => e.split("—")[0].split("/")[0].trim();
+  const counts = new Map<string, number>();
+  for (const t of ALL_TRAMITES) counts.set(entidadLimpia(t.entidad), (counts.get(entidadLimpia(t.entidad)) ?? 0) + 1);
+  const topNombres = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([nombre]) => nombre);
+  const pcts = [0.26, 0.21, 0.18, 0.15, 0.12, 0.08];
+  const result: Record<string, number> = {};
+  topNombres.forEach((nombre, i) => { result[nombre] = pcts[i] ?? 0; });
+  return result;
+})();
+
+function buildCostoPorDimension(pct: Record<string, number>, totalUSD: number) {
+  return Object.entries(pct)
+    .map(([nombre, p]) => ({ nombre, valor: Math.round(totalUSD * p) }))
+    .sort((a, b) => b.valor - a.valor);
+}
+
+// "Trámite" -- real, no dato de muestra: solo 3 de los 21 trámites reales
+// tienen costo anual numérico (TRAMITES_COST_MAP); el resto no entra en esta
+// barra comparativa, mismo criterio ya usado en otras partes de la app para
+// no fabricar un valor donde no existe. No depende de `country` (son solo 3
+// registros en total, repartirlos más por país los dejaría casi vacíos).
+const costoPorTramiteDimFilas = ALL_TRAMITES
+  .filter(t => TRAMITES_COST_MAP[t.id] !== undefined)
+  .map(t => ({ nombre: t.nombre, valor: TRAMITES_COST_MAP[t.id] }))
+  .sort((a, b) => b.valor - a.valor);
+
+type ModoCostoPor = "pais" | "sector" | "entidad" | "tramite" | "usuario" | "frecuencia" | "tiempo" | "pasos";
+const COSTO_POR_MODO_LABEL: Record<ModoCostoPor, string> = {
+  pais: "País", sector: "Sector", entidad: "Entidad", tramite: "Trámite",
+  usuario: "Tipo de usuario", frecuencia: "Frecuencia", tiempo: "Tiempo", pasos: "Pasos",
+};
+
 const selStyle: React.CSSProperties = {
   fontFamily: "IBM Plex Sans, sans-serif",
   color: C.text,
@@ -62,6 +120,7 @@ function ImpactoEconomico({ country = "Todos", onCountryChange, onNavigate }: {
   onNavigate: (v: View) => void;
 }) {
   const [page, setPage] = useState(0);
+  const [modoCostoPor, setModoCostoPor] = useState<ModoCostoPor>("pais");
 
   // Mismo criterio que Barreras/Trámites: regional usa el rango de los 5
   // países, por país usa el de ese país puntual.
@@ -76,6 +135,19 @@ function ImpactoEconomico({ country = "Todos", onCountryChange, onNavigate }: {
   const costoPorPaisFilas = COUNTRIES
     .map(pais => ({ nombre: pais, valor: COUNTRY_TRAMITES_DATA[pais].costoEstimadoUSD }))
     .sort((a, b) => b.valor - a.valor);
+
+  // "Costo estimado por: [dimensión]" -- País/Trámite reales, el resto dato
+  // de muestra escalado sobre el costo total del país activo ("Todos" usa
+  // el regional, COUNTRY_TRAMITES_DATA["Todos"] === td de arriba).
+  const totalUSDActivo = COUNTRY_TRAMITES_DATA[country].costoEstimadoUSD;
+  const costoPorFilas = modoCostoPor === "pais" ? costoPorPaisFilas
+    : modoCostoPor === "tramite" ? costoPorTramiteDimFilas
+    : modoCostoPor === "sector" ? buildCostoPorDimension(COSTO_POR_SECTOR_PCT, totalUSDActivo)
+    : modoCostoPor === "entidad" ? buildCostoPorDimension(COSTO_POR_ENTIDAD_PCT, totalUSDActivo)
+    : modoCostoPor === "usuario" ? buildCostoPorDimension(COSTO_POR_USUARIO_PCT, totalUSDActivo)
+    : modoCostoPor === "frecuencia" ? buildCostoPorDimension(COSTO_POR_FRECUENCIA_PCT, totalUSDActivo)
+    : modoCostoPor === "tiempo" ? buildCostoPorDimension(COSTO_POR_TIEMPO_PCT, totalUSDActivo)
+    : buildCostoPorDimension(COSTO_POR_PASOS_PCT, totalUSDActivo);
 
   const canalesTramites = CANALES_TRANSMISION_TRAMITES_MUESTRA[country] ?? CANALES_TRANSMISION_TRAMITES_MUESTRA["Todos"];
   const canalesBarreras = CANALES_TRANSMISION_MUESTRA[country] ?? CANALES_TRANSMISION_MUESTRA["Todos"];
@@ -337,7 +409,7 @@ function ImpactoEconomico({ country = "Todos", onCountryChange, onNavigate }: {
             <p className="text-[11px] uppercase tracking-widest font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Supuestos y metodología</p>
             <p className="text-[13px] mt-0.5" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text }}>Standard Cost Model de trámites</p>
           </div>
-          <button style={HDR_BTN_PILL}>Ver metodología</button>
+          <button style={HDR_BTN_PILL} onClick={() => onNavigate({ screen: "documentacion" })}>Ver metodología</button>
         </div>
 
         <p className="text-[10px] uppercase tracking-widest font-medium mb-2" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Fórmula</p>
@@ -377,22 +449,28 @@ function ImpactoEconomico({ country = "Todos", onCountryChange, onNavigate }: {
         </div>
       </div>
 
-      {/* Costo estimado por: [medida] */}
+      {/* Costo estimado por: [dimensión] -- País/Trámite reales, el resto
+          dato de muestra (ver COSTO_POR_*_PCT arriba). */}
       <ComposicionSimplePanel
-        label="Costo estimado por: País"
-        filas={costoPorPaisFilas}
-        formatValor={formatUSDCompacto}
+        label={`Costo estimado por: ${COSTO_POR_MODO_LABEL[modoCostoPor]}`}
+        filas={costoPorFilas}
+        formatValor={modoCostoPor === "tramite" ? formatUSD : formatUSDCompacto}
         actionLabel="Ver tabla completa"
         onAction={() => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: {} })}
         headerExtra={
-          // TODO: falta decidir si "Costo estimado por: [dimensión]" tendrá
-          // más opciones además de "País" (ej. Sector, Entidad) — visual,
-          // sin lógica de cambio de dimensión todavía.
           <select
-            defaultValue="pais"
+            value={modoCostoPor}
+            onChange={e => setModoCostoPor(e.target.value as ModoCostoPor)}
             style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 11, color: C.textMuted, backgroundColor: "transparent", border: `1px solid ${C.border}`, borderRadius: 6, padding: "3px 8px", cursor: "pointer" }}
           >
             <option value="pais">País</option>
+            <option value="sector">Sector</option>
+            <option value="entidad">Entidad</option>
+            <option value="tramite">Trámite</option>
+            <option value="usuario">Tipo de usuario</option>
+            <option value="frecuencia">Frecuencia</option>
+            <option value="tiempo">Tiempo</option>
+            <option value="pasos">Pasos</option>
           </select>
         }
       />

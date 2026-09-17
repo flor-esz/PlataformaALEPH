@@ -2710,7 +2710,9 @@ const ALL_DISTORSIONES: Distorsion[] = [
 ];
 
 // ─── Extended tramites with numeric cost + extra rows for list/pagination ─────
-const TRAMITES_COST_MAP: Record<string, number> = {
+// Exportado: ImpactoEconomico.tsx lo reusa para "Costo estimado por:
+// Trámite" (los únicos 3 de 21 trámites reales con costo anual numérico).
+export const TRAMITES_COST_MAP: Record<string, number> = {
   "cert-exportacion": 15120,
   "registro-sanitario": 850,
   "declaracion-mensual-isv": 2160,
@@ -6196,7 +6198,11 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
   // usado con modoBarrerasPorRegional en BarrerasScreen: un hook no puede
   // llamarse condicionalmente sin romper las reglas de hooks si el usuario
   // alterna entre Regional y País sin desmontar el componente.
-  const [modoTramitesPor, setModoTramitesPor] = useState<"entidad" | "sector" | "tipoUsuario" | "pais">("entidad");
+  const [modoTramitesPor, setModoTramitesPor] = useState<"entidad" | "sector">("entidad");
+  // Mismo criterio, para la card "Trámites por: ..." de la rama País
+  // ("Top 10 entidades por número de trámites") -- estado propio, no
+  // compartido con modoTramitesPor de Regional.
+  const [modoTramitesPorPais, setModoTramitesPorPais] = useState<"entidad" | "sector">("entidad");
 
   const filtrosTramitesAgregado: FiltrosTramitesAgregado = { sector, entidad, tipoUsuario, tipoCarga, subdimension, etapaCiclo, tamano, ano };
 
@@ -6276,23 +6282,16 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
     // "Trámites por: ..." (card debajo de "Tipo de usuario") -- real desde
     // ALL_TRAMITES (buildTramitesAgregado), ya no td.topEntidades
     // (COUNTRY_TRAMITES_DATA["Todos"], mock) con un <select> decorativo sin
-    // lógica. "País" queda visible pero deshabilitado -- porPaisTramites ya
-    // sale calculado, listo para cuando se habilite esa comparación.
+    // lógica. Solo Entidad/Sector -- Tipo de usuario ya se ve en el panel de
+    // al lado, y la comparación entre países no se va a usar acá.
     const tramitesAgregadoReg = buildTramitesAgregado(filtrosTramitesAgregado);
-    const porPaisTramites = COUNTRIES.map(pais => ({
-      name: pais,
-      value: buildTramitesAgregado(filtrosTramitesAgregado, pais as Exclude<Country, "Todos">).total,
-    }));
     const TRAMITES_POR_MODO_LABEL: Record<typeof modoTramitesPor, string> = {
-      entidad: "Entidad", sector: "Sector", tipoUsuario: "Tipo de usuario", pais: "País",
+      entidad: "Entidad", sector: "Sector",
     };
     const TRAMITES_POR_MODO_FILTRO_KEY: Record<typeof modoTramitesPor, string> = {
-      entidad: "entidad", sector: "sector", tipoUsuario: "tipoUsuario", pais: "pais",
+      entidad: "entidad", sector: "sector",
     };
-    const tramitesPorFilas = modoTramitesPor === "entidad" ? tramitesAgregadoReg.topEntidades
-      : modoTramitesPor === "sector" ? tramitesAgregadoReg.topSectores
-      : modoTramitesPor === "tipoUsuario" ? tramitesAgregadoReg.tipoUsuarioBars
-      : porPaisTramites;
+    const tramitesPorFilas = modoTramitesPor === "entidad" ? tramitesAgregadoReg.topEntidades : tramitesAgregadoReg.topSectores;
     const maxTramitesPor = Math.max(...tramitesPorFilas.map(e => e.value), 1);
 
     const SEV_LEGEND_TRAMITES = [
@@ -6566,11 +6565,6 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
               >
                 <option value="entidad">Entidad</option>
                 <option value="sector">Sector</option>
-                <option value="tipoUsuario">Tipo de usuario</option>
-                {/* Comparación entre países todavía sin resolver -- queda
-                    visible para que se sepa que existe, pero deshabilitada
-                    hasta entonces (porPaisTramites ya está calculado). */}
-                <option value="pais" disabled>País (pendiente)</option>
               </select>
             </div>
             <div className="px-5 pt-4 flex flex-col gap-2.5 flex-1">
@@ -6695,7 +6689,7 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
   const hojaCargaPorEje: HojaExcel = {
     nombre: "Carga por eje",
     filas: ["Accesibilidad", "Certidumbre", "Cumplimiento", "Proporcionalidad"].flatMap(tipo => {
-      const dato = td.cargaPorTipo[tipo];
+      const dato = tramitesAgregado.cargaPorTipo[tipo];
       if (!dato) return [];
       const totalTipo = dato.niveles.n4 + dato.niveles.n3 + dato.niveles.n2 + dato.niveles.n1;
       return [
@@ -6710,7 +6704,7 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
   };
   const hojaTopEntidades: HojaExcel = {
     nombre: "Top 10 entidades",
-    filas: td.topEntidades.map(e => ({ "Entidad": e.name, "Trámites": e.value })),
+    filas: tramitesAgregado.topEntidades.map(e => ({ "Entidad": e.name, "Trámites": e.value })),
   };
   const hojaEtapaCiclo: HojaExcel = {
     nombre: "Etapa del ciclo empresarial",
@@ -6819,7 +6813,7 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
               titulo: "Carga por eje",
               chartLabel: "Carga por eje",
               categorias: ["Accesibilidad", "Certidumbre", "Cumplimiento", "Proporcionalidad"].flatMap(tipo => {
-                const dato = td.cargaPorTipo[tipo];
+                const dato = tramitesAgregado.cargaPorTipo[tipo];
                 if (!dato) return [];
                 const total = dato.niveles.n4 + dato.niveles.n3 + dato.niveles.n2 + dato.niveles.n1;
                 return [{ nombre: tipo, total, componentes: [{ nombre: tipo, valor: total }] }];
@@ -6828,7 +6822,7 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
             {
               titulo: "Top 10 entidades por número de trámites",
               chartLabel: "Top 10 entidades",
-              categorias: td.topEntidades.map(e => ({ nombre: e.name, total: e.value, componentes: [{ nombre: e.name, valor: e.value }] })),
+              categorias: tramitesAgregado.topEntidades.map(e => ({ nombre: e.name, total: e.value, componentes: [{ nombre: e.name, valor: e.value }] })),
             },
             {
               titulo: "Etapa del ciclo empresarial",
@@ -6967,9 +6961,11 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
         <KpiCard label="Cargas críticas" value={String(tramitesAgregado.criticos)} sub="nivel 4" valueColor={C.critico} />
       </div>
 
-      {/* Row: Carga por tipo | Top 10 entidades — antes usaban las constantes
-          sueltas de Bolivia (PANEL_CARGA_TIPO_DATA / TOP_ENTIDADES_BOLIVIA)
-          sin importar el país; ahora usan td.cargaPorTipo / td.topEntidades */}
+      {/* Row: Carga por tipo | Trámites por: Entidad/Sector — antes usaban
+          las constantes sueltas de Bolivia (PANEL_CARGA_TIPO_DATA /
+          TOP_ENTIDADES_BOLIVIA) sin importar el país, después
+          td.cargaPorTipo/td.topEntidades (COUNTRY_TRAMITES_DATA, mock);
+          ahora ambas usan tramitesAgregado (real, ALL_TRAMITES). */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         {/* Sin onSegmentClick (a diferencia de "IDR por clasificación" en
             Barreras): los segmentos de la barra son Crítico/Alto/Mediano/Bajo,
@@ -6985,21 +6981,42 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
           infoPorTipo={EJE_CARGA_INFO}
           onRowClick={(tipoCarga, subdimension) => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: { pais: country, tipoCarga, subdimension } })}
         />
+        {/* Trámites por: Entidad / Sector -- real desde ALL_TRAMITES
+            (buildTramitesAgregado), ya no td.topEntidades
+            (COUNTRY_TRAMITES_DATA[country], mock) con título fijo. Mismo
+            criterio y alcance (solo Entidad/Sector) que la card equivalente
+            de Trámites Regional. */}
         <div className="rounded-lg p-6" style={{ backgroundColor: C.card }}>
-          <p className="text-[11px] uppercase tracking-widest mb-4 font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Top 10 entidades por número de trámites</p>
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-[11px] uppercase tracking-widest font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>
+              Trámites por: {modoTramitesPorPais === "entidad" ? "Entidad" : "Sector"}
+            </p>
+            <select
+              value={modoTramitesPorPais}
+              onChange={e => setModoTramitesPorPais(e.target.value as typeof modoTramitesPorPais)}
+              style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 11, color: C.textMuted, backgroundColor: "transparent", border: `1px solid ${C.border}`, borderRadius: 6, padding: "3px 8px", cursor: "pointer" }}
+            >
+              <option value="entidad">Entidad</option>
+              <option value="sector">Sector</option>
+            </select>
+          </div>
           <div className="flex flex-col gap-2.5">
             {(() => {
-              const maxEntidad = Math.max(...td.topEntidades.map(e => e.value), 1);
-              return td.topEntidades.map(item => (
+              const filas = modoTramitesPorPais === "entidad" ? tramitesAgregado.topEntidades : tramitesAgregado.topSectores;
+              const maxValor = Math.max(...filas.map(e => e.value), 1);
+              return filas.map(item => (
                 <div
                   key={item.name}
                   className="flex items-center gap-3"
-                  onClick={() => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: { pais: country, entidad: item.name } })}
+                  onClick={() => onNavigate({
+                    screen: "hallazgos-filtrados-tramites",
+                    filtros: modoTramitesPorPais === "entidad" ? { pais: country, entidad: item.name } : { pais: country, sector: item.name },
+                  })}
                   style={{ cursor: "pointer" }}
                 >
                   <span className="text-[11px] flex-shrink-0 leading-tight" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text, width: 188 }}>{item.name}</span>
                   <div className="flex-1 rounded-full overflow-hidden h-[8px]" style={{ backgroundColor: "#E6ECF3" }}>
-                    <div className="h-full rounded-full" style={{ width: `${(item.value / maxEntidad) * 100}%`, backgroundColor: C.steel2 }} />
+                    <div className="h-full rounded-full" style={{ width: `${(item.value / maxValor) * 100}%`, backgroundColor: C.steel2 }} />
                   </div>
                   <span className="text-[12px] font-semibold flex-shrink-0" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted, width: 24, textAlign: "right" }}>{item.value}</span>
                 </div>
