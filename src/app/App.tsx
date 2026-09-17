@@ -2720,21 +2720,116 @@ const TRAMITES_EXT = [
     ...t,
     costoNum: TRAMITES_COST_MAP[t.id] ?? 0,
     requisitos: t.pasos.length,
-    tamano: "Grande",
+    // tamano/anio reales de ALL_TRAMITES -- antes se pisaban acá con un
+    // valor fijo ("Grande"/2022), por lo que los filtros de Tamaño/Año
+    // nunca distinguían entre los 21 trámites reales. t.tamano/t.anio ya
+    // vienen del spread ...t de arriba.
     ciclo: t.etapa,
-    año: 2022,
   })),
-  { id: "habilitacion-municipal",  nombre: "Habilitación Municipal de Negocio",          entidad: "Alcaldía Municipal de La Paz",             etapa: "Apertura",   tipo: "Empresarial", sector: "Construcción y Obra Pública",         costoNum: 4200,  requisitos: 9,  tamano: "Mediana",  ciclo: "Apertura",   año: 2021, costo: { monetario: "USD 4,200/año"   }, barrerasAfectadas: [], pasos: [] },
-  { id: "permiso-operacion-mef",   nombre: "Permiso de Operación MEF",                   entidad: "Min. de Economía y Finanzas",              etapa: "Operación",  tipo: "Empresarial", sector: "Servicios Financieros y de Seguros",  costoNum: 8900,  requisitos: 12, tamano: "Grande",   ciclo: "Operación",  año: 2023, costo: { monetario: "USD 8,900/año"   }, barrerasAfectadas: [], pasos: [] },
-  { id: "registro-exportador",     nombre: "Registro de Exportador",                     entidad: "SENAVEX",                                 etapa: "Apertura",   tipo: "Empresarial", sector: "Agroindustria Cafetalera",            costoNum: 1200,  requisitos: 7,  tamano: "Pequeña",  ciclo: "Apertura",   año: 2020, costo: { monetario: "USD 1,200/op."   }, barrerasAfectadas: ["restriccion-operadores"], pasos: [] },
-  { id: "licencia-funcionamiento", nombre: "Licencia de Funcionamiento Industrial",      entidad: "SENAVEX",                                 etapa: "Apertura",   tipo: "Empresarial", sector: "Textil y Confección",                 costoNum: 3400,  requisitos: 10, tamano: "Mediana",  ciclo: "Apertura",   año: 2022, costo: { monetario: "USD 3,400/año"   }, barrerasAfectadas: [], pasos: [] },
-  { id: "declaracion-planilla",    nombre: "Declaración de Planilla Laboral",             entidad: "Min. de Trabajo, Empleo y Prev. Social", etapa: "Operación",  tipo: "Empresarial", sector: "Autopartes y Arneses",                costoNum: 960,   requisitos: 5,  tamano: "Grande",   ciclo: "Operación",  año: 2019, costo: { monetario: "USD 960/año"     }, barrerasAfectadas: [], pasos: [] },
-  { id: "autorizacion-transito",   nombre: "Autorización de Tránsito Aduanero",          entidad: "Aduana Nacional de Bolivia",              etapa: "Operación",  tipo: "Empresarial", sector: "Autopartes y Arneses",                costoNum: 2700,  requisitos: 8,  tamano: "Grande",   ciclo: "Operación",  año: 2021, costo: { monetario: "USD 2,700/op."   }, barrerasAfectadas: [], pasos: [] },
-  { id: "inspeccion-sanitaria",    nombre: "Inspección Sanitaria Periódica",              entidad: "SENASAG",                                 etapa: "Operación",  tipo: "Empresarial", sector: "Agroindustria Cafetalera",            costoNum: 1800,  requisitos: 6,  tamano: "Mediana",  ciclo: "Operación",  año: 2020, costo: { monetario: "USD 1,800/año"   }, barrerasAfectadas: [], pasos: [] },
-  { id: "registro-marca",          nombre: "Registro de Marca Comercial",                 entidad: "SENAPI",                                  etapa: "Apertura",   tipo: "Ciudadano",   sector: "Textil y Confección",                 costoNum: 480,   requisitos: 5,  tamano: "Micro",    ciclo: "Apertura",   año: 2018, costo: { monetario: "USD 480/marca"   }, barrerasAfectadas: [], pasos: [] },
-  { id: "cierre-empresa",          nombre: "Cancelación de Matrícula de Comercio",       entidad: "FUNDEMPRESA",                             etapa: "Cierre",     tipo: "Empresarial", sector: "Servicios Financieros y de Seguros",  costoNum: 620,   requisitos: 7,  tamano: "Pequeña",  ciclo: "Cierre",     año: 2023, costo: { monetario: "USD 620/trámite" }, barrerasAfectadas: [], pasos: [] },
-  { id: "autorizacion-ampliacion", nombre: "Autorización de Ampliación de Planta",       entidad: "Min. de Medio Ambiente y Agua",           etapa: "Expansión",  tipo: "Empresarial", sector: "Construcción y Obra Pública",         costoNum: 11200, requisitos: 14, tamano: "Grande",   ciclo: "Expansión",  año: 2024, costo: { monetario: "USD 11,200/op." }, barrerasAfectadas: [], pasos: [] },
+  { id: "habilitacion-municipal",  nombre: "Habilitación Municipal de Negocio",          entidad: "Alcaldía Municipal de La Paz",             etapa: "Apertura",   tipo: "Empresarial", sector: "Construcción y Obra Pública",         costoNum: 4200,  requisitos: 9,  tamano: "Mediana",  ciclo: "Apertura",   anio: 2021, costo: { monetario: "USD 4,200/año"   }, barrerasAfectadas: [], pasos: [] },
+  { id: "permiso-operacion-mef",   nombre: "Permiso de Operación MEF",                   entidad: "Min. de Economía y Finanzas",              etapa: "Operación",  tipo: "Empresarial", sector: "Servicios Financieros y de Seguros",  costoNum: 8900,  requisitos: 12, tamano: "Grande",   ciclo: "Operación",  anio: 2023, costo: { monetario: "USD 8,900/año"   }, barrerasAfectadas: [], pasos: [] },
+  { id: "registro-exportador",     nombre: "Registro de Exportador",                     entidad: "SENAVEX",                                 etapa: "Apertura",   tipo: "Empresarial", sector: "Agroindustria Cafetalera",            costoNum: 1200,  requisitos: 7,  tamano: "Pequeña",  ciclo: "Apertura",   anio: 2020, costo: { monetario: "USD 1,200/op."   }, barrerasAfectadas: ["restriccion-operadores"], pasos: [] },
+  { id: "licencia-funcionamiento", nombre: "Licencia de Funcionamiento Industrial",      entidad: "SENAVEX",                                 etapa: "Apertura",   tipo: "Empresarial", sector: "Textil y Confección",                 costoNum: 3400,  requisitos: 10, tamano: "Mediana",  ciclo: "Apertura",   anio: 2022, costo: { monetario: "USD 3,400/año"   }, barrerasAfectadas: [], pasos: [] },
+  { id: "declaracion-planilla",    nombre: "Declaración de Planilla Laboral",             entidad: "Min. de Trabajo, Empleo y Prev. Social", etapa: "Operación",  tipo: "Empresarial", sector: "Autopartes y Arneses",                costoNum: 960,   requisitos: 5,  tamano: "Grande",   ciclo: "Operación",  anio: 2019, costo: { monetario: "USD 960/año"     }, barrerasAfectadas: [], pasos: [] },
+  { id: "autorizacion-transito",   nombre: "Autorización de Tránsito Aduanero",          entidad: "Aduana Nacional de Bolivia",              etapa: "Operación",  tipo: "Empresarial", sector: "Autopartes y Arneses",                costoNum: 2700,  requisitos: 8,  tamano: "Grande",   ciclo: "Operación",  anio: 2021, costo: { monetario: "USD 2,700/op."   }, barrerasAfectadas: [], pasos: [] },
+  { id: "inspeccion-sanitaria",    nombre: "Inspección Sanitaria Periódica",              entidad: "SENASAG",                                 etapa: "Operación",  tipo: "Empresarial", sector: "Agroindustria Cafetalera",            costoNum: 1800,  requisitos: 6,  tamano: "Mediana",  ciclo: "Operación",  anio: 2020, costo: { monetario: "USD 1,800/año"   }, barrerasAfectadas: [], pasos: [] },
+  { id: "registro-marca",          nombre: "Registro de Marca Comercial",                 entidad: "SENAPI",                                  etapa: "Apertura",   tipo: "Ciudadano",   sector: "Textil y Confección",                 costoNum: 480,   requisitos: 5,  tamano: "Micro",    ciclo: "Apertura",   anio: 2018, costo: { monetario: "USD 480/marca"   }, barrerasAfectadas: [], pasos: [] },
+  { id: "cierre-empresa",          nombre: "Cancelación de Matrícula de Comercio",       entidad: "FUNDEMPRESA",                             etapa: "Cierre",     tipo: "Empresarial", sector: "Servicios Financieros y de Seguros",  costoNum: 620,   requisitos: 7,  tamano: "Pequeña",  ciclo: "Cierre",     anio: 2023, costo: { monetario: "USD 620/trámite" }, barrerasAfectadas: [], pasos: [] },
+  { id: "autorizacion-ampliacion", nombre: "Autorización de Ampliación de Planta",       entidad: "Min. de Medio Ambiente y Agua",           etapa: "Expansión",  tipo: "Empresarial", sector: "Construcción y Obra Pública",         costoNum: 11200, requisitos: 14, tamano: "Grande",   ciclo: "Expansión",  anio: 2024, costo: { monetario: "USD 11,200/op." }, barrerasAfectadas: [], pasos: [] },
 ];
+
+// ─── Agregación real desde ALL_TRAMITES (TramitesScreen — Regional y País) ────
+// Mismo patrón que filtrarBarrerasParaAgregado/buildBarrerasAgregado en
+// Barreras: en vez de leer totales de muestra fijos por país
+// (COUNTRY_TRAMITES_DATA), agrega en vivo los 21 trámites con ficha completa
+// de ALL_TRAMITES según los filtros activos.
+export type FiltrosTramitesAgregado = {
+  sector: string;
+  entidad: string;
+  tipoUsuario: string;
+  tipoCarga: string;
+  subdimension: string;
+  etapaCiclo: string;
+  tamano: string;
+  ano: string;
+};
+
+// Único lugar donde vive el filtrado de ALL_TRAMITES por los 8 filtros de
+// TramitesScreen -- buildTramitesAgregado y buildTopTramitesFilas comparten
+// esta misma fuente de verdad. Mismo criterio de comparación de entidad/
+// tamano/ano que filtrarTramites() (Reportes), reusado acá en vez de
+// reinventarlo.
+function filtrarTramitesParaAgregado(filtros: FiltrosTramitesAgregado, pais?: Exclude<Country, "Todos">) {
+  const base = pais ? ALL_TRAMITES.filter(t => t.pais === pais) : ALL_TRAMITES;
+  return base.filter(t => {
+    if (filtros.sector && t.sector !== filtros.sector) return false;
+    if (filtros.entidad && t.entidad.split("—")[0].split("/")[0].trim() !== filtros.entidad) return false;
+    if (filtros.tipoUsuario && t.tipo !== filtros.tipoUsuario) return false;
+    if (filtros.tipoCarga && t.tipoCarga !== filtros.tipoCarga) return false;
+    if (filtros.subdimension && t.subdimension !== filtros.subdimension) return false;
+    if (filtros.etapaCiclo && t.etapa !== filtros.etapaCiclo) return false;
+    if (filtros.tamano && t.tamano !== filtros.tamano) return false;
+    if (filtros.ano && t.anio !== Number(filtros.ano)) return false;
+    return true;
+  });
+}
+
+export function buildTramitesAgregado(filtros: FiltrosTramitesAgregado, pais?: Exclude<Country, "Todos">) {
+  const filtradas = filtrarTramitesParaAgregado(filtros, pais);
+  const total = filtradas.length;
+  const criticos = filtradas.filter(t => t.severidad === "Crítica").length;
+  const tipoUsuario = {
+    empresarial: filtradas.filter(t => t.tipo === "Empresarial").length,
+    ciudadano: filtradas.filter(t => t.tipo === "Ciudadano").length,
+  };
+  // cargaPorTipo: mismo shape que cd.clasificacion en Barreras
+  // (Record<string, TipoDato>), pero con 4 llaves (Accesibilidad/
+  // Certidumbre/Cumplimiento/Proporcionalidad) en vez de Entrada/Operación.
+  // severidad de trámites solo tiene 2 niveles reales (Crítica/Alta) --
+  // Crítica -> n4, Alta -> n3; n2/n1 quedan en 0 con los datos reales
+  // actuales (no hay "Mediano"/"Bajo" en la muestra, igual que N2/N6 en
+  // Barreras -- no es un bug).
+  const cargaPorTipo: Record<string, TipoDato> = {};
+  for (const t of filtradas) {
+    if (!cargaPorTipo[t.tipoCarga]) cargaPorTipo[t.tipoCarga] = { niveles: { n1: 0, n2: 0, n3: 0, n4: 0 }, subdimensiones: [] };
+    const dato = cargaPorTipo[t.tipoCarga];
+    const nivel = t.severidad === "Crítica" ? "n4" : "n3";
+    dato.niveles[nivel]++;
+    let sub = dato.subdimensiones.find(s => s.nombre === t.subdimension);
+    if (!sub) { sub = { nombre: t.subdimension, niveles: { n1: 0, n2: 0, n3: 0, n4: 0 } }; dato.subdimensiones.push(sub); }
+    sub.niveles[nivel]++;
+  }
+  // topEntidades: igual que td.topEntidades pero contado en vivo sobre el
+  // filtrado real (mismo criterio de limpieza de nombre que sector/entidad
+  // de arriba).
+  const entidadLimpia = (e: string) => e.split("—")[0].split("/")[0].trim();
+  const entidadMap = new Map<string, number>();
+  for (const t of filtradas) entidadMap.set(entidadLimpia(t.entidad), (entidadMap.get(entidadLimpia(t.entidad)) ?? 0) + 1);
+  const topEntidades = Array.from(entidadMap, ([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 10);
+
+  return { total, criticos, tipoUsuario, cargaPorTipo, topEntidades };
+  // NO se toca costoEstimadoUSD -- se queda en COUNTRY_TRAMITES_DATA (mock).
+  // Solo 3 de los 21 trámites reales tienen costo anual numérico
+  // (TRAMITES_COST_MAP); no hay base real para el resto todavía. TODO:
+  // pendiente de datos de costo por trámite para el resto.
+}
+
+// ─── Top N trámites según severidad, real y filtrado (tabla "Trámites
+// prioritarios" de TramitesScreen, Regional y País) — mismo patrón que
+// buildTopBarrerasFilas en Barreras. ──────────────────────────────────────────
+export function buildTopTramitesFilas(filtros: FiltrosTramitesAgregado, pais: Exclude<Country, "Todos"> | undefined, top: number) {
+  const filtradas = filtrarTramitesParaAgregado(filtros, pais);
+  return [...filtradas]
+    .sort((a, b) => (b.severidad === "Crítica" ? 1 : 0) - (a.severidad === "Crítica" ? 1 : 0))
+    .slice(0, top)
+    .map(t => ({
+      id: t.id, tramite: t.nombre, entidad: t.entidad,
+      eje: `${t.tipoCarga} · ${t.subdimension}`,
+      costo: TRAMITES_COST_MAP[t.id] ? `USD ${TRAMITES_COST_MAP[t.id].toLocaleString("es")}/año` : "—",
+      severidad: t.severidad, estadoHitl: t.estadoHitl ?? "Por decidir",
+      accion: t.accionSugerida, tipoUsuario: t.tipo, sector: t.sector,
+    }));
+}
 
 // ─── Regional Dashboard data ───────────────────────────────────────────────────
 const COUNTRY_CARGA: Record<string, { total: number; criticas: number }> = {
@@ -3054,13 +3149,14 @@ export function buildBarrerasAgregado(
     else if (sev === "Bajo") dato.niveles.n1++;
     let sub = dato.subdimensiones.find(s => s.nombre === b.subdimension);
     if (!sub) {
-      sub = { nombre: b.subdimension, niveles: { n1: 0, n2: 0, n3: 0, n4: 0 } };
+      sub = { nombre: b.subdimension, niveles: { n1: 0, n2: 0, n3: 0, n4: 0 }, publicadas: 0 };
       dato.subdimensiones.push(sub);
     }
     if (sev === "Crítico") sub.niveles.n4++;
     else if (sev === "Alto") sub.niveles.n3++;
     else if (sev === "Mediano") sub.niveles.n2++;
     else if (sev === "Bajo") sub.niveles.n1++;
+    if (b.validacion.estadoHitl === "Publicado") sub.publicadas = (sub.publicadas ?? 0) + 1;
   }
 
   // jerarquia: 5 filas fijas N2->N6 (JERARQUIA_BARRERAS_A_N2N6), incluidas en
@@ -3109,6 +3205,7 @@ export function buildTopBarrerasFilas(filtros: FiltrosBarrerasAgregado, pais: Ex
       sector: b.sector, instrumento: b.instrumento,
       canal: b.canalTransmision,
       estadoHitl: b.validacion.estadoHitl,
+      entidad: b.entidad,
     }));
 }
 
@@ -4953,16 +5050,23 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
     const paisesRow1 = COUNTRIES.slice(0, 3);
     const paisesRow2 = COUNTRIES.slice(3);
 
-    // dato de muestra: no hay desglose real de % validado HITL por
-    // subdimensión, se usa el mismo % del país en todas sus filas de "Entrada".
-    const buildEntradaPorPais = (pais: Country) => {
-      const cdPais = COUNTRY_BARRERAS_DATA[pais];
-      const subdims = cdPais.clasificacion["Entrada"]?.subdimensiones ?? [];
-      return subdims.map(s => ({
-        nombre: s.nombre,
-        total: s.niveles.n4 + s.niveles.n3 + s.niveles.n2 + s.niveles.n1,
-        validadoPct: VALIDADO_HITL_MUESTRA[pais],
-      }));
+    // Real y por eje (Entrada/Operación), desde ALL_BARRERAS -- ya no
+    // COUNTRY_BARRERAS_DATA (mock, solo Entrada, % Validado repetido del
+    // país en todas las filas). s.publicadas viene de buildBarrerasAgregado
+    // (contador real por (clasificación, subdimensión) del país).
+    const buildSubdimensionesPorPais = (pais: Exclude<Country, "Todos">, eje: "Entrada" | "Operación") => {
+      const cdPais = buildBarrerasAgregado(filtrosBarrerasAgregado, pais);
+      const subdims = cdPais.clasificacion[eje]?.subdimensiones ?? [];
+      return subdims.map(s => {
+        const total = s.niveles.n4 + s.niveles.n3 + s.niveles.n2 + s.niveles.n1;
+        return {
+          nombre: s.nombre,
+          total,
+          validadoPct: s.publicadas !== undefined && total > 0
+            ? Math.round((s.publicadas / total) * 100)
+            : 0,
+        };
+      });
     };
 
     // Top 3 real por país (buildTopBarrerasFilas, misma fuente de verdad que
@@ -4992,11 +5096,14 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
         key={pais}
         pais={pais}
         total={COUNTRY_BARRERAS_DATA[pais].total}
-        entrada={buildEntradaPorPais(pais)}
+        ejes={[
+          { nombre: "Entrada", datos: buildSubdimensionesPorPais(pais as Exclude<Country, "Todos">, "Entrada") },
+          { nombre: "Operación", datos: buildSubdimensionesPorPais(pais as Exclude<Country, "Todos">, "Operación") },
+        ]}
         coberturaPct={COBERTURA_MUESTRA[pais as Exclude<Country, "Todos">]}
         validadoHitlPct={VALIDADO_HITL_MUESTRA[pais]}
         onVerBarreras={() => onCountryChange?.(pais)}
-        onEntradaClick={(subdimension) => onNavigate({ screen: "hallazgos-filtrados-barreras", filtros: { pais, clasificacion: "Entrada", subdimension } })}
+        onEjeItemClick={(eje, subdimension) => onNavigate({ screen: "hallazgos-filtrados-barreras", filtros: { pais, clasificacion: eje, subdimension } })}
       />
     );
 
@@ -5108,7 +5215,7 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
         // en la vista Regional de los 5 países.
         items: topBarrerasFilas.slice(0, 2).map(b => ({
           categoria: "Distorsión",
-          entidad: (b as { entidad?: string }).entidad,
+          entidad: b.entidad,
           titulo: b.titulo,
           cita: b.instrumento,
           severidad: IRR_LABELS[b.irr],
@@ -5419,7 +5526,7 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
       intro: `Barreras reales del conjunto ya filtrado en ${countryLabelBar}.`,
       items: tablaFilas.slice(0, 2).map(b => ({
         categoria: "Distorsión",
-        entidad: (b as { entidad?: string }).entidad,
+        entidad: b.entidad,
         titulo: b.titulo,
         cita: b.instrumento,
         severidad: IRR_LABELS[b.irr],
@@ -6049,23 +6156,14 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
   const PAGE_SIZE = 10;
   const countryLabel = country === "Todos" ? "5 países" : country;
 
-  const sectors = Array.from(new Set(TRAMITES_EXT.map(t => t.sector)));
-  const entidades = Array.from(new Set(TRAMITES_EXT.map(t => t.entidad.split("—")[0].split("/")[0].trim())));
+  const filtrosTramitesAgregado: FiltrosTramitesAgregado = { sector, entidad, tipoUsuario, tipoCarga, subdimension, etapaCiclo, tamano, ano };
+
+  // Opciones de sector/entidad del filtro: ALL_TRAMITES (21 trámites con
+  // ficha completa), no TRAMITES_EXT (que agrega 10 filas de relleno sin
+  // ficha real) -- mismo criterio que Barreras.
+  const sectors = Array.from(new Set(ALL_TRAMITES.map(t => t.sector))).sort();
+  const entidades = Array.from(new Set(ALL_TRAMITES.map(t => t.entidad.split("—")[0].split("/")[0].trim()))).sort();
   const subdimOpts = tipoCarga ? (SUBDIMS_BY_TIPO_CARGA[tipoCarga] ?? []) : [];
-
-  const filtered = TRAMITES_EXT
-    .filter(t => !sector || t.sector === sector)
-    .filter(t => !entidad || t.entidad.split("—")[0].split("/")[0].trim() === entidad)
-    .filter(t => !tipoUsuario || t.tipo === tipoUsuario)
-    .filter(t => !tipoCarga || true)
-    .filter(t => !subdimension || true)
-    .filter(t => !etapaCiclo || t.etapa === etapaCiclo)
-    .filter(t => !tamano || t.tamano === tamano)
-    .filter(t => !ano || String((t as any).año) === ano)
-    .sort((a, b) => b.costoNum - a.costoNum);
-
-  const pageCount = Math.ceil(filtered.length / PAGE_SIZE);
-  const pageItems = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   const selStyle: React.CSSProperties = {
     fontFamily: "IBM Plex Sans, sans-serif",
@@ -6094,34 +6192,41 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
     const paisesRow1 = COUNTRIES.slice(0, 3);
     const paisesRow2 = COUNTRIES.slice(3);
 
+    // Real y por los 4 ejes (Accesibilidad/Certidumbre/Cumplimiento/
+    // Proporcionalidad), desde ALL_TRAMITES -- ya no
+    // COUNTRY_TRAMITES_DATA["Accesibilidad"] a secas. Sin validadoPct --
+    // Trámites no tiene ese concepto en esta card (mismo criterio que ya usa
+    // hoy showEntradaSelect=false: la barra sólida sin leyenda "% Validado").
+    const buildSubdimensionesTramitePorPais = (pais: Exclude<Country, "Todos">, tipoCarga: string) => {
+      const tdPais = buildTramitesAgregado(filtrosTramitesAgregado, pais);
+      const subdims = tdPais.cargaPorTipo[tipoCarga]?.subdimensiones ?? [];
+      return subdims.map(s => ({ nombre: s.nombre, total: s.niveles.n4 + s.niveles.n3 + s.niveles.n2 + s.niveles.n1 }));
+    };
+
     const paisCard = (pais: Country) => {
       const tdPais = COUNTRY_TRAMITES_DATA[pais];
-      const subdims = tdPais.cargaPorTipo["Accesibilidad"]?.subdimensiones ?? [];
-      const entrada = subdims.map(s => ({
-        nombre: s.nombre,
-        total: s.niveles.n4 + s.niveles.n3 + s.niveles.n2 + s.niveles.n1,
-      }));
       return (
         <BarrerasPorPaisCard
           key={pais}
           pais={pais}
           total={tdPais.total}
-          entrada={entrada}
+          ejes={["Accesibilidad", "Certidumbre", "Cumplimiento", "Proporcionalidad"].map(tipoCarga => ({
+            nombre: tipoCarga, datos: buildSubdimensionesTramitePorPais(pais as Exclude<Country, "Todos">, tipoCarga),
+          }))}
           coberturaPct={COBERTURA_MUESTRA[pais as Exclude<Country, "Todos">]}
           validadoHitlPct={TRAMITES_VALIDADO_HITL_MUESTRA[pais]}
           onVerBarreras={() => onCountryChange?.(pais)}
           buttonLabel="Ver trámites por país →"
-          showEntradaSelect={false}
-          onEntradaClick={(subdimension) => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: { pais, tipoCarga: "Accesibilidad", subdimension } })}
+          onEjeItemClick={(tipoCarga, subdimension) => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: { pais, tipoCarga, subdimension } })}
         />
       );
     };
 
-    // dato de muestra — no hay catálogo real de trámites individuales
-    // priorizados para ningún país todavía (mismo pendiente ya anotado en
-    // Barreras).
+    // Top 3 real por país (buildTopTramitesFilas, misma fuente de verdad que
+    // buildSubdimensionesTramitePorPais) -- ya no TRAMITES_PRIORITARIOS_
+    // MUESTRA, un mock fijo sin relación con los 8 filtros activos.
     const tramitesPrioritariosFilas = COUNTRIES.flatMap(pais =>
-      (TRAMITES_PRIORITARIOS_MUESTRA[pais as Exclude<Country, "Todos">] ?? []).map(t => ({ pais, ...t }))
+      buildTopTramitesFilas(filtrosTramitesAgregado, pais as Exclude<Country, "Todos">, 3).map(t => ({ pais, ...t })),
     );
     const prioritariosPageCount = Math.ceil(tramitesPrioritariosFilas.length / PAGE_SIZE);
     const prioritariosPageItems = tramitesPrioritariosFilas.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
@@ -6495,10 +6600,15 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
     );
   }
 
-  // "Trámites prioritarios" — misma expresión que ya usaba la tabla más abajo
-  // (hoisted acá para no calcularla 2 veces: la usan tanto el Excel del header
-  // como la tabla).
-  const filasPais = TRAMITES_PRIORITARIOS_MUESTRA[country as Exclude<Country, "Todos">] ?? TRAMITES_PRIORITARIOS_MUESTRA["Bolivia"];
+  // "Trámites prioritarios" — real y filtrado (buildTopTramitesFilas, ya no
+  // TRAMITES_PRIORITARIOS_MUESTRA). Hoisted acá para no calcularla 2 veces:
+  // la usan tanto el Excel del header como la tabla.
+  const filasPais = buildTopTramitesFilas(filtrosTramitesAgregado, country as Exclude<Country, "Todos">, 3);
+  // Reactivo a los 8 filtros -- alimenta "CARGA POR EJE" y los 4 KPIs
+  // (Total/Empresariales/Ciudadanos/Cargas críticas). costoEstimadoUSD NO
+  // sale de acá -- sigue en td (COUNTRY_TRAMITES_DATA), ver TODO junto a
+  // buildTramitesAgregado.
+  const tramitesAgregado = buildTramitesAgregado(filtrosTramitesAgregado, country as Exclude<Country, "Todos">);
 
   // ── Hojas del Excel -- una por cada bloque visible en esta pantalla (no
   // solo "Trámites prioritarios"): los 5 KPIs, "Carga por eje" (con su
@@ -6766,10 +6876,12 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
         </select>
       </div>
 
-      {/* KPIs — antes hardcodeados sin importar el país, ahora alimentados
-          desde COUNTRY_TRAMITES_DATA[country] */}
+      {/* KPIs — Total/Empresariales/Ciudadanos/Cargas críticas ahora
+          reactivos a los 8 filtros (buildTramitesAgregado, sobre
+          ALL_TRAMITES); Costo estimado sigue en td (COUNTRY_TRAMITES_DATA) --
+          ver TODO junto a buildTramitesAgregado. */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
-        <KpiCard label="Total trámites" value={td.total.toLocaleString("es-BO")} sub={countryLabel} />
+        <KpiCard label="Total trámites" value={tramitesAgregado.total.toLocaleString("es-BO")} sub={countryLabel} />
         <KpiCard
           label="Costo estimado de trámites"
           value={`USD ${(td.costoEstimadoUSD / 1_000_000).toFixed(1)} M`}
@@ -6782,9 +6894,9 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
             notaCalculo: notaCostoTramites(country),
           })}
         />
-        <KpiCard label="Empresariales" value={String(td.tipoUsuario.empresarial)} sub={`${td.total > 0 ? Math.round((td.tipoUsuario.empresarial / td.total) * 100) : 0}% del total`} />
-        <KpiCard label="Ciudadanos" value={String(td.tipoUsuario.ciudadano)} sub={`${td.total > 0 ? Math.round((td.tipoUsuario.ciudadano / td.total) * 100) : 0}% del total`} />
-        <KpiCard label="Cargas críticas" value={String(td.criticos)} sub="nivel 4" valueColor={C.critico} />
+        <KpiCard label="Empresariales" value={String(tramitesAgregado.tipoUsuario.empresarial)} sub={`${tramitesAgregado.total > 0 ? Math.round((tramitesAgregado.tipoUsuario.empresarial / tramitesAgregado.total) * 100) : 0}% del total`} />
+        <KpiCard label="Ciudadanos" value={String(tramitesAgregado.tipoUsuario.ciudadano)} sub={`${tramitesAgregado.total > 0 ? Math.round((tramitesAgregado.tipoUsuario.ciudadano / tramitesAgregado.total) * 100) : 0}% del total`} />
+        <KpiCard label="Cargas críticas" value={String(tramitesAgregado.criticos)} sub="nivel 4" valueColor={C.critico} />
       </div>
 
       {/* Row: Carga por tipo | Top 10 entidades — antes usaban las constantes
@@ -6801,7 +6913,7 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
         <PanelTipoSubdimension
           label="CARGA POR EJE"
           tipos={["Accesibilidad", "Certidumbre", "Cumplimiento", "Proporcionalidad"]}
-          datos={td.cargaPorTipo}
+          datos={tramitesAgregado.cargaPorTipo}
           onRowClick={(tipoCarga, subdimension) => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: { pais: country, tipoCarga, subdimension } })}
         />
         <div className="rounded-lg p-6" style={{ backgroundColor: C.card }}>
@@ -6883,9 +6995,10 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
         />
       </div>
 
-      {/* Trámites prioritarios — dato de muestra (TRAMITES_PRIORITARIOS_MUESTRA),
-          filtrado por país; antes esta tabla mostraba TRAMITES_EXT (catálogo
-          de Bolivia) sin importar el país seleccionado en el filtro de arriba. */}
+      {/* Trámites prioritarios — real y filtrado por país (buildTopTramitesFilas,
+          ver `filasPais` arriba); antes mostraba TRAMITES_PRIORITARIOS_MUESTRA
+          (mock fijo, sin los 8 filtros activos), y antes de eso TRAMITES_EXT
+          (catálogo de Bolivia) sin importar el país seleccionado. */}
       {(() => {
         // `filasPais` ya viene calculada más arriba (la reusa también el
         // Excel del header, ver hojaTramitesPrioritarios).

@@ -25,6 +25,11 @@ export type NivelData = { n1: number; n2: number; n3: number; n4: number };
 export type SubdimensionDato = {
   nombre: string;
   niveles: NivelData;
+  // Opcional: cuántas de esta (clasificación, subdimensión) tienen
+  // validacion.estadoHitl === "Publicado" -- usado por pantallas que
+  // calculan un "% Validado" real por fila (ej. BarrerasPorPaisCard en
+  // BarrerasScreen). No lo consume ningún componente todavía.
+  publicadas?: number;
 };
 
 export type TipoDato = {

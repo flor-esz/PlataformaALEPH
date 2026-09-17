@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type React from "react";
 
 const TXT_MUTED: React.CSSProperties = {
@@ -16,22 +17,27 @@ export type BarrerasPorPaisEntrada = {
   validadoPct?: number;
 };
 
+export type BarrerasPorPaisEje = { nombre: string; datos: BarrerasPorPaisEntrada[] };
+
 export type BarrerasPorPaisCardProps = {
   pais: string;
   total: number;
-  entrada: BarrerasPorPaisEntrada[];
+  // Un eje por opción del <select> del header (Barreras: Entrada/Operación
+  // -- 2 ejes; Trámites: Accesibilidad/Certidumbre/Cumplimiento/
+  // Proporcionalidad -- 4 ejes). El <select> solo se muestra si hay más de
+  // un eje; con 1 solo eje, la card queda igual que si nunca hubiera tenido
+  // dropdown (mismo resultado visual que antes tenía showEntradaSelect={false}).
+  ejes: BarrerasPorPaisEje[];
   coberturaPct: number;
   validadoHitlPct: number;
   onVerBarreras: () => void;
   // Texto del botón final — por defecto "Ver barreras por país →".
   buttonLabel?: string;
-  // Muestra el <select> visual "Entrada" del header — por defecto true.
-  // Solo aplica a la clasificación Entrada/Operación de Barreras.
-  showEntradaSelect?: boolean;
-  // Si se pasa, cada subfila (Comercio/Competencia/Inversión) se vuelve
-  // clicable, con el nombre de esa subdimensión. Cuando se omite, se
-  // comporta exactamente igual que hoy (no clicable).
-  onEntradaClick?: (nombre: string) => void;
+  // Si se pasa, cada subfila (Comercio/Competencia/Inversión, etc.) se
+  // vuelve clicable, con el nombre del eje activo y el nombre de esa
+  // subfila. Cuando se omite, se comporta exactamente igual que hoy (no
+  // clicable).
+  onEjeItemClick?: (eje: string, nombre: string) => void;
 };
 
 // ─── Single subdimensión row ────────────────────────────────────────────────
@@ -64,8 +70,11 @@ function EntradaRow({ nombre, total, validadoPct, maxTotal, onClick }: BarrerasP
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
-export function BarrerasPorPaisCard({ pais, total, entrada, coberturaPct, validadoHitlPct, onVerBarreras, buttonLabel, showEntradaSelect = true, onEntradaClick }: BarrerasPorPaisCardProps) {
-  const maxTotal = Math.max(...entrada.map(e => e.total), 1);
+export function BarrerasPorPaisCard({ pais, total, ejes, coberturaPct, validadoHitlPct, onVerBarreras, buttonLabel, onEjeItemClick }: BarrerasPorPaisCardProps) {
+  const [ejeIdx, setEjeIdx] = useState(0);
+  const ejeActivo = ejes[ejeIdx];
+  const filas = ejeActivo?.datos ?? [];
+  const maxTotal = Math.max(...filas.map(e => e.total), 1);
   return (
     <div className="rounded-lg flex flex-col" style={{ backgroundColor: "#FAFBFC", padding: 18 }}>
       <div className="flex items-start justify-between mb-4">
@@ -73,19 +82,19 @@ export function BarrerasPorPaisCard({ pais, total, entrada, coberturaPct, valida
           <p style={{ fontFamily: "Space Grotesk, sans-serif", fontSize: 15, color: "#14161A" }}>{pais}</p>
           <p style={{ ...TXT_MUTED, fontSize: 11 }}>{total.toLocaleString("es")} total</p>
         </div>
-        {showEntradaSelect && (
-          // TODO: cablear Operación cuando haya diseño para ese estado
+        {ejes.length > 1 && (
           <select
-            defaultValue="Entrada"
+            value={ejeIdx}
+            onChange={e => setEjeIdx(Number(e.target.value))}
             style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 11, color: "#6B7A8D", backgroundColor: "transparent", border: "1px solid #DCE3EB", borderRadius: 6, padding: "3px 8px", cursor: "pointer" }}
           >
-            <option value="Entrada">Entrada</option>
+            {ejes.map((e, i) => <option key={e.nombre} value={i}>{e.nombre}</option>)}
           </select>
         )}
       </div>
 
       <div className="flex flex-col gap-2.5 mb-4">
-        {entrada.map(e => <EntradaRow key={e.nombre} {...e} maxTotal={maxTotal} onClick={onEntradaClick ? () => onEntradaClick(e.nombre) : undefined} />)}
+        {filas.map(e => <EntradaRow key={e.nombre} {...e} maxTotal={maxTotal} onClick={onEjeItemClick && ejeActivo ? () => onEjeItemClick(ejeActivo.nombre, e.nombre) : undefined} />)}
       </div>
 
       <div className="flex items-center justify-between mb-4">
