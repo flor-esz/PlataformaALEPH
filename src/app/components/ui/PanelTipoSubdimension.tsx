@@ -8,6 +8,7 @@ import {
   SelectValue,
 } from "./select";
 import { Card } from "./card";
+import { EjeCargaInfoIcon } from "./EjeCargaInfoIcon";
 
 // ─── Severity scale (from Guidelines — non-negotiable) ────────────────────────
 const SEV = [
@@ -50,6 +51,10 @@ export type PanelTipoSubdimensionProps = {
   // para el resto de la fila) -- mismo patrón ya usado en
   // BarrerasPorJerarquiaCard.
   onSegmentClick?: (tipo: string, subdimension: string, severidad: string) => void;
+  // Opcional: texto de apoyo ("qué mide este eje") por `tipo`, mostrado con
+  // un ícono (i) junto al label -- usado por Trámites (EJE_CARGA_INFO en
+  // App.tsx). Si no se pasa (caso Barreras), no se renderiza ícono.
+  infoPorTipo?: Record<string, { enfoque: string; pregunta: string }>;
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -151,6 +156,7 @@ export function PanelTipoSubdimension({
   className,
   onRowClick,
   onSegmentClick,
+  infoPorTipo,
 }: PanelTipoSubdimensionProps) {
   const [tipo, setTipo] = useState(tipos[0] ?? "");
   const dato = datos[tipo];
@@ -172,19 +178,22 @@ export function PanelTipoSubdimension({
         className="flex items-center justify-between gap-3 px-5 py-4"
         style={{ borderBottom: "1px solid #DCE3EB" }}
       >
-        <p
-          style={{
-            fontFamily: "Space Grotesk, sans-serif",
-            fontSize: 11,
-            fontWeight: 500,
-            color: "#6B7A8D",
-            textTransform: "uppercase",
-            letterSpacing: "0.09em",
-            lineHeight: 1,
-          }}
-        >
-          {label}
-        </p>
+        <div className="flex items-center gap-1.5">
+          <p
+            style={{
+              fontFamily: "Space Grotesk, sans-serif",
+              fontSize: 11,
+              fontWeight: 500,
+              color: "#6B7A8D",
+              textTransform: "uppercase",
+              letterSpacing: "0.09em",
+              lineHeight: 1,
+            }}
+          >
+            {label}
+          </p>
+          <EjeCargaInfoIcon info={infoPorTipo?.[tipo]} />
+        </div>
         <Select value={tipo} onValueChange={setTipo}>
           <SelectTrigger
             size="sm"

@@ -3557,6 +3557,29 @@ const SUBDIMS_BY_TIPO_CARGA: Record<string, string[]> = {
   "Proporcionalidad": ["Proporcionalidad normativa"],
 };
 
+// Texto de apoyo ("qué mide este eje") para el ícono (i) junto al eje activo
+// de carga -- Trámites País (PanelTipoSubdimension, "CARGA POR EJE") y
+// Trámites Regional (BarrerasPorPaisCard, fichas de país). Barreras no usa
+// esto (Entrada/Operación no son ejes de carga).
+export const EJE_CARGA_INFO: Record<string, { enfoque: string; pregunta: string }> = {
+  "Cumplimiento": {
+    enfoque: "Pasos, documentos, tasas, garantías, reportes, renovaciones y costos directos de cumplimiento.",
+    pregunta: "¿Cuál es el costo directo de cumplir?",
+  },
+  "Accesibilidad": {
+    enfoque: "Múltiples entidades, presencialidad, repetición de información, falta de interoperabilidad o ausencia de ventanilla única.",
+    pregunta: "¿Se repite información o canal?",
+  },
+  "Certidumbre": {
+    enfoque: "Plazos, criterios de decisión, recursos, vigencia, requisitos abiertos o discrecionales.",
+    pregunta: "¿Hay incertidumbre o discrecionalidad?",
+  },
+  "Proporcionalidad": {
+    enfoque: "Inspecciones, sanciones, requisitos o controles no calibrados por riesgo, tamaño, historial o impacto.",
+    pregunta: "¿El control está calibrado al riesgo?",
+  },
+};
+
 const BARRERA_META: Record<string, { subdimension: string; etapaCicloVida: string }> = {
   "bloqueo-renovacion":    { subdimension: "Certidumbre procedimental",             etapaCicloVida: "Operación" },
   "restriccion-operadores": { subdimension: "Comercio",                              etapaCicloVida: "Apertura"  },
@@ -5095,7 +5118,7 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
       <BarrerasPorPaisCard
         key={pais}
         pais={pais}
-        total={COUNTRY_BARRERAS_DATA[pais].total}
+        total={buildBarrerasAgregado(filtrosBarrerasAgregado, pais as Exclude<Country, "Todos">).total}
         ejes={[
           { nombre: "Entrada", datos: buildSubdimensionesPorPais(pais as Exclude<Country, "Todos">, "Entrada") },
           { nombre: "Operación", datos: buildSubdimensionesPorPais(pais as Exclude<Country, "Todos">, "Operación") },
@@ -6204,12 +6227,11 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
     };
 
     const paisCard = (pais: Country) => {
-      const tdPais = COUNTRY_TRAMITES_DATA[pais];
       return (
         <BarrerasPorPaisCard
           key={pais}
           pais={pais}
-          total={tdPais.total}
+          total={buildTramitesAgregado(filtrosTramitesAgregado, pais as Exclude<Country, "Todos">).total}
           ejes={["Accesibilidad", "Certidumbre", "Cumplimiento", "Proporcionalidad"].map(tipoCarga => ({
             nombre: tipoCarga, datos: buildSubdimensionesTramitePorPais(pais as Exclude<Country, "Todos">, tipoCarga),
           }))}
@@ -6217,6 +6239,7 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
           validadoHitlPct={TRAMITES_VALIDADO_HITL_MUESTRA[pais]}
           onVerBarreras={() => onCountryChange?.(pais)}
           buttonLabel="Ver trámites por país →"
+          infoPorEje={EJE_CARGA_INFO}
           onEjeItemClick={(tipoCarga, subdimension) => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: { pais, tipoCarga, subdimension } })}
         />
       );
@@ -6914,6 +6937,7 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
           label="CARGA POR EJE"
           tipos={["Accesibilidad", "Certidumbre", "Cumplimiento", "Proporcionalidad"]}
           datos={tramitesAgregado.cargaPorTipo}
+          infoPorTipo={EJE_CARGA_INFO}
           onRowClick={(tipoCarga, subdimension) => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: { pais: country, tipoCarga, subdimension } })}
         />
         <div className="rounded-lg p-6" style={{ backgroundColor: C.card }}>

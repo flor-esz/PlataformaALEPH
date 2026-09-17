@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type React from "react";
+import { EjeCargaInfoIcon } from "./EjeCargaInfoIcon";
 
 const TXT_MUTED: React.CSSProperties = {
   fontFamily: "IBM Plex Sans, sans-serif",
@@ -38,6 +39,11 @@ export type BarrerasPorPaisCardProps = {
   // subfila. Cuando se omite, se comporta exactamente igual que hoy (no
   // clicable).
   onEjeItemClick?: (eje: string, nombre: string) => void;
+  // Opcional: texto de apoyo ("qué mide este eje") por nombre de eje,
+  // mostrado con un ícono (i) junto al eje activo -- usado por Trámites
+  // (EJE_CARGA_INFO en App.tsx). Si no se pasa (caso Barreras), no se
+  // renderiza ícono.
+  infoPorEje?: Record<string, { enfoque: string; pregunta: string }>;
 };
 
 // ─── Single subdimensión row ────────────────────────────────────────────────
@@ -70,7 +76,7 @@ function EntradaRow({ nombre, total, validadoPct, maxTotal, onClick }: BarrerasP
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
-export function BarrerasPorPaisCard({ pais, total, ejes, coberturaPct, validadoHitlPct, onVerBarreras, buttonLabel, onEjeItemClick }: BarrerasPorPaisCardProps) {
+export function BarrerasPorPaisCard({ pais, total, ejes, coberturaPct, validadoHitlPct, onVerBarreras, buttonLabel, onEjeItemClick, infoPorEje }: BarrerasPorPaisCardProps) {
   const [ejeIdx, setEjeIdx] = useState(0);
   const ejeActivo = ejes[ejeIdx];
   const filas = ejeActivo?.datos ?? [];
@@ -83,13 +89,16 @@ export function BarrerasPorPaisCard({ pais, total, ejes, coberturaPct, validadoH
           <p style={{ ...TXT_MUTED, fontSize: 11 }}>{total.toLocaleString("es")} total</p>
         </div>
         {ejes.length > 1 && (
-          <select
-            value={ejeIdx}
-            onChange={e => setEjeIdx(Number(e.target.value))}
-            style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 11, color: "#6B7A8D", backgroundColor: "transparent", border: "1px solid #DCE3EB", borderRadius: 6, padding: "3px 8px", cursor: "pointer" }}
-          >
-            {ejes.map((e, i) => <option key={e.nombre} value={i}>{e.nombre}</option>)}
-          </select>
+          <div className="flex items-center gap-1.5">
+            <EjeCargaInfoIcon info={infoPorEje?.[ejeActivo?.nombre ?? ""]} />
+            <select
+              value={ejeIdx}
+              onChange={e => setEjeIdx(Number(e.target.value))}
+              style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 11, color: "#6B7A8D", backgroundColor: "transparent", border: "1px solid #DCE3EB", borderRadius: 6, padding: "3px 8px", cursor: "pointer" }}
+            >
+              {ejes.map((e, i) => <option key={e.nombre} value={i}>{e.nombre}</option>)}
+            </select>
+          </div>
         )}
       </div>
 
