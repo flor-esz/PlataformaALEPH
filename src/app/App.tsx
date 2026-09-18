@@ -2717,6 +2717,16 @@ export const TRAMITES_COST_MAP: Record<string, number> = {
   "registro-sanitario": 850,
   "declaracion-mensual-isv": 2160,
 };
+// Solo los 3 trámites con costo SCM numérico real (TRAMITES_COST_MAP) tienen
+// supuestos documentados; el resto queda en "-" (dato de muestra parcial, a
+// propósito, no se inventa para los 18 restantes). Exportado:
+// HallazgosFiltradosTramites.tsx lo reusa para la columna "Supuestos SCM" del
+// Excel.
+export const SUPUESTOS_SCM_POR_ID: Record<string, string> = {
+  "cert-exportacion": "11 h de personal administrativo a USD 25/h + tarifa oficial de USD 145/operación, sobre 36 operaciones/año.",
+  "registro-sanitario": "18 h de personal técnico a USD 30/h + tarifa oficial de USD 310/producto, renovación cada 5 años.",
+  "declaracion-mensual-isv": "6 h de personal contable a USD 20/h + tarifa oficial de USD 60/mes, 12 declaraciones/año.",
+};
 const TRAMITES_EXT = [
   ...ALL_TRAMITES.map(t => ({
     ...t,
@@ -2993,7 +3003,9 @@ type JerarquiaBar = { nombre: string; total: number; n4: number; n3: number; n2:
 // "Constitucional" ni "Técnico o local" hoy, así que N2 Legislativo y N6
 // Procedimental/Trámites saldrán en 0 en todas las gráficas que usan este
 // mapeo hasta que haya datos reales en esos 2 niveles.
-const JERARQUIA_BARRERAS_A_N2N6: Record<string, string> = {
+// Exportado: HallazgosFiltradosBarreras.tsx lo reusa para traducir la
+// columna "Jerarquía" del Excel a la misma escala que ya muestra en pantalla.
+export const JERARQUIA_BARRERAS_A_N2N6: Record<string, string> = {
   "Constitucional": "N2 Legislativo",
   "Legal": "N3 Reglamentario",
   "Reglamentario": "N4 Resolutivo / Agencias",
@@ -4666,7 +4678,7 @@ function CountryDashboard({ country, onCountryChange, onNavigate }: { country: s
         </div>
       </div>
 
-      <TablaExploratoria filas={tablaExploratoria} onVerTablaCompleta={() => onNavigate({ screen: "hallazgos-filtrados", filtros: {} })} />
+      <TablaExploratoria filas={tablaExploratoria} onVerTablaCompleta={() => onNavigate({ screen: "hallazgos-filtrados", filtros: { pais: country } })} />
     </div>
   );
 }
@@ -5379,10 +5391,16 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
 
         {/* Top 3 barreras según IRR por país — dato de muestra (ver TODO en TOP_BARRERAS_POR_PAIS_MUESTRA) */}
         <div className="rounded-lg" style={{ backgroundColor: C.card }}>
-          <div className="p-5 border-b" style={{ borderColor: C.border }}>
+          <div className="p-5 border-b flex items-center justify-between gap-3" style={{ borderColor: C.border }}>
             <h3 className="text-[13px] uppercase tracking-widest font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>
               Top 3 barreras según IDR por país
             </h3>
+            <button
+              onClick={() => onNavigate({ screen: "hallazgos-filtrados-barreras", filtros: country !== "Todos" ? { pais: country } : {} })}
+              style={{ backgroundColor: C.text, color: "white", border: "none", borderRadius: 999, padding: "6px 14px", fontFamily: "Space Grotesk, sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}
+            >
+              Ver tabla completa
+            </button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[900px]">
@@ -5769,14 +5787,22 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
       {(() => {
         return (
           <div className="rounded-lg" style={{ backgroundColor: C.card }}>
-            <div className="p-5 border-b flex items-center justify-between" style={{ borderColor: C.border }}>
+            <div className="p-5 border-b flex items-center justify-between gap-3" style={{ borderColor: C.border }}>
               <h3 className="text-[13px] uppercase tracking-widest font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>
                 Top 3 barreras según IDR{" "}
                 <span style={{ color: C.critico }}>({barrerasFiltradasPais.length})</span>
               </h3>
-              <span style={{ fontSize: 12, color: C.textMuted, fontFamily: "IBM Plex Sans, sans-serif" }}>
-                {barrerasFiltradasPais.length} registros filtrados
-              </span>
+              <div className="flex items-center gap-3 flex-shrink-0">
+                <span style={{ fontSize: 12, color: C.textMuted, fontFamily: "IBM Plex Sans, sans-serif" }}>
+                  {barrerasFiltradasPais.length} registros filtrados
+                </span>
+                <button
+                  onClick={() => onNavigate({ screen: "hallazgos-filtrados-barreras", filtros: country !== "Todos" ? { pais: country } : {} })}
+                  style={{ backgroundColor: C.text, color: "white", border: "none", borderRadius: 999, padding: "6px 14px", fontFamily: "Space Grotesk, sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}
+                >
+                  Ver tabla completa
+                </button>
+              </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[1100px]">
@@ -6597,9 +6623,17 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
 
         {/* Trámites prioritarios */}
         <div className="rounded-lg" style={{ backgroundColor: C.card }}>
-          <div className="p-5 border-b flex items-center gap-3" style={{ borderColor: C.border }}>
-            <h3 className="text-[13px] uppercase tracking-widest font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Trámites prioritarios</h3>
-            <span className="text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.steel3 }}>({tramitesPrioritariosFilas.length})</span>
+          <div className="p-5 border-b flex items-center justify-between gap-3" style={{ borderColor: C.border }}>
+            <div className="flex items-center gap-3">
+              <h3 className="text-[13px] uppercase tracking-widest font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Trámites prioritarios</h3>
+              <span className="text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.steel3 }}>({tramitesPrioritariosFilas.length})</span>
+            </div>
+            <button
+              onClick={() => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: country !== "Todos" ? { pais: country } : {} })}
+              style={{ backgroundColor: C.text, color: "white", border: "none", borderRadius: 999, padding: "6px 14px", fontFamily: "Space Grotesk, sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}
+            >
+              Ver tabla completa
+            </button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1000px]">
@@ -7092,9 +7126,17 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
         const prioritariosPageItems = filasPais.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
         return (
           <div className="rounded-lg" style={{ backgroundColor: C.card }}>
-            <div className="p-5 border-b flex items-center gap-3" style={{ borderColor: C.border }}>
-              <h3 className="text-[13px] uppercase tracking-widest font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Trámites prioritarios</h3>
-              <span className="text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.steel3 }}>({filasPais.length})</span>
+            <div className="p-5 border-b flex items-center justify-between gap-3" style={{ borderColor: C.border }}>
+              <div className="flex items-center gap-3">
+                <h3 className="text-[13px] uppercase tracking-widest font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>Trámites prioritarios</h3>
+                <span className="text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.steel3 }}>({filasPais.length})</span>
+              </div>
+              <button
+                onClick={() => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: country !== "Todos" ? { pais: country } : {} })}
+                style={{ backgroundColor: C.text, color: "white", border: "none", borderRadius: 999, padding: "6px 14px", fontFamily: "Space Grotesk, sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}
+              >
+                Ver tabla completa
+              </button>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[1000px]">
@@ -11179,6 +11221,7 @@ function AppInner() {
           anioDesde: "Año desde",
           anioHasta: "Año hasta",
           estructura: "Estructura",
+          pais: "País",
         };
         const filtrosObj = view.filtros;
         const filtrosArr = Object.entries(filtrosObj).map(([key, value]) => ({ key, value, label: FILTRO_LABELS[key] ?? key }));

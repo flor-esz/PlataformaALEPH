@@ -7,6 +7,13 @@
 // ciclo ya documentado en theme.ts — no hace falta, no necesita nada de ahí.
 import type { Vigencia, EstadoInstrumento } from "../components/ui/TablaExploratoria";
 import type { Estructura } from "../components/ui/DocumentosEstructuraPanel";
+// `import type` -- se borra por completo en tiempo de compilación (no queda
+// ningún require/import real en el JS emitido), así que no reabre el ciclo
+// de import documentado arriba (ese ciclo es sobre VALORES usados en tiempo
+// de evaluación del módulo, no sobre anotaciones de tipo). Mismo patrón ya
+// usado en HallazgosFiltradosShell.tsx (`import type { View, Country } from
+// "../../App"`).
+import type { Country } from "../App";
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 export type EstadoProcesamiento = "Analizados" | "Con metadatos" | "Procesados" | "Scrapeados" | "Pendientes";
@@ -30,6 +37,15 @@ export type Instrumento = {
   // DocumentosEstructuraPanel en Panel País) -- sí varía por nivel, a
   // diferencia de estadoProcesamiento.
   estructura: Estructura;
+  pais: Country;
+  // Nombre real de la gaceta/diario oficial del país (ver FUENTE_POR_PAIS)
+  // -- no es un dato inventado.
+  fuente: string;
+  // Marcador de posición deliberado (dominio .example, nunca resuelve a un
+  // sitio real) -- no se puede fabricar una URL real de gaceta oficial por
+  // instrumento sin dar la falsa impresión de ser un enlace verificado.
+  enlace: string;
+  observaciones: string;
 };
 
 // ─── Pools de generación ────────────────────────────────────────────────────────
@@ -41,6 +57,26 @@ export type Instrumento = {
 const NOMBRE_POOL = ["D.S.", "Ley", "R.M.", "Decreto", "Resolución"];
 export const ENTIDAD_POOL = ["Min. Economía", "Asamblea", "SENAPI", "Min. Trabajo", "Aduana Nacional", "Alcaldía Municipal"];
 export const SECTOR_POOL = ["Comercio", "Financiero", "Innovación", "Agroindustria", "Minería", "Textil y Confección"];
+export const PAIS_POOL: Country[] = ["Argentina", "Bolivia", "Chile", "Ecuador", "Perú"];
+// Nombre real de la gaceta/diario oficial de cada país -- esto sí es un dato
+// real (el nombre de la fuente), no inventado.
+const FUENTE_POR_PAIS: Record<Country, string> = {
+  Argentina: "Boletín Oficial de la República Argentina",
+  Bolivia: "Gaceta Oficial del Estado Plurinacional de Bolivia",
+  Chile: "Diario Oficial de Chile",
+  Ecuador: "Registro Oficial del Ecuador",
+  Perú: "Diario Oficial El Peruano",
+  Todos: "",
+};
+// Enlace: NO se puede fabricar una URL real de gaceta oficial por
+// instrumento -- se usa un patrón claramente de marcador de posición (no un
+// dominio .gob real) para no dar la impresión de que es un enlace verificado.
+const OBSERVACIONES_POOL = [
+  "Sin observaciones.",
+  "Pendiente de verificación con fuente primaria.",
+  "Texto disponible en versión digital.",
+  "Requiere confirmación de vigencia con la entidad emisora.",
+];
 const TIPO_POR_NOMBRE: Record<string, string> = {
   "D.S.": "Decreto",
   "Ley": "Ley",
@@ -200,6 +236,7 @@ function generarInstrumentos(nivel: string, cantidad: number, startIndex: number
     const vigencia: Vigencia = i % 5 === 0 ? "Por confirmar" : "Vigente"; // ~20% / 80%
     const estado: EstadoInstrumento = i % 10 < 3 ? "Procesado" : "Analizado"; // ~30% / 70%
     const estadoProcesamiento = ESTADO_PROCESAMIENTO_POR_INDICE_GLOBAL[startIndex + i];
+    const pais = PAIS_POOL[i % PAIS_POOL.length];
 
     filas.push({
       nombre: `${nombreBase} ${correlativoPorNombre[nombreBase]}`,
@@ -212,6 +249,10 @@ function generarInstrumentos(nivel: string, cantidad: number, startIndex: number
       estado,
       estadoProcesamiento,
       estructura: estructurasNivel[i],
+      pais,
+      fuente: FUENTE_POR_PAIS[pais],
+      enlace: `https://normativa-regional.example/instrumento/${nombreBase.toLowerCase().replace(/\s+/g, "-")}-${correlativoPorNombre[nombreBase]}`,
+      observaciones: OBSERVACIONES_POOL[i % OBSERVACIONES_POOL.length],
     });
   }
   return filas;

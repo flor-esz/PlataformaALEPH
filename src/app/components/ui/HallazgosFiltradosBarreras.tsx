@@ -6,8 +6,8 @@
 // que se importa de vuelta desde App.tsx solo se usa dentro del cuerpo de
 // HallazgosFiltradosBarreras(), nunca en el top-level de este módulo, así
 // que el import estático es seguro.
-import { ALL_BARRERAS, SeverityBadge, ESTADO_HITL_META } from "../../App";
-import type { View } from "../../App";
+import { ALL_BARRERAS, SeverityBadge, ESTADO_HITL_META, JERARQUIA_BARRERAS_A_N2N6 } from "../../App";
+import type { View, HojaExcel, ReporteEstrategicoData } from "../../App";
 import { Badge } from "./TablaExploratoria";
 import { HallazgosFiltradosShell, type Columna } from "./HallazgosFiltradosShell";
 
@@ -50,6 +50,53 @@ export type HallazgosFiltradosBarrerasProps = {
 // esas otras dos pantallas aunque una key como "subdimension" exista en las
 // tres, cada una vive en su propia URL/estado.
 export function HallazgosFiltradosBarreras({ filtros, resultados, onSetFiltro, onQuitarFiltro, onLimpiarTodos, onNavigate, notaCalculo }: HallazgosFiltradosBarrerasProps) {
+  // Excel: una sola hoja con las 15 columnas pedidas, sobre `resultados` (ya
+  // filtrado en pantalla, no ALL_BARRERAS sin filtrar). Jerarquía traducida a
+  // N2-N6 (mismo criterio que el resto de la pantalla, ver JERARQUIA_
+  // BARRERAS_A_N2N6 en App.tsx).
+  const hojaBarreras: HojaExcel = {
+    nombre: "Barreras",
+    filas: resultados.map(b => ({
+      "ID": b.id,
+      "País": b.pais,
+      "Sector": b.sector,
+      "Entidad": b.entidad,
+      "Instrumento": b.instrumento,
+      "Jerarquía": JERARQUIA_BARRERAS_A_N2N6[b.jerarquia] ?? b.jerarquia,
+      "Cita": b.pasajeResaltado,
+      "Descripción": b.descripcion,
+      "Eje (Entrada/Operación)": b.clasificacion,
+      "Subcategoría": b.subdimension,
+      "Canal de transmisión": b.canalTransmision,
+      "Severidad IA": b.validacion.severidadIA,
+      "Severidad validada": b.validacion.severidadValidada,
+      "Estado HITL": b.validacion.estadoHitl,
+      "Acción de mejora": b.accionSugerida.accion,
+    })),
+  };
+  // Reporte Estratégico (PDF) -- mínimo, mismo criterio ya usado antes
+  // (Instrumentos): sin hallazgos destacados ni acciones AMR inventados para
+  // este catálogo genérico -- esas 2 secciones quedan vacías.
+  const estrategicoData: ReporteEstrategicoData = {
+    paisLabel: "Barreras filtradas",
+    isRegional: true,
+    codigo: "RegLAC-BARR-2026-001",
+    sectorLabel: "Todos los sectores",
+    fechaCorte: "Marzo 2026",
+    filtrosActivos: filtros.map(f => ({ label: f.label, value: f.value })),
+    mensajes: { titulo: "", items: [] },
+    bloquesKpi: [
+      {
+        titulo: "Barreras filtradas",
+        variante: "panorama",
+        items: [{ label: "Total de barreras", val: String(resultados.length) }],
+      },
+    ],
+    graficas: [],
+    accionesAMR: { titulo: "", items: [] },
+    hallazgosDestacados: { titulo: "", items: [] },
+  };
+
   return (
     <HallazgosFiltradosShell<BarreraItem>
       filtros={filtros}
@@ -67,6 +114,7 @@ export function HallazgosFiltradosBarreras({ filtros, resultados, onSetFiltro, o
       camposReales={["pais", "sector", "entidad", "clasificacion", "subdimension", "jerarquia", "severidad"]}
       sectors={Array.from(new Set(ALL_BARRERAS.map(b => b.sector))).sort()}
       entidades={Array.from(new Set(ALL_BARRERAS.map(b => b.entidad))).sort()}
+      descargar={{ hojas: [hojaBarreras], nombreArchivoBase: "barreras-filtradas", estrategicoData }}
     />
   );
 }

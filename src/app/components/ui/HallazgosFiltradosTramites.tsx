@@ -5,8 +5,8 @@
 // que se importa de vuelta desde App.tsx solo se usa dentro del cuerpo de
 // HallazgosFiltradosTramites(), nunca en el top-level de este módulo, así
 // que el import estático es seguro.
-import { ALL_TRAMITES, ESTADO_HITL_META } from "../../App";
-import type { View } from "../../App";
+import { ALL_TRAMITES, ESTADO_HITL_META, SUPUESTOS_SCM_POR_ID } from "../../App";
+import type { View, HojaExcel, ReporteEstrategicoData } from "../../App";
 // C viene de ./theme (no de App.tsx): SEVERIDAD_TRAMITE_COLOR de más abajo se
 // evalúa en el top-level de este módulo, así que necesita la fuente sin
 // ciclo -- ver comentario en theme.ts sobre por qué C importado desde App.tsx
@@ -63,6 +63,53 @@ export type HallazgosFiltradosTramitesProps = {
 // App.tsx, case "hallazgos-filtrados-tramites") -- no comparte estado con
 // esas otras dos pantallas.
 export function HallazgosFiltradosTramites({ filtros, resultados, onSetFiltro, onQuitarFiltro, onLimpiarTodos, onNavigate, notaCalculo }: HallazgosFiltradosTramitesProps) {
+  // Excel: una sola hoja con las 15 columnas pedidas, sobre `resultados` (ya
+  // filtrado en pantalla, no ALL_TRAMITES sin filtrar). "Supuestos SCM" solo
+  // tiene texto en los 3 trámites con costo SCM numérico real
+  // (SUPUESTOS_SCM_POR_ID en App.tsx); el resto queda en "-".
+  const hojaTramites: HojaExcel = {
+    nombre: "Trámites",
+    filas: resultados.map(t => ({
+      "ID": t.id,
+      "País": t.pais,
+      "Sector": t.sector,
+      "Entidad": t.entidad,
+      "Trámite": t.nombre,
+      "Usuario": t.tipo,
+      "Pasos": t.pasos.length,
+      "Costo SCM": t.costo.cargaTotal,
+      "Tiempo": t.costo.tiempo,
+      "Frecuencia": t.costo.frecuencia,
+      "Eje": t.tipoCarga,
+      "Severidad": t.severidad,
+      "Estado HITL": t.estadoHitl,
+      "Acción de mejora": t.accionSugerida,
+      "Supuestos SCM": SUPUESTOS_SCM_POR_ID[t.id] ?? "-",
+    })),
+  };
+  // Reporte Estratégico (PDF) -- mínimo, mismo criterio ya usado antes
+  // (Instrumentos/Barreras): sin hallazgos destacados ni acciones AMR
+  // inventados para este catálogo genérico -- esas 2 secciones quedan vacías.
+  const estrategicoData: ReporteEstrategicoData = {
+    paisLabel: "Trámites filtrados",
+    isRegional: true,
+    codigo: "RegLAC-TRAM-FILT-2026-001",
+    sectorLabel: "Todos los sectores",
+    fechaCorte: "Marzo 2026",
+    filtrosActivos: filtros.map(f => ({ label: f.label, value: f.value })),
+    mensajes: { titulo: "", items: [] },
+    bloquesKpi: [
+      {
+        titulo: "Trámites filtrados",
+        variante: "panorama",
+        items: [{ label: "Total de trámites", val: String(resultados.length) }],
+      },
+    ],
+    graficas: [],
+    accionesAMR: { titulo: "", items: [] },
+    hallazgosDestacados: { titulo: "", items: [] },
+  };
+
   return (
     <HallazgosFiltradosShell<TramiteItem>
       filtros={filtros}
@@ -83,6 +130,7 @@ export function HallazgosFiltradosTramites({ filtros, resultados, onSetFiltro, o
       camposReales={["pais", "sector", "entidad", "severidad"]}
       sectors={Array.from(new Set(ALL_TRAMITES.map(t => t.sector))).sort()}
       entidades={Array.from(new Set(ALL_TRAMITES.map(t => t.entidad))).sort()}
+      descargar={{ hojas: [hojaTramites], nombreArchivoBase: "tramites-filtrados", estrategicoData }}
     />
   );
 }

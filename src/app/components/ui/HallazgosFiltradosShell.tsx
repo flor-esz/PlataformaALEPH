@@ -8,8 +8,8 @@ import { C, HDR_BTN_PRIMARY, HDR_BTN_SECONDARY } from "../../theme";
 // solo se usan dentro del cuerpo de HallazgosFiltradosShell(), nunca en el
 // top-level de este módulo, así que el import estático es seguro (ver
 // comentario en theme.ts sobre el porqué).
-import { Header, BarraFiltrosBarreras } from "../../App";
-import type { View, Country } from "../../App";
+import { Header, BarraFiltrosBarreras, DescargarDropdown } from "../../App";
+import type { View, Country, HojaExcel, ReporteEstrategicoData } from "../../App";
 
 // ─── Shell compartido de "Hallazgos filtrados" ─────────────────────────────
 // Extraído de lo que antes era HallazgosFiltrados.tsx (la variante de
@@ -56,6 +56,16 @@ export type HallazgosFiltradosShellProps<T> = {
   // los chips de filtro) explicando cómo se calculó el KPI desde el que se
   // navegó acá -- ver KpiCard.onClick en Barreras/Trámites/Impacto Económico.
   notaCalculo?: string;
+  // Si se pasa, el botón "Descargar" del header pasa a ser un
+  // <DescargarDropdown> real (Excel + PDF) sobre `resultados` ya filtrado,
+  // en vez del placeholder sin cablear que sigue usando el resto de
+  // pantallas que reusan este shell (Barreras/Trámites) hasta que tengan su
+  // propio fix -- ver TODO histórico junto al botón más abajo.
+  descargar?: {
+    hojas: HojaExcel[];
+    nombreArchivoBase: string;
+    estrategicoData: ReporteEstrategicoData;
+  };
 };
 
 function textoCelda(valor: string | number) {
@@ -108,6 +118,7 @@ export function HallazgosFiltradosShell<T>({
   mostrarPeriodo,
   pageSize = 25,
   notaCalculo,
+  descargar,
 }: HallazgosFiltradosShellProps<T>) {
   const [page, setPage] = useState(0);
   const pageCount = Math.max(1, Math.ceil(resultados.length / pageSize));
@@ -165,10 +176,20 @@ export function HallazgosFiltradosShell<T>({
             <button style={HDR_BTN_PRIMARY} onClick={() => onNavigate({ screen: "reportes" })}>
               <Download size={13} /><span className="hidden sm:inline">Generar reporte</span><span className="sm:hidden">Reporte</span>
             </button>
-            {/* TODO: dropdown de opciones de descarga */}
-            <button style={HDR_BTN_SECONDARY}>
-              Descargar <ChevronDown size={13} />
-            </button>
+            {descargar ? (
+              <DescargarDropdown
+                hojas={descargar.hojas}
+                filtrosActivos={filtros.map(f => ({ label: f.label, value: f.value }))}
+                nombreArchivoBase={descargar.nombreArchivoBase}
+                estrategicoData={descargar.estrategicoData}
+              />
+            ) : (
+              // TODO: dropdown de opciones de descarga (Barreras/Trámites --
+              // Instrumentos ya lo tiene cableado vía `descargar`, arriba).
+              <button style={HDR_BTN_SECONDARY}>
+                Descargar <ChevronDown size={13} />
+              </button>
+            )}
           </>
         }
       />
