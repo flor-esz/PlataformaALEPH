@@ -74,7 +74,7 @@ import { HallazgosFiltrados } from "./components/ui/HallazgosFiltrados";
 // respectivos componentes, nunca en el top-level de sus módulos.
 import { HallazgosFiltradosBarreras } from "./components/ui/HallazgosFiltradosBarreras";
 import { HallazgosFiltradosTramites } from "./components/ui/HallazgosFiltradosTramites";
-import { INSTRUMENTOS_MUESTRA, EVOLUCION_ANIOS, EVOLUCION_FACTORES, DOC_ESTRUCTURA_PCT_MUESTRA, repartoProporcional } from "./data/instrumentosMuestra";
+import { INSTRUMENTOS_MUESTRA, EVOLUCION_ANIOS, EVOLUCION_FACTORES, DOC_ESTRUCTURA_PCT_MUESTRA, repartoProporcional, JERARQUIA_N2N6_TOTALES } from "./data/instrumentosMuestra";
 import {
   PieChart,
   Pie,
@@ -9279,6 +9279,59 @@ function AdminPermisosScreen() {
   );
 }
 
+// ─── Anexo Metodológico ─────────────────────────────────────────────────────
+// Contenido 100% estático (no depende de ningún estado de ReportesScreen ni
+// de país/sector/tipoHallazgo) -- taxonomías locked, pipeline HITL y
+// disclaimers ya usados en otras pantallas de la plataforma, no fabricado
+// para este botón. Reusa ReporteEstrategicoPaper/exportarReporteEstrategicoPdf,
+// el mismo mecanismo que ya usa DescargarDropdown en el resto del proyecto.
+const ANEXO_METODOLOGICO_DATA: ReporteEstrategicoData = {
+  paisLabel: "Independiente de país / sector",
+  isRegional: true,
+  codigo: "RegLAC-ANEXO-METODOLOGICO-2026-001",
+  sectorLabel: "No aplica",
+  fechaCorte: "Marzo 2026",
+  filtrosActivos: [],
+  mensajes: {
+    titulo: "Marco metodológico, taxonomías y disclaimers",
+    items: [
+      "Escala de severidad: Crítico (4) > Alto (3) > Mediano (2) > Bajo (1), aplicada de forma uniforme a barreras y trámites.",
+      "Clasificación de distorsiones: eje Entrada (Comercio, Competencia, Inversión) y eje Operación (Competencia, Inversión, Innovación).",
+      "Tipo de carga administrativa (trámites): Accesibilidad, Certidumbre, Cumplimiento, Proporcionalidad, cada una con sus propias subdimensiones.",
+      "Jerarquía normativa: 6 niveles BID (N1 Constitucional, de uso interno, hasta N6 Procedimental/Trámites, visible en los tableros).",
+      "Los datos mostrados en pantallas de ejemplo y en este anexo son, en su mayoría, datos de muestra («dato de muestra») hasta que se incorpore información real verificada de fuentes oficiales.",
+      "El costo económico de trámites se estima mediante la metodología Standard Cost Model (SCM); los supuestos de cálculo, cuando existen, se documentan trámite por trámite.",
+    ],
+  },
+  bloquesKpi: [{
+    titulo: "Cobertura del universo analizado",
+    variante: "panorama",
+    items: [
+      { label: "Países cubiertos", val: "5", sub: "Argentina, Bolivia, Chile, Ecuador, Perú" },
+      { label: "Período auditado", val: "2015–2026" },
+      { label: "Instrumentos normativos", val: "1,842", sub: "dato de muestra" },
+      { label: "Niveles de jerarquía normativa", val: "6 (N1–N6)" },
+    ],
+  }],
+  graficas: [{
+    titulo: "Jerarquía normativa (taxonomía BID)",
+    chartLabel: "Instrumentos por nivel N2-N6",
+    categorias: JERARQUIA_N2N6_TOTALES.map(j => ({
+      nombre: j.nivel, total: j.total, componentes: [{ nombre: j.nivel, valor: j.total }],
+    })),
+  }],
+  accionesAMR: {
+    titulo: "Protocolo de validación HITL",
+    items: [
+      { verbo: "Etapa 1 · Asesor/ESZ", desc: "Carga y clasificación inicial del hallazgo (barrera o trámite) detectado por los agentes de IA." },
+      { verbo: "Etapa 2 · Validador (triage)", desc: "Revisión de forma y descarte de falsos positivos antes de pasar a análisis de fondo." },
+      { verbo: "Etapa 3 · Analista jurídico-económico", desc: "Checklist de 10 criterios (5 jurídicos, 5 económicos) para confirmar o ajustar severidad y acción sugerida." },
+      { verbo: "Etapa 4 · Decisión final y publicación", desc: "Comparación dice/debe decir y publicación del hallazgo validado en la plataforma." },
+    ],
+  },
+  hallazgosDestacados: { titulo: "", items: [] },
+};
+
 // ─── Reportes ─────────────────────────────────────────────────────────────────
 function ReportesScreen({ prefill, onNavigate }: { prefill?: ReportesPrefill; onNavigate: (v: View) => void }) {
   const COUNTRIES: Country[] = ["Todos", "Argentina", "Bolivia", "Chile", "Ecuador", "Perú"];
@@ -9854,6 +9907,18 @@ function ReportesScreen({ prefill, onNavigate }: { prefill?: ReportesPrefill; on
               Generar reporte
             </button>
             <p className="text-[10px] text-center mt-2" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>Formato: {formato.toUpperCase()} · Datos simulados</p>
+
+            {/* Anexo Metodológico -- independiente de los filtros del wizard
+                (país/sector/tipoHallazgo no le aplican, ver
+                ANEXO_METODOLOGICO_DATA arriba): taxonomías, protocolo HITL y
+                disclaimers, siempre disponible sin importar qué haya
+                seleccionado el usuario. */}
+            <button
+              style={{ ...HDR_BTN_SECONDARY, width: "100%", justifyContent: "center", marginTop: 8 }}
+              onClick={() => exportarReporteEstrategicoPdf(ANEXO_METODOLOGICO_DATA, `anexo-metodologico-${fechaSlugHoy()}`)}
+            >
+              <FileText size={14} /> Descargar Anexo Metodológico
+            </button>
           </div>
         </div>
       </div>
@@ -10405,11 +10470,27 @@ function ReporteEstrategicoPaper({ data }: { data: ReporteEstrategicoData }) {
     );
   }
 
+  // Último bloque, siempre presente -- a diferencia del resto de secciones
+  // de arriba (que solo aparecen si la pantalla trae datos para ellas), este
+  // no depende de `data`: es un recuadro en blanco para anotaciones a mano
+  // una vez impreso el PDF.
+  secNum++;
+  pushBlock(
+    <div key="notas" className="pdf-block" style={{ pageBreakInside: "avoid" }}>
+      <SecLabel num={secNum} title="Notas y observaciones" />
+      <div style={{ border: `1px solid ${C.border}`, borderRadius: 12, height: 220 }} />
+    </div>
+  );
+
   return (
     <div className="max-w-[820px] mx-auto my-4 md:my-8 shadow-xl rounded-xl overflow-hidden" style={{ marginLeft: "auto", marginRight: "auto" }}>
 
       {/* ── PORTADA ── */}
-      <div className="pdf-block px-10 md:px-16 py-14 md:py-16 flex flex-col" style={{ backgroundColor: C.steel4, minHeight: 520, pageBreakInside: "avoid" }}>
+      {/* minHeight 1160 ≈ 820 × 1.414 (ratio A4, 297mm/210mm) -- el bloque ya
+          tiene la proporción real de una hoja A4 antes de capturarse, sin
+          depender del relleno azul de exportarReportePdf para disimular la
+          diferencia (antes 520, dejaba media página en blanco). */}
+      <div className="pdf-block px-10 md:px-16 py-14 md:py-16 flex flex-col" style={{ backgroundColor: C.steel4, minHeight: 1160, pageBreakInside: "avoid" }}>
         <div className="flex items-center gap-4 mb-auto">
           <span className="text-[22px] tracking-[4px]" style={{ fontFamily: "Space Grotesk, sans-serif", fontWeight: 500, color: "white" }}>RegLAC</span>
         </div>
