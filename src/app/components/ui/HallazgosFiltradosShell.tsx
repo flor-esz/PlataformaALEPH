@@ -184,8 +184,10 @@ export function HallazgosFiltradosShell<T>({
                 estrategicoData={descargar.estrategicoData}
               />
             ) : (
-              // TODO: dropdown de opciones de descarga (Barreras/Trámites --
-              // Instrumentos ya lo tiene cableado vía `descargar`, arriba).
+              // TODO: dropdown de opciones de descarga -- pantallas que aún no
+              // pasan `descargar` (ninguna variante de HallazgosFiltrados* usa
+              // ya este fallback; queda para futuras pantallas que reusen el
+              // shell sin cablearlo desde el día uno).
               <button style={HDR_BTN_SECONDARY}>
                 Descargar <ChevronDown size={13} />
               </button>

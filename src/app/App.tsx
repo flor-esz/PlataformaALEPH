@@ -6020,10 +6020,71 @@ function BarreraDetail({ id, onNavigate, userRole, retroGobiernoOverrides, onGua
             <button style={HDR_BTN_PRIMARY} onClick={() => onNavigate({ screen: "reportes", prefill: { tipoHallazgo: "distorsion", pais: barrera.pais, sectores: [barrera.sector] } })}>
               <Download size={13} /><span className="hidden sm:inline">Generar reporte</span><span className="sm:hidden">Reporte</span>
             </button>
-            {/* TODO: dropdown de opciones de descarga */}
-            <button style={HDR_BTN_SECONDARY}>
-              Descargar <ChevronDown size={13} />
-            </button>
+            <DescargarDropdown
+              hojas={[{
+                nombre: "Barrera",
+                filas: [{
+                  "ID": barrera.id,
+                  "País": barrera.pais,
+                  "Sector": barrera.sector,
+                  "Entidad": barrera.entidad,
+                  "Instrumento": barrera.instrumento,
+                  "Jerarquía": JERARQUIA_BARRERAS_A_N2N6[barrera.jerarquia] ?? barrera.jerarquia,
+                  "Cita": barrera.pasajeResaltado,
+                  "Descripción": barrera.descripcion,
+                  "Eje (Entrada/Operación)": barrera.clasificacion,
+                  "Subcategoría": barrera.subdimension,
+                  "Canal de transmisión": barrera.canalTransmision,
+                  "Severidad IA": barrera.validacion.severidadIA,
+                  "Severidad validada": barrera.validacion.severidadValidada,
+                  "Estado HITL": barrera.validacion.estadoHitl,
+                  "Acción de mejora": barrera.accionSugerida.accion,
+                }],
+              }]}
+              filtrosActivos={[{ label: "Barrera", value: barrera.titulo }]}
+              nombreArchivoBase={`barrera-${barrera.id}`}
+              estrategicoData={{
+                paisLabel: barrera.pais,
+                isRegional: false,
+                codigo: `RegLAC-${barrera.pais.slice(0, 3).toUpperCase()}-BAR-${barrera.id}`,
+                sectorLabel: barrera.sector,
+                fechaCorte: "Marzo 2026",
+                filtrosActivos: [{ label: "Barrera", value: barrera.titulo }],
+                mensajes: { titulo: "", items: [] },
+                bloquesKpi: [{
+                  titulo: "Barrera",
+                  variante: "panorama",
+                  items: [
+                    { label: "Severidad IA", val: barrera.validacion.severidadIA },
+                    { label: "Severidad validada", val: barrera.validacion.severidadValidada },
+                    { label: "Estado HITL", val: barrera.validacion.estadoHitl },
+                  ],
+                }],
+                graficas: [],
+                // Real, no inventado -- es la ficha completa que ya se ve en
+                // esta misma pantalla, a diferencia de las tablas filtradas
+                // genéricas (que sí dejan estas 2 secciones vacías).
+                accionesAMR: {
+                  titulo: "Acción sugerida",
+                  items: [{
+                    verbo: barrera.accionSugerida.accion,
+                    desc: `${barrera.accionSugerida.tipoCambioRequerido} · Prioridad ${barrera.accionSugerida.prioridad} · Factibilidad ${barrera.accionSugerida.factibilidad}`,
+                  }],
+                },
+                hallazgosDestacados: {
+                  titulo: "Hallazgo destacado",
+                  items: [{
+                    categoria: "Distorsión",
+                    entidad: barrera.entidad,
+                    titulo: barrera.titulo,
+                    cita: barrera.pasajeResaltado,
+                    severidad: barrera.severidad,
+                    etiqueta: barrera.clasificacion,
+                    accion: barrera.accionSugerida.accion,
+                  }],
+                },
+              }}
+            />
           </>
         }
       />
