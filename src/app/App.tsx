@@ -128,6 +128,24 @@ export function useIsMobile() {
   return isMobile;
 }
 
+// ─── Feature flags por entrega ─────────────────────────────────────────────────
+// Checklist de integración para el equipo de back: cada flag referencia el ID
+// del requerimiento (Requerimientos_Funcionales_y_Visuales_Interno.xlsx) que
+// habilita. Para ocultar algo de una entrega futura, condicionar con un flag
+// nuevo acá -- nunca borrar ni comentar el código.
+export const ENTREGA_ACTUAL: 1 | 2 | 3 = 1;
+export const FEATURES = {
+  // Entrega 2
+  tablaExploratoriaInstrumentos: ENTREGA_ACTUAL >= 2, // Req-28
+  descargaExcelPanelPais: ENTREGA_ACTUAL >= 2, // Req-29
+  impactoEconomicoBarrerasPais: ENTREGA_ACTUAL >= 2, // Req-42
+  accionMejoraSugeridaBarrerasPais: ENTREGA_ACTUAL >= 2, // Req-43
+  tablaPrioritariaBarreras: ENTREGA_ACTUAL >= 2, // Req-44
+  accionSugeridaDetalleBarrera: ENTREGA_ACTUAL >= 2, // Req-47
+  // Entrega 3
+  objetivoLegitimoDetalleBarrera: ENTREGA_ACTUAL >= 3, // Req-45/46
+} as const;
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type Country = "Todos" | "Argentina" | "Bolivia" | "Chile" | "Ecuador" | "Perú";
 type Section = "dashboard" | "barreras" | "tramites" | "comparativa" | "repositorio" | "impacto-economico" | "administracion" | "reportes" | "documentacion" | "revision"  | "indice";
@@ -4551,12 +4569,14 @@ function CountryDashboard({ country, onCountryChange, onNavigate }: { country: s
           <table> real, ver FuentesTrazabilidadTable más abajo). Único filtro
           real de esta pantalla es el país (sin useState de filtro propio,
           ver comentario arriba). */}
-      <DescargarDropdown
-        hojas={[hojaResumen, hojaEvolucion, hojaJerarquia, hojaPalabras, hojaEstructuraDocs, hojaFuentesTrazabilidad, hojaTipoUsuario, hojaTablaExploratoria]}
-        filtrosActivos={[{ label: "País", value: country }]}
-        nombreArchivoBase="panel_pais"
-        estrategicoData={estrategicoData}
-      />
+      {FEATURES.descargaExcelPanelPais && (
+        <DescargarDropdown
+          hojas={[hojaResumen, hojaEvolucion, hojaJerarquia, hojaPalabras, hojaEstructuraDocs, hojaFuentesTrazabilidad, hojaTipoUsuario, hojaTablaExploratoria]}
+          filtrosActivos={[{ label: "País", value: country }]}
+          nombreArchivoBase="panel_pais"
+          estrategicoData={estrategicoData}
+        />
+      )}
     </>
   );
 
@@ -4678,7 +4698,9 @@ function CountryDashboard({ country, onCountryChange, onNavigate }: { country: s
         </div>
       </div>
 
-      <TablaExploratoria filas={tablaExploratoria} onVerTablaCompleta={() => onNavigate({ screen: "hallazgos-filtrados", filtros: { pais: country } })} />
+      {FEATURES.tablaExploratoriaInstrumentos && (
+        <TablaExploratoria filas={tablaExploratoria} onVerTablaCompleta={() => onNavigate({ screen: "hallazgos-filtrados", filtros: { pais: country } })} />
+      )}
     </div>
   );
 }
@@ -5395,54 +5417,56 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
         </div>
 
         {/* Top 3 barreras según IRR por país — dato de muestra (ver TODO en TOP_BARRERAS_POR_PAIS_MUESTRA) */}
-        <div className="rounded-lg" style={{ backgroundColor: C.card }}>
-          <div className="p-5 border-b flex items-center justify-between gap-3" style={{ borderColor: C.border }}>
-            <h3 className="text-[13px] uppercase tracking-widest font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>
-              Top 3 barreras según IDR por país
-            </h3>
-            <button
-              onClick={() => onNavigate({ screen: "hallazgos-filtrados-barreras", filtros: country !== "Todos" ? { pais: country } : {} })}
-              style={{ backgroundColor: C.text, color: "white", border: "none", borderRadius: 999, padding: "6px 14px", fontFamily: "Space Grotesk, sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}
-            >
-              Ver tabla completa
-            </button>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px]">
-              <thead>
-                <tr style={{ borderBottom: `1px solid ${C.border}` }}>
-                  {["País", "IDR", "Clasificación", "Subdimensión", "Sector", "Instrumento", "Estado HITL"].map(h => (
-                    <th key={h} className="px-4 py-3 text-left text-[11px] uppercase tracking-widest whitespace-nowrap"
-                      style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {topBarrerasFilas.map((b, i) => (
-                  <tr
-                    key={i}
-                    className="hover:bg-[#F4F7FB] transition-colors"
-                    style={{ borderBottom: `1px solid ${C.border}`, cursor: b.id ? "pointer" : "default" }}
-                    onClick={() => { if (b.id) onNavigate({ screen: "barrera-detail", id: b.id }); }}
-                  >
-                    <td className="px-4 py-3 text-[13px] font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>{b.pais}</td>
-                    <td className="px-4 py-3"><SeverityBadge level={IRR_LABELS[b.irr]} /></td>
-                    <td className="px-4 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{b.clasificacion}</td>
-                    <td className="px-4 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted, maxWidth: 180 }}>{b.subdimension}</td>
-                    <td className="px-4 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{b.sector}</td>
-                    <td className="px-4 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted, maxWidth: 180 }}>{b.instrumento}</td>
-                    <td className="px-4 py-3">
-                      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium"
-                        style={{ backgroundColor: ESTADO_HITL_META[b.estadoHitl].bg, color: ESTADO_HITL_META[b.estadoHitl].color, fontFamily: "IBM Plex Sans, sans-serif" }}>
-                        {b.estadoHitl}
-                      </span>
-                    </td>
+        {FEATURES.tablaPrioritariaBarreras && (
+          <div className="rounded-lg" style={{ backgroundColor: C.card }}>
+            <div className="p-5 border-b flex items-center justify-between gap-3" style={{ borderColor: C.border }}>
+              <h3 className="text-[13px] uppercase tracking-widest font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>
+                Top 3 barreras según IDR por país
+              </h3>
+              <button
+                onClick={() => onNavigate({ screen: "hallazgos-filtrados-barreras", filtros: country !== "Todos" ? { pais: country } : {} })}
+                style={{ backgroundColor: C.text, color: "white", border: "none", borderRadius: 999, padding: "6px 14px", fontFamily: "Space Grotesk, sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}
+              >
+                Ver tabla completa
+              </button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[900px]">
+                <thead>
+                  <tr style={{ borderBottom: `1px solid ${C.border}` }}>
+                    {["País", "IDR", "Clasificación", "Subdimensión", "Sector", "Instrumento", "Estado HITL"].map(h => (
+                      <th key={h} className="px-4 py-3 text-left text-[11px] uppercase tracking-widest whitespace-nowrap"
+                        style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>{h}</th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {topBarrerasFilas.map((b, i) => (
+                    <tr
+                      key={i}
+                      className="hover:bg-[#F4F7FB] transition-colors"
+                      style={{ borderBottom: `1px solid ${C.border}`, cursor: b.id ? "pointer" : "default" }}
+                      onClick={() => { if (b.id) onNavigate({ screen: "barrera-detail", id: b.id }); }}
+                    >
+                      <td className="px-4 py-3 text-[13px] font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>{b.pais}</td>
+                      <td className="px-4 py-3"><SeverityBadge level={IRR_LABELS[b.irr]} /></td>
+                      <td className="px-4 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{b.clasificacion}</td>
+                      <td className="px-4 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted, maxWidth: 180 }}>{b.subdimension}</td>
+                      <td className="px-4 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{b.sector}</td>
+                      <td className="px-4 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted, maxWidth: 180 }}>{b.instrumento}</td>
+                      <td className="px-4 py-3">
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium"
+                          style={{ backgroundColor: ESTADO_HITL_META[b.estadoHitl].bg, color: ESTADO_HITL_META[b.estadoHitl].color, fontFamily: "IBM Plex Sans, sans-serif" }}>
+                          {b.estadoHitl}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     );
   }
@@ -5572,16 +5596,16 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
           ],
         })),
       },
-      {
+      ...(FEATURES.impactoEconomicoBarrerasPais ? [{
         titulo: "Canales de transmisión económica",
         chartLabel: "Canales de transmisión económica",
         categorias: canalesBarrerasPais.map(f => ({ nombre: f.nombre, total: f.valor, componentes: [{ nombre: f.nombre, valor: f.valor }] })),
-      },
+      }] : []),
     ],
-    accionesAMR: {
+    accionesAMR: FEATURES.accionMejoraSugeridaBarrerasPais ? {
       titulo: "Barreras por acción de mejora sugerida",
       items: accionMejoraBarrerasPais.map(f => ({ verbo: f.nombre, desc: `${f.valor} barrera(s) con esta acción sugerida en ${country}.` })),
-    },
+    } : { titulo: "", items: [] },
     hallazgosDestacados: {
       titulo: "Top barreras",
       intro: `Barreras reales del conjunto ya filtrado en ${countryLabelBar}.`,
@@ -5622,7 +5646,7 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
                     <ExternalLink size={13} /><span className="hidden sm:inline">Generar reporte</span><span className="sm:hidden">Reporte</span>
                   </button>
                   <DescargarDropdown
-                    hojas={[hojaResumenBarPais, hojaClasificacionBarPais, hojaJerarquiaBarPais, hojaCanalesBarPais, hojaAccionMejoraBarPais, hojaTopBarrerasPais]}
+                    hojas={[hojaResumenBarPais, hojaClasificacionBarPais, hojaJerarquiaBarPais, FEATURES.impactoEconomicoBarrerasPais && hojaCanalesBarPais, FEATURES.accionMejoraSugeridaBarrerasPais && hojaAccionMejoraBarPais, hojaTopBarrerasPais].filter(Boolean)}
                     filtrosActivos={filtrosActivosBarPais}
                     nombreArchivoBase="barreras_pais"
                     estrategicoData={estrategicoDataBarPais}
@@ -5715,58 +5739,69 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
       {/* Barreras por jerarquía normativa · Canales de transmisión económica */}
       {(() => {
         const coberturaPais = COBERTURA_MUESTRA[country as Exclude<Country, "Todos">] ?? COBERTURA_MUESTRA["Bolivia"];
-        return (
+        const barrerasPorJerarquiaCard = (
+          <BarrerasPorJerarquiaCard
+            cd={cd}
+            metricas={metricasInstrumento}
+            modo={modoBarrerasPorPais}
+            onModoChange={setModoBarrerasPorPais}
+            jerarquiaActiva={jerarquia}
+            onSegmentClick={(modoSel, nombre, severidad) => {
+              // Mismo criterio que en la rama Regional: "jerarquia" viene en
+              // N2-N6, se traduce de vuelta a la escala vieja para que el
+              // filtro real sobre barrera.jerarquia siga funcionando.
+              const valor = modoSel === "jerarquia" ? (N2N6_A_JERARQUIA_BARRERAS[nombre] ?? nombre) : nombre;
+              onNavigate({ screen: "hallazgos-filtrados-barreras", filtros: { pais: country, [modoSel]: valor, severidad } });
+            }}
+            onRowClick={nivel => onNavigate({ screen: "hallazgos-filtrados", filtros: { jerarquia: nivel } })}
+            footer={
+              <p style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 11, color: C.textMuted }}>
+                Cobertura {coberturaPais}% · {VALIDADO_HITL_MUESTRA[country]}% validado HITL
+              </p>
+            }
+          />
+        );
+        return FEATURES.impactoEconomicoBarrerasPais ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4" style={{ alignItems: "stretch" }}>
-            <BarrerasPorJerarquiaCard
-              cd={cd}
-              metricas={metricasInstrumento}
-              modo={modoBarrerasPorPais}
-              onModoChange={setModoBarrerasPorPais}
-              jerarquiaActiva={jerarquia}
-              onSegmentClick={(modoSel, nombre, severidad) => {
-                // Mismo criterio que en la rama Regional: "jerarquia" viene en
-                // N2-N6, se traduce de vuelta a la escala vieja para que el
-                // filtro real sobre barrera.jerarquia siga funcionando.
-                const valor = modoSel === "jerarquia" ? (N2N6_A_JERARQUIA_BARRERAS[nombre] ?? nombre) : nombre;
-                onNavigate({ screen: "hallazgos-filtrados-barreras", filtros: { pais: country, [modoSel]: valor, severidad } });
-              }}
-              onRowClick={nivel => onNavigate({ screen: "hallazgos-filtrados", filtros: { jerarquia: nivel } })}
-              footer={
-                <p style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 11, color: C.textMuted }}>
-                  Cobertura {coberturaPais}% · {VALIDADO_HITL_MUESTRA[country]}% validado HITL
-                </p>
-              }
-            />
+            {barrerasPorJerarquiaCard}
             <ComposicionSimplePanel
               label="Canales de transmisión económica"
               filas={CANALES_TRANSMISION_MUESTRA[country as Exclude<Country, "Todos">] ?? CANALES_TRANSMISION_MUESTRA["Bolivia"]}
               onRowClick={(canalTransmision) => onNavigate({ screen: "hallazgos-filtrados-barreras", filtros: { pais: country, canalTransmision } })}
             />
           </div>
+        ) : (
+          <div className="mb-4">{barrerasPorJerarquiaCard}</div>
         );
       })()}
 
       {/* Barreras por acción de mejora sugerida · Barreras con afectación MIPYME */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6" style={{ alignItems: "stretch" }}>
-        {/* TODO: acción de mejora sugerida a nivel agregado es un concepto
-            nuevo sin metodología real -- falta definir cómo se calcula a
-            partir de barreras individuales cuando exista ese detalle.
-            barrera.accionCategoria (corta, ver ALL_BARRERAS) es la que
-            filtra acá -- barrera.accionSugerida.accion sigue siendo la
-            descripción larga que ya usan las tablas, sin tocar. */}
-        <ComposicionSimplePanel
-          label="Barreras por acción de mejora sugerida"
-          filas={ACCION_MEJORA_MUESTRA[country as Exclude<Country, "Todos">] ?? ACCION_MEJORA_MUESTRA["Bolivia"]}
-          onRowClick={(accionCategoria) => onNavigate({ screen: "hallazgos-filtrados-barreras", filtros: { pais: country, accionCategoria } })}
-        />
-        <ComposicionSimplePanel
-          label="Barreras con afectación MIPYME"
-          filas={MIPYME_MUESTRA[country as Exclude<Country, "Todos">] ?? MIPYME_MUESTRA["Bolivia"]}
-          actionLabel="Ver tabla completa"
-          onAction={() => onNavigate({ screen: "hallazgos-filtrados-barreras", filtros: { pais: country } })}
-          onRowClick={(afectacionMipyme) => onNavigate({ screen: "hallazgos-filtrados-barreras", filtros: { pais: country, afectacionMipyme } })}
-        />
-      </div>
+      {(FEATURES.accionMejoraSugeridaBarrerasPais || FEATURES.impactoEconomicoBarrerasPais) && (
+        <div className={FEATURES.accionMejoraSugeridaBarrerasPais && FEATURES.impactoEconomicoBarrerasPais ? "grid grid-cols-1 md:grid-cols-2 gap-4 mb-6" : "mb-6"} style={{ alignItems: "stretch" }}>
+          {/* TODO: acción de mejora sugerida a nivel agregado es un concepto
+              nuevo sin metodología real -- falta definir cómo se calcula a
+              partir de barreras individuales cuando exista ese detalle.
+              barrera.accionCategoria (corta, ver ALL_BARRERAS) es la que
+              filtra acá -- barrera.accionSugerida.accion sigue siendo la
+              descripción larga que ya usan las tablas, sin tocar. */}
+          {FEATURES.accionMejoraSugeridaBarrerasPais && (
+            <ComposicionSimplePanel
+              label="Barreras por acción de mejora sugerida"
+              filas={ACCION_MEJORA_MUESTRA[country as Exclude<Country, "Todos">] ?? ACCION_MEJORA_MUESTRA["Bolivia"]}
+              onRowClick={(accionCategoria) => onNavigate({ screen: "hallazgos-filtrados-barreras", filtros: { pais: country, accionCategoria } })}
+            />
+          )}
+          {FEATURES.impactoEconomicoBarrerasPais && (
+            <ComposicionSimplePanel
+              label="Barreras con afectación MIPYME"
+              filas={MIPYME_MUESTRA[country as Exclude<Country, "Todos">] ?? MIPYME_MUESTRA["Bolivia"]}
+              actionLabel="Ver tabla completa"
+              onAction={() => onNavigate({ screen: "hallazgos-filtrados-barreras", filtros: { pais: country } })}
+              onRowClick={(afectacionMipyme) => onNavigate({ screen: "hallazgos-filtrados-barreras", filtros: { pais: country, afectacionMipyme } })}
+            />
+          )}
+        </div>
+      )}
 
       {/* Corrección: sus filas usan las etiquetas N2–N6 de INSTRUMENTOS
           (JERARQUIA_N2N6_LABELS), solo con un % propio de Barreras (DOC_
@@ -5789,7 +5824,7 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
       {/* Top 3 barreras según IRR -- tablaFilas/barrerasFiltradasPais ya
           vienen hoisted arriba (las usa también el Reporte Estratégico del
           header, ver estrategicoDataBarPais), no una copia recalculada acá. */}
-      {(() => {
+      {FEATURES.tablaPrioritariaBarreras && (() => {
         return (
           <div className="rounded-lg" style={{ backgroundColor: C.card }}>
             <div className="p-5 border-b flex items-center justify-between gap-3" style={{ borderColor: C.border }}>
@@ -6011,7 +6046,7 @@ function BarreraDetail({ id, onNavigate, userRole, retroGobiernoOverrides, onGua
     ["Prioridad", barrera.accionSugerida.prioridad],
     ["Tipo de cambio requerido", barrera.accionSugerida.tipoCambioRequerido],
     ["Factibilidad", barrera.accionSugerida.factibilidad],
-    ["Objetivo legítimo y proporcionalidad", barrera.accionSugerida.objetivoLegitimo],
+    ...(FEATURES.objetivoLegitimoDetalleBarrera ? [["Objetivo legítimo y proporcionalidad", barrera.accionSugerida.objetivoLegitimo] as [string, string]] : []),
   ];
   const ESCALA_ALTA_MEDIA_BAJA = ["Alta", "Media", "Baja"];
 
@@ -6069,13 +6104,13 @@ function BarreraDetail({ id, onNavigate, userRole, retroGobiernoOverrides, onGua
                 // Real, no inventado -- es la ficha completa que ya se ve en
                 // esta misma pantalla, a diferencia de las tablas filtradas
                 // genéricas (que sí dejan estas 2 secciones vacías).
-                accionesAMR: {
+                accionesAMR: FEATURES.accionSugeridaDetalleBarrera ? {
                   titulo: "Acción sugerida",
                   items: [{
                     verbo: barrera.accionSugerida.accion,
                     desc: `${barrera.accionSugerida.tipoCambioRequerido} · Prioridad ${barrera.accionSugerida.prioridad} · Factibilidad ${barrera.accionSugerida.factibilidad}`,
                   }],
-                },
+                } : { titulo: "", items: [] },
                 hallazgosDestacados: {
                   titulo: "Hallazgo destacado",
                   items: [{
@@ -6143,31 +6178,33 @@ function BarreraDetail({ id, onNavigate, userRole, retroGobiernoOverrides, onGua
           {/* Acción sugerida — reemplaza el bloque "Propuesta de reforma" (Dice/Debe
               Decir). El campo `reforma` (dice/debeDedir/palanca) NO se borra del tipo
               de dato, solo deja de renderizarse acá. */}
-          <div className="rounded-lg overflow-hidden" style={{ backgroundColor: C.steel2 }}>
-            <div className="px-5 py-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.15)" }}>
-              <p className="text-[11px] uppercase tracking-widest font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: "#CFE0F0" }}>Acción sugerida</p>
+          {FEATURES.accionSugeridaDetalleBarrera && (
+            <div className="rounded-lg overflow-hidden" style={{ backgroundColor: C.steel2 }}>
+              <div className="px-5 py-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.15)" }}>
+                <p className="text-[11px] uppercase tracking-widest font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: "#CFE0F0" }}>Acción sugerida</p>
+              </div>
+              <div className="px-5">
+                {accionSugeridaRows.map(([k, v], i) => (
+                  <div key={k} className="flex items-start justify-between gap-3 py-3"
+                    style={{ borderBottom: i < accionSugeridaRows.length - 1 ? "1px solid rgba(255,255,255,0.15)" : "none" }}>
+                    <span style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 11, color: "#CFE0F0" }}>{k}</span>
+                    <span
+                      className="text-right"
+                      style={{
+                        fontFamily: "Space Grotesk, sans-serif",
+                        fontSize: 13,
+                        color: "white",
+                        fontWeight: ESCALA_ALTA_MEDIA_BAJA.includes(v) ? 700 : 400,
+                        maxWidth: "60%",
+                      }}
+                    >
+                      {v}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="px-5">
-              {accionSugeridaRows.map(([k, v], i) => (
-                <div key={k} className="flex items-start justify-between gap-3 py-3"
-                  style={{ borderBottom: i < accionSugeridaRows.length - 1 ? "1px solid rgba(255,255,255,0.15)" : "none" }}>
-                  <span style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 11, color: "#CFE0F0" }}>{k}</span>
-                  <span
-                    className="text-right"
-                    style={{
-                      fontFamily: "Space Grotesk, sans-serif",
-                      fontSize: 13,
-                      color: "white",
-                      fontWeight: ESCALA_ALTA_MEDIA_BAJA.includes(v) ? 700 : 400,
-                      maxWidth: "60%",
-                    }}
-                  >
-                    {v}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
+          )}
         </div>
 
         {/* Sidebar */}
