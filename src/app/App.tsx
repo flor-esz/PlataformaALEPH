@@ -142,6 +142,8 @@ export const FEATURES = {
   accionMejoraSugeridaBarrerasPais: ENTREGA_ACTUAL >= 2, // Req-43
   tablaPrioritariaBarreras: ENTREGA_ACTUAL >= 2, // Req-44
   accionSugeridaDetalleBarrera: ENTREGA_ACTUAL >= 2, // Req-47
+  impactoAccionTramitesPais: ENTREGA_ACTUAL >= 2, // Req-58
+  tablaPrioritariaTramites: ENTREGA_ACTUAL >= 2, // Req-59
   // Entrega 3
   objetivoLegitimoDetalleBarrera: ENTREGA_ACTUAL >= 3, // Req-45/46
 } as const;
@@ -6569,7 +6571,7 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
         },
       ],
       accionesAMR: { titulo: "Acciones sugeridas en el conjunto filtrado", items: accionesAgrupadasReg },
-      hallazgosDestacados: {
+      hallazgosDestacados: FEATURES.tablaPrioritariaTramites ? {
         titulo: "Trámites prioritarios",
         intro: "Trámites reales del conjunto filtrado en esta pantalla.",
         items: tramitesPrioritariosFilas.slice(0, 2).map(t => ({
@@ -6582,7 +6584,7 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
           accion: t.accion,
           costoLabel: t.costo,
         })),
-      },
+      } : { titulo: "", items: [] },
     };
 
     return (
@@ -6599,7 +6601,7 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
                 <ExternalLink size={13} /><span className="hidden sm:inline">Generar reporte</span><span className="sm:hidden">Reporte</span>
               </button>
               <DescargarDropdown
-                hojas={[hojaResumen, hojaTramitesPorPais, hojaEntradaPorPais, hojaTipoUsuario, hojaPorEntidad, hojaTramitesPrioritarios]}
+                hojas={[hojaResumen, hojaTramitesPorPais, hojaEntradaPorPais, hojaTipoUsuario, hojaPorEntidad, FEATURES.tablaPrioritariaTramites && hojaTramitesPrioritarios].filter(Boolean)}
                 filtrosActivos={[]}
                 nombreArchivoBase="tramites_regional"
                 estrategicoData={estrategicoData}
@@ -6725,6 +6727,7 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
         </div>
 
         {/* Trámites prioritarios */}
+        {FEATURES.tablaPrioritariaTramites && (
         <div className="rounded-lg" style={{ backgroundColor: C.card }}>
           <div className="p-5 border-b flex items-center justify-between gap-3" style={{ borderColor: C.border }}>
             <div className="flex items-center gap-3">
@@ -6795,6 +6798,7 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
             </div>
           )}
         </div>
+        )}
       </div>
     );
   }
@@ -6966,17 +6970,17 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
               chartLabel: "Etapa del ciclo empresarial",
               categorias: (ETAPA_CICLO_MUESTRA[country as Exclude<Country, "Todos">] ?? ETAPA_CICLO_MUESTRA["Bolivia"]).map(f => ({ nombre: f.nombre, total: f.valor, componentes: [{ nombre: f.nombre, valor: f.valor }] })),
             },
-            {
+            ...(FEATURES.impactoAccionTramitesPais ? [{
               titulo: "Afectación MIPYME",
               chartLabel: "Afectación MIPYME",
               categorias: (MIPYME_MUESTRA[country as Exclude<Country, "Todos">] ?? MIPYME_MUESTRA["Bolivia"]).map(f => ({ nombre: f.nombre, total: f.valor, componentes: [{ nombre: f.nombre, valor: f.valor }] })),
-            },
+            }] : []),
           ],
-          accionesAMR: {
+          accionesAMR: FEATURES.impactoAccionTramitesPais ? {
             titulo: "Acciones de mejora en trámites",
             items: accionesMejoraPais.map(f => ({ verbo: f.nombre, desc: `${f.valor} trámite(s) con esta acción sugerida en ${country}.` })),
-          },
-          hallazgosDestacados: {
+          } : { titulo: "", items: [] },
+          hallazgosDestacados: FEATURES.tablaPrioritariaTramites ? {
             titulo: "Trámites prioritarios",
             intro: `Trámites reales del conjunto filtrado en ${countryLabel}.`,
             items: filasPais.slice(0, 2).map(t => ({
@@ -6989,7 +6993,7 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
               accion: t.accion,
               costoLabel: t.costo,
             })),
-          },
+          } : { titulo: "", items: [] },
         };
 
         return (
@@ -7005,7 +7009,7 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
                   <ExternalLink size={13} /><span className="hidden sm:inline">Generar reporte</span><span className="sm:hidden">Reporte</span>
                 </button>
                 <DescargarDropdown
-                  hojas={[hojaResumen, hojaCargaPorEje, hojaTopEntidades, hojaEtapaCiclo, hojaMipyme, hojaTipoUsuario, hojaAccionMejora, hojaAfectaciones, hojaTramitesPrioritarios]}
+                  hojas={[hojaResumen, hojaCargaPorEje, hojaTopEntidades, hojaEtapaCiclo, FEATURES.impactoAccionTramitesPais && hojaMipyme, hojaTipoUsuario, FEATURES.impactoAccionTramitesPais && hojaAccionMejora, FEATURES.impactoAccionTramitesPais && hojaAfectaciones, FEATURES.tablaPrioritariaTramites && hojaTramitesPrioritarios].filter(Boolean)}
                   filtrosActivos={filtrosActivosExcel}
                   nombreArchivoBase="tramites_pais"
                   estrategicoData={estrategicoData}
@@ -7175,13 +7179,15 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
             onAction={() => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: { pais: country } })}
             onRowClick={(etapaCiclo) => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: { pais: country, etapaCiclo } })}
           />
-          <ComposicionSimplePanel
-            label="Afectación MIPYME"
-            filas={MIPYME_MUESTRA[country as Exclude<Country, "Todos">] ?? MIPYME_MUESTRA["Bolivia"]}
-            actionLabel="Ver tabla completa"
-            onAction={() => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: { pais: country } })}
-            onRowClick={(afectacionMipyme) => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: { pais: country, afectacionMipyme } })}
-          />
+          {FEATURES.impactoAccionTramitesPais && (
+            <ComposicionSimplePanel
+              label="Afectación MIPYME"
+              filas={MIPYME_MUESTRA[country as Exclude<Country, "Todos">] ?? MIPYME_MUESTRA["Bolivia"]}
+              actionLabel="Ver tabla completa"
+              onAction={() => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: { pais: country } })}
+              onRowClick={(afectacionMipyme) => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: { pais: country, afectacionMipyme } })}
+            />
+          )}
         </div>
         <ComposicionSimplePanel
           label="Tipo de usuario"
@@ -7198,31 +7204,33 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
 
       {/* Acciones de mejora en trámites · Afectaciones — series independientes
           (antes esta segunda sección repetía los números de la primera) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6" style={{ alignItems: "stretch" }}>
-        {/* tramite.accionCategoria (corta, ver ALL_TRAMITES) es la que filtra
-            acá -- tramite.accionSugerida sigue siendo la descripción larga
-            que ya usan las tablas, sin tocar. */}
-        <ComposicionSimplePanel
-          label="Acciones de mejora en trámites"
-          filas={TRAMITES_ACCION_MEJORA_MUESTRA[country as Exclude<Country, "Todos">] ?? TRAMITES_ACCION_MEJORA_MUESTRA["Bolivia"]}
-          actionLabel="Ver más"
-          onAction={() => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: { pais: country } })}
-          onRowClick={(accionCategoria) => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: { pais: country, accionCategoria } })}
-        />
-        <ComposicionSimplePanel
-          label="Afectaciones"
-          filas={TRAMITES_AFECTACIONES_MUESTRA[country as Exclude<Country, "Todos">] ?? TRAMITES_AFECTACIONES_MUESTRA["Bolivia"]}
-          actionLabel="Ver más"
-          onAction={() => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: { pais: country } })}
-          onRowClick={(tipoAfectacion) => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: { pais: country, tipoAfectacion } })}
-        />
-      </div>
+      {FEATURES.impactoAccionTramitesPais && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6" style={{ alignItems: "stretch" }}>
+          {/* tramite.accionCategoria (corta, ver ALL_TRAMITES) es la que filtra
+              acá -- tramite.accionSugerida sigue siendo la descripción larga
+              que ya usan las tablas, sin tocar. */}
+          <ComposicionSimplePanel
+            label="Acciones de mejora en trámites"
+            filas={TRAMITES_ACCION_MEJORA_MUESTRA[country as Exclude<Country, "Todos">] ?? TRAMITES_ACCION_MEJORA_MUESTRA["Bolivia"]}
+            actionLabel="Ver más"
+            onAction={() => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: { pais: country } })}
+            onRowClick={(accionCategoria) => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: { pais: country, accionCategoria } })}
+          />
+          <ComposicionSimplePanel
+            label="Afectaciones"
+            filas={TRAMITES_AFECTACIONES_MUESTRA[country as Exclude<Country, "Todos">] ?? TRAMITES_AFECTACIONES_MUESTRA["Bolivia"]}
+            actionLabel="Ver más"
+            onAction={() => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: { pais: country } })}
+            onRowClick={(tipoAfectacion) => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: { pais: country, tipoAfectacion } })}
+          />
+        </div>
+      )}
 
       {/* Trámites prioritarios — real y filtrado por país (buildTopTramitesFilas,
           ver `filasPais` arriba); antes mostraba TRAMITES_PRIORITARIOS_MUESTRA
           (mock fijo, sin los 8 filtros activos), y antes de eso TRAMITES_EXT
           (catálogo de Bolivia) sin importar el país seleccionado. */}
-      {(() => {
+      {FEATURES.tablaPrioritariaTramites && (() => {
         // `filasPais` ya viene calculada más arriba (la reusa también el
         // Excel del header, ver hojaTramitesPrioritarios).
         const prioritariosPageCount = Math.ceil(filasPais.length / PAGE_SIZE);
