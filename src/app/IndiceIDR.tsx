@@ -15,6 +15,7 @@ import {
   usePeriodoAnalisis,
   periodoRegional,
   formatearPeriodo,
+  useIsMobile,
 } from "./App";
 import type { Country, View, HojaExcel, ReporteEstrategicoData } from "./App";
 import type { TipoDato } from "./components/ui/PanelTipoSubdimension";
@@ -79,11 +80,12 @@ function PesoIndicePanel({ label, peso, total, selectValue, filas, actionLabel, 
   // Si se pasa, cada fila se vuelve clicable, con su `nombre`.
   onRowClick?: (nombre: string) => void;
 }) {
+  const isMobile = useIsMobile();
   const maxValor = Math.max(...filas.map(f => f.valor), 1);
   const gradient = [C.steel4, C.steel3, C.steel2, C.steel1];
   return (
-    <div className="rounded-xl flex flex-col h-full" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
-      <div className="px-5 pt-4 pb-4 flex items-start justify-between gap-3" style={{ borderBottom: `1px solid ${C.border}` }}>
+    <div className={isMobile ? "rounded-xl flex flex-col" : "rounded-xl flex flex-col h-full"} style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
+      <div className="px-5 pt-4 pb-4 flex flex-wrap items-start justify-between gap-3" style={{ borderBottom: `1px solid ${C.border}` }}>
         <div>
           <div className="flex items-center gap-2">
             <p className="text-[11px] uppercase tracking-widest font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>{label}</p>
@@ -91,7 +93,7 @@ function PesoIndicePanel({ label, peso, total, selectValue, filas, actionLabel, 
           </div>
           <p className="text-[11px] mt-0.5" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>peso {peso}% del índice</p>
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex items-center gap-2 flex-wrap">
           {/* TODO: select visual -- falta diseño del estado alterno
               (Operación / Certidumbre, Cumplimiento, Proporcionalidad) antes
               de cablearlo a un cambio real de clasificación/tipo. */}
@@ -104,7 +106,7 @@ function PesoIndicePanel({ label, peso, total, selectValue, filas, actionLabel, 
           <button style={HDR_BTN_PILL} onClick={onAction}>{actionLabel}</button>
         </div>
       </div>
-      <div className="px-5 pt-4 pb-5 flex flex-col gap-3 flex-1 justify-center">
+      <div className={isMobile ? "px-5 pt-4 pb-5 flex flex-col gap-3" : "px-5 pt-4 pb-5 flex flex-col gap-3 flex-1 justify-center"}>
         {filas.map((f, i) => {
           const pct = (f.valor / maxValor) * 100;
           return (

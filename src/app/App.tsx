@@ -4330,13 +4330,13 @@ export function Header({ breadcrumb, title, subtitle, actions }: { breadcrumb?: 
   const isMobile = useIsMobile();
   return (
     <div className="mb-5 md:mb-6">
-      <div className="flex items-start justify-between gap-3">
+      <div className={isMobile ? "flex flex-col gap-3" : "flex items-start justify-between gap-3"}>
         <div className="flex-1 min-w-0">
           {breadcrumb && <p className="text-[10px] md:text-[11px] uppercase tracking-widest mb-0.5" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{breadcrumb}</p>}
           <h1 className="text-[22px] md:text-[28px] font-semibold leading-tight" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>{title}</h1>
           {subtitle && <p className="text-[12px] md:text-[13px] mt-0.5" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{subtitle}</p>}
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0 mt-1">
+        <div className={isMobile ? "flex items-center gap-2 flex-wrap" : "flex items-center gap-2 flex-shrink-0 mt-1"}>
           {actions}
           {!isMobile && (
             <>
@@ -5003,10 +5003,11 @@ export function ComposicionSimplePanel({ label, filas, actionLabel, onAction, fo
   // omite, se comporta exactamente igual que hoy (no clicable).
   onRowClick?: (nombre: string) => void;
 }) {
+  const isMobile = useIsMobile();
   const maxValor = Math.max(...filas.map(f => f.valor), 1);
   const gradient = [C.steel4, C.steel3, C.steel2, C.steel1, "#A0C1E0", "#BDD0DD"];
   return (
-    <div className="rounded-xl flex flex-col h-full" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
+    <div className={isMobile ? "rounded-xl flex flex-col" : "rounded-xl flex flex-col h-full"} style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
       <div className="px-5 pt-4 pb-4 flex items-center justify-between gap-3" style={{ borderBottom: `1px solid ${C.border}` }}>
         <p className="text-[11px] uppercase tracking-widest font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>{label}</p>
         <div className="flex items-center gap-2 flex-shrink-0">
@@ -5021,7 +5022,7 @@ export function ComposicionSimplePanel({ label, filas, actionLabel, onAction, fo
           )}
         </div>
       </div>
-      <div className="px-5 pt-4 pb-5 flex flex-col gap-3 flex-1 justify-center">
+      <div className={isMobile ? "px-5 pt-4 pb-5 flex flex-col gap-3" : "px-5 pt-4 pb-5 flex flex-col gap-3 flex-1 justify-center"}>
         {filas.map((f, i) => {
           const pct = (f.valor / maxValor) * 100;
           return (
