@@ -144,8 +144,12 @@ export const FEATURES = {
   accionSugeridaDetalleBarrera: ENTREGA_ACTUAL >= 2, // Req-47
   impactoAccionTramitesPais: ENTREGA_ACTUAL >= 2, // Req-58
   tablaPrioritariaTramites: ENTREGA_ACTUAL >= 2, // Req-59
+  metodologiaCostosSupuestos: ENTREGA_ACTUAL >= 2, // Req-64 (incluye el botón "Ver metodología" de Req-68, nested)
+  costoEstimadoPorDimension: ENTREGA_ACTUAL >= 2, // Req-65
+  descargaImpactoEconomico: ENTREGA_ACTUAL >= 2, // Req-68
   // Entrega 3
   objetivoLegitimoDetalleBarrera: ENTREGA_ACTUAL >= 3, // Req-45/46
+  afectacionMipymeImpacto: ENTREGA_ACTUAL >= 3, // Req-66
 } as const;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
