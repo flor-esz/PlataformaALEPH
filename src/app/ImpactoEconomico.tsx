@@ -488,6 +488,7 @@ function ImpactoEconomico({ country = "Todos", onCountryChange, onNavigate }: {
           independientes, no deben coincidir) */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 my-6" style={{ alignItems: "stretch" }}>
         <ComposicionSimplePanel
+          stretch
           label="Trámites afectados por canal de transmisión económica"
           filas={canalesTramites}
           actionLabel="Ver tabla completa"
@@ -498,6 +499,7 @@ function ImpactoEconomico({ country = "Todos", onCountryChange, onNavigate }: {
             `country` arriba) -- la nota anterior de que "no distingue país
             propio" era un error, corregido acá junto con el resto del barrido. */}
         <ComposicionSimplePanel
+          stretch
           label="Barreras afectados por canal de transmisión económica"
           filas={canalesBarreras}
           actionLabel="Ver tabla completa"

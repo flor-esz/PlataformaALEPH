@@ -4988,7 +4988,7 @@ function BarrerasPorJerarquiaCard({ cd, metricas, modo, onModoChange, jerarquiaA
 // Barreras — mismo lenguaje visual que BarrasComposicion, pero SIN leyenda de
 // severidad (esto es composición, no severidad): degradado C.steel4→steel1 y
 // dos tonos más claros de la misma rampa categórica para filas adicionales.
-export function ComposicionSimplePanel({ label, filas, actionLabel, onAction, formatValor, headerExtra, onRowClick }: {
+export function ComposicionSimplePanel({ label, filas, actionLabel, onAction, formatValor, headerExtra, onRowClick, stretch = false }: {
   label: string;
   filas: { nombre: string; valor: number }[];
   actionLabel?: string;
@@ -5002,12 +5002,16 @@ export function ComposicionSimplePanel({ label, filas, actionLabel, onAction, fo
   // Si se pasa, cada fila se vuelve clicable, con su `nombre`. Cuando se
   // omite, se comporta exactamente igual que hoy (no clicable).
   onRowClick?: (nombre: string) => void;
+  // true cuando el panel vive en una grilla de 2 columnas con
+  // alignItems:stretch y debe igualar de alto a su par (ej. "Trámites/
+  // Barreras por canal de transmisión económica" en Impacto Económico).
+  // Por defecto false: el panel toma solo el alto de su contenido.
+  stretch?: boolean;
 }) {
-  const isMobile = useIsMobile();
   const maxValor = Math.max(...filas.map(f => f.valor), 1);
   const gradient = [C.steel4, C.steel3, C.steel2, C.steel1, "#A0C1E0", "#BDD0DD"];
   return (
-    <div className={isMobile ? "rounded-xl flex flex-col" : "rounded-xl flex flex-col h-full"} style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
+    <div className={stretch ? "rounded-xl flex flex-col h-full" : "rounded-xl flex flex-col"} style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
       <div className="px-5 pt-4 pb-4 flex items-center justify-between gap-3" style={{ borderBottom: `1px solid ${C.border}` }}>
         <p className="text-[11px] uppercase tracking-widest font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.textMuted }}>{label}</p>
         <div className="flex items-center gap-2 flex-shrink-0">
@@ -5022,7 +5026,7 @@ export function ComposicionSimplePanel({ label, filas, actionLabel, onAction, fo
           )}
         </div>
       </div>
-      <div className={isMobile ? "px-5 pt-4 pb-5 flex flex-col gap-3" : "px-5 pt-4 pb-5 flex flex-col gap-3 flex-1 justify-center"}>
+      <div className={stretch ? "px-5 pt-4 pb-5 flex flex-col gap-3 flex-1 justify-center" : "px-5 pt-4 pb-5 flex flex-col gap-3"}>
         {filas.map((f, i) => {
           const pct = (f.valor / maxValor) * 100;
           return (
@@ -5866,7 +5870,7 @@ function FichaPanel({ title, rows, children }: { title: string; rows: [string, R
       {rows.map(([k, v]) => (
         <div key={k} className="flex justify-between py-2 border-b last:border-0 gap-3" style={{ borderColor: C.border }}>
           <span className="text-[12px] flex-shrink-0" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{k}</span>
-          <span className="text-[12px] font-medium text-right" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text, maxWidth: "60%" }}>{v}</span>
+          <span className="text-[12px] font-medium text-right" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text, maxWidth: "60%", overflowWrap: "anywhere" }}>{v}</span>
         </div>
       ))}
       {children}
