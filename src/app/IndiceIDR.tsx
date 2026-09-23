@@ -1,6 +1,7 @@
 import { Download, Info } from "lucide-react";
 import { C, HDR_BTN_PRIMARY, HDR_BTN_PILL } from "./theme";
 import {
+  FEATURES,
   Header,
   KpiCard,
   DescargarDropdown,
@@ -75,8 +76,8 @@ function PesoIndicePanel({ label, peso, total, selectValue, filas, actionLabel, 
   total: number;
   selectValue: string;
   filas: { nombre: string; valor: number }[];
-  actionLabel: string;
-  onAction: () => void;
+  actionLabel?: string;
+  onAction?: () => void;
   // Si se pasa, cada fila se vuelve clicable, con su `nombre`.
   onRowClick?: (nombre: string) => void;
 }) {
@@ -103,7 +104,7 @@ function PesoIndicePanel({ label, peso, total, selectValue, filas, actionLabel, 
           >
             <option value={selectValue}>{selectValue}</option>
           </select>
-          <button style={HDR_BTN_PILL} onClick={onAction}>{actionLabel}</button>
+          {actionLabel && <button style={HDR_BTN_PILL} onClick={onAction}>{actionLabel}</button>}
         </div>
       </div>
       <div className={isMobile ? "px-5 pt-4 pb-5 flex flex-col gap-3" : "px-5 pt-4 pb-5 flex flex-col gap-3 flex-1 justify-center"}>
@@ -181,7 +182,9 @@ function IndiceIDR({ country = "Todos", onCountryChange, onNavigate }: {
       <div key={pais} className="rounded-lg" style={{ backgroundColor: C.card, padding: 18 }}>
         <div className="flex items-center justify-between mb-3 gap-2">
           <p className="uppercase" style={{ fontFamily: "Space Grotesk, sans-serif", fontSize: 13, color: C.text }}>{pais}</p>
-          <button style={HDR_BTN_PILL} onClick={() => onCountryChange?.(pais)}>Ver detalle por país</button>
+          {FEATURES.verDetallePaisIndice && (
+            <button style={HDR_BTN_PILL} onClick={() => onCountryChange?.(pais)}>Ver detalle por país</button>
+          )}
         </div>
         <p className="font-semibold leading-none mb-4" style={{ fontFamily: "Space Grotesk, sans-serif", fontSize: 32, color: C.text }}>{IRR_GENERAL_MUESTRA[pais]}</p>
         <p className="uppercase mb-2" style={{ fontFamily: "Space Grotesk, sans-serif", fontSize: 10.5, color: C.textMuted }}>Hallazgos / Barreras</p>
@@ -298,7 +301,9 @@ function IndiceIDR({ country = "Todos", onCountryChange, onNavigate }: {
         actions={
           <>
             {/* Mismo botón/destino ya corregido en Barreras Regional/Trámites Regional (screen "documentacion" -> "Metodología" del sidebar). */}
-            <button style={HDR_BTN_PILL} onClick={() => onNavigate({ screen: "documentacion" })}>Ver metodología</button>
+            {FEATURES.documentacionMetodologia && (
+              <button style={HDR_BTN_PILL} onClick={() => onNavigate({ screen: "documentacion" })}>Ver metodología</button>
+            )}
             <button style={HDR_BTN_PRIMARY} onClick={() => onNavigate({ screen: "reportes" })}>
               <Download size={13} /><span className="hidden sm:inline">Generar reporte</span><span className="sm:hidden">Reporte</span>
             </button>
@@ -326,10 +331,12 @@ function IndiceIDR({ country = "Todos", onCountryChange, onNavigate }: {
           lógica de filtrado todavía (mismo criterio que Impacto Económico). */}
       <div className="flex flex-col gap-2 mb-5">
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
-          <select className="grow" style={selStyle} value={country} onChange={e => onCountryChange?.(e.target.value as Country)}>
-            <option value="Todos">Todos los países</option>
-            {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
+          {FEATURES.verDetallePaisIndice && (
+            <select className="grow" style={selStyle} value={country} onChange={e => onCountryChange?.(e.target.value as Country)}>
+              <option value="Todos">Todos los países</option>
+              {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          )}
           <select className="grow" style={selStyle} defaultValue="">
             <option value="">Costo</option>
             <option value="bajo">Bajo (&lt; USD 200)</option>
@@ -411,8 +418,7 @@ function IndiceIDR({ country = "Todos", onCountryChange, onNavigate }: {
           total={distorsiones.total}
           selectValue="Entrada"
           filas={distorsiones.filas}
-          actionLabel="Ver barreras →"
-          onAction={() => onNavigate({ screen: "barreras" })}
+          {...(FEATURES.drillDownAccionesIndice ? { actionLabel: "Ver barreras →", onAction: () => onNavigate({ screen: "barreras" }) } : {})}
           onRowClick={(subdimension) => onNavigate({ screen: "hallazgos-filtrados-barreras", filtros: { clasificacion: "Entrada", subdimension, ...(country !== "Todos" ? { pais: country } : {}) } })}
         />
         <PesoIndicePanel
@@ -421,8 +427,7 @@ function IndiceIDR({ country = "Todos", onCountryChange, onNavigate }: {
           total={carga.total}
           selectValue="Accesibilidad"
           filas={carga.filas}
-          actionLabel="Ver trámites →"
-          onAction={() => onNavigate({ screen: "tramites" })}
+          {...(FEATURES.drillDownAccionesIndice ? { actionLabel: "Ver trámites →", onAction: () => onNavigate({ screen: "tramites" }) } : {})}
           onRowClick={(subdimension) => onNavigate({ screen: "hallazgos-filtrados-tramites", filtros: { tipoCarga: "Accesibilidad", subdimension, ...(country !== "Todos" ? { pais: country } : {}) } })}
         />
       </div>

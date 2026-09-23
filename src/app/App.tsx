@@ -147,9 +147,28 @@ export const FEATURES = {
   metodologiaCostosSupuestos: ENTREGA_ACTUAL >= 2, // Req-64 (incluye el botón "Ver metodología" de Req-68, nested)
   costoEstimadoPorDimension: ENTREGA_ACTUAL >= 2, // Req-65
   descargaImpactoEconomico: ENTREGA_ACTUAL >= 2, // Req-68
+  verDetallePaisIndice: ENTREGA_ACTUAL >= 2, // Req-73
+  drillDownAccionesIndice: ENTREGA_ACTUAL >= 2, // Req-76
+  // Req-79 a Req-86 (módulo completo "Validación HITL" / "Calidad" en el
+  // sidebar). Oculta el punto de entrada por navegación normal, pero NO
+  // bloquea el acceso directo por URL a revision-repositorio/revision-log-
+  // errores/revision-indicadores si alguien la escribe a mano o tiene un
+  // enlace guardado -- aceptable para demo; bloquear también el acceso
+  // directo sería un ajuste aparte en el switch de routing.
+  validacionHitl: ENTREGA_ACTUAL >= 2, // Req-79 a Req-86 (módulo completo)
+  filtroEstadoHitlReportes: ENTREGA_ACTUAL >= 2, // Req-94
+  descargaFichaBarrera: ENTREGA_ACTUAL >= 2, // Req-95
+  descargaAnexoMetodologico: ENTREGA_ACTUAL >= 2, // Req-96
   // Entrega 3
   objetivoLegitimoDetalleBarrera: ENTREGA_ACTUAL >= 3, // Req-45/46
   afectacionMipymeImpacto: ENTREGA_ACTUAL >= 3, // Req-66
+  // Req-100 a Req-108 (módulo completo "Documentación"/"Metodología", hoy
+  // solo un placeholder de catálogo de funcionalidades, no el contenido
+  // real). Oculta el ítem del sidebar y los botones "Ver metodología" que
+  // navegan a screen "documentacion" -- salvo el de ImpactoEconomico.tsx,
+  // que ya queda oculto antes por vivir dentro de la caja gateada por
+  // metodologiaCostosSupuestos (Req-64).
+  documentacionMetodologia: ENTREGA_ACTUAL >= 3, // Req-100 a Req-108 (módulo completo, hoy placeholder)
 } as const;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -4119,7 +4138,7 @@ function Sidebar({
             el Asesor entraba directo a un hallazgo fijo porque el Repositorio
             nunca incluía Etapa 1 en su matriz -- eso ya se corrigió, así que
             todos los roles navegan igual. */}
-        {(userRole === "asesor" || userRole === "analista" || userRole === "validador" || userRole === "administrador") && (
+        {FEATURES.validacionHitl && (userRole === "asesor" || userRole === "analista" || userRole === "validador" || userRole === "administrador") && (
           <>
             <button
               className="w-full flex items-center gap-3 px-6 py-3 text-left relative"
@@ -4144,7 +4163,9 @@ function Sidebar({
             siendo el placeholder pendiente de contenido), solo cambió la
             etiqueta visible; internamente sigue siendo el mismo screen
             "documentacion". */}
-        {navItem("Metodología", "documentacion", <BookOpen size={18} />, () => nav(() => onNavigate({ screen: "documentacion" })))}
+        {FEATURES.documentacionMetodologia && (
+          navItem("Metodología", "documentacion", <BookOpen size={18} />, () => nav(() => onNavigate({ screen: "documentacion" })))
+        )}
         {/* Administración submenu — visible solo para Administrador */}
         {userRole === "administrador" && (
           <>
@@ -5315,7 +5336,9 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
             <>
               {/* Lleva a la sección "Metodología" del sidebar (screen "documentacion" --
                   ver Sidebar en este mismo archivo, renombrada de "Documentación"). */}
-              <button style={HDR_BTN_PILL} onClick={() => onNavigate({ screen: "documentacion" })}>Ver metodología</button>
+              {FEATURES.documentacionMetodologia && (
+                <button style={HDR_BTN_PILL} onClick={() => onNavigate({ screen: "documentacion" })}>Ver metodología</button>
+              )}
               <button style={HDR_BTN_PRIMARY} onClick={() => onNavigate({ screen: "reportes", prefill: reportesPrefill })}>
                 <ExternalLink size={13} /><span className="hidden sm:inline">Generar reporte</span><span className="sm:hidden">Reporte</span>
               </button>
@@ -5647,7 +5670,9 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
               actions={
                 <>
                   {/* Mismo botón/destino ya corregido en Barreras Regional (screen "documentacion" -> "Metodología" del sidebar). */}
-                  <button style={HDR_BTN_PILL} onClick={() => onNavigate({ screen: "documentacion" })}>Ver metodología</button>
+                  {FEATURES.documentacionMetodologia && (
+                    <button style={HDR_BTN_PILL} onClick={() => onNavigate({ screen: "documentacion" })}>Ver metodología</button>
+                  )}
                   <button style={HDR_BTN_PRIMARY} onClick={() => onNavigate({ screen: "reportes", prefill: reportesPrefill })}>
                     <ExternalLink size={13} /><span className="hidden sm:inline">Generar reporte</span><span className="sm:hidden">Reporte</span>
                   </button>
@@ -6066,6 +6091,7 @@ function BarreraDetail({ id, onNavigate, userRole, retroGobiernoOverrides, onGua
             <button style={HDR_BTN_PRIMARY} onClick={() => onNavigate({ screen: "reportes", prefill: { tipoHallazgo: "distorsion", pais: barrera.pais, sectores: [barrera.sector] } })}>
               <Download size={13} /><span className="hidden sm:inline">Generar reporte</span><span className="sm:hidden">Reporte</span>
             </button>
+            {FEATURES.descargaFichaBarrera && (
             <DescargarDropdown
               hojas={[{
                 nombre: "Barrera",
@@ -6131,6 +6157,7 @@ function BarreraDetail({ id, onNavigate, userRole, retroGobiernoOverrides, onGua
                 },
               }}
             />
+            )}
           </>
         }
       />
@@ -6600,7 +6627,9 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
             <>
               {/* Lleva a la sección "Metodología" del sidebar (screen "documentacion" --
                   ver Sidebar en este mismo archivo, renombrada de "Documentación"). */}
-              <button style={HDR_BTN_PILL} onClick={() => onNavigate({ screen: "documentacion" })}>Ver metodología</button>
+              {FEATURES.documentacionMetodologia && (
+                <button style={HDR_BTN_PILL} onClick={() => onNavigate({ screen: "documentacion" })}>Ver metodología</button>
+              )}
               <button style={HDR_BTN_PRIMARY} onClick={() => onNavigate({ screen: "reportes", prefill: reportesPrefill })}>
                 <ExternalLink size={13} /><span className="hidden sm:inline">Generar reporte</span><span className="sm:hidden">Reporte</span>
               </button>
@@ -7008,7 +7037,9 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
             actions={
               <>
                 {/* Mismo botón/destino ya corregido en Trámites Regional (screen "documentacion" -> "Metodología" del sidebar). */}
-                <button style={HDR_BTN_PILL} onClick={() => onNavigate({ screen: "documentacion" })}>Ver metodología</button>
+                {FEATURES.documentacionMetodologia && (
+                  <button style={HDR_BTN_PILL} onClick={() => onNavigate({ screen: "documentacion" })}>Ver metodología</button>
+                )}
                 <button style={HDR_BTN_PRIMARY} onClick={() => onNavigate({ screen: "reportes", prefill: reportesPrefill })}>
                   <ExternalLink size={13} /><span className="hidden sm:inline">Generar reporte</span><span className="sm:hidden">Reporte</span>
                 </button>
@@ -9624,13 +9655,15 @@ function ReportesScreen({ prefill, onNavigate }: { prefill?: ReportesPrefill; on
           </SectionCard>
 
           {/* 3d. Estado HITL — siempre visible */}
-          <SectionCard title="Estado HITL">
-            <div className="flex flex-wrap gap-2">
-              {ESTADOS_HITL.map(e => (
-                <ChipToggle key={e} label={e} active={selectedEstadoHitl.includes(e)} onClick={() => toggle(selectedEstadoHitl, setSelectedEstadoHitl, e)} />
-              ))}
-            </div>
-          </SectionCard>
+          {FEATURES.filtroEstadoHitlReportes && (
+            <SectionCard title="Estado HITL">
+              <div className="flex flex-wrap gap-2">
+                {ESTADOS_HITL.map(e => (
+                  <ChipToggle key={e} label={e} active={selectedEstadoHitl.includes(e)} onClick={() => toggle(selectedEstadoHitl, setSelectedEstadoHitl, e)} />
+                ))}
+              </div>
+            </SectionCard>
+          )}
 
           {/* 3e. IDR general mínimo — siempre visible */}
           <SectionCard title="IDR general mínimo">
@@ -9967,12 +10000,14 @@ function ReportesScreen({ prefill, onNavigate }: { prefill?: ReportesPrefill; on
                 ANEXO_METODOLOGICO_DATA arriba): taxonomías, protocolo HITL y
                 disclaimers, siempre disponible sin importar qué haya
                 seleccionado el usuario. */}
-            <button
-              style={{ ...HDR_BTN_SECONDARY, width: "100%", justifyContent: "center", marginTop: 8 }}
-              onClick={() => exportarReporteEstrategicoPdf(ANEXO_METODOLOGICO_DATA, `anexo-metodologico-${fechaSlugHoy()}`)}
-            >
-              <FileText size={14} /> Descargar Anexo Metodológico
-            </button>
+            {FEATURES.descargaAnexoMetodologico && (
+              <button
+                style={{ ...HDR_BTN_SECONDARY, width: "100%", justifyContent: "center", marginTop: 8 }}
+                onClick={() => exportarReporteEstrategicoPdf(ANEXO_METODOLOGICO_DATA, `anexo-metodologico-${fechaSlugHoy()}`)}
+              >
+                <FileText size={14} /> Descargar Anexo Metodológico
+              </button>
+            )}
           </div>
         </div>
       </div>
