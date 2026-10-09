@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { ResponsiveContainer, PieChart, Pie, Cell, Sector } from "recharts";
+import { CardHead } from "./cardhead";
 import { fmtInt } from "./format";
 import { I, Icon } from "./icons";
 import { T, type Sev } from "./theme";
@@ -14,9 +15,13 @@ export function Pips({ n, color }: { n: number; color: string }) {
     </span>
   );
 }
+
 export function Mejora({ t }: { t: string }) {
   return (
-    <span className="pill" style={{ background: MEJORA.bg, color: MEJORA.fg }}>
+    <span
+      className="pill mj"
+      style={{ background: MEJORA.bg, color: MEJORA.fg }}
+    >
       <svg
         width="11"
         height="11"
@@ -34,11 +39,15 @@ export function Mejora({ t }: { t: string }) {
     </span>
   );
 }
+
 export function SevPill({ s }: { s: Sev }) {
   const c = T.sev[s];
   const n = { Alta: 3, Media: 2, Baja: 1 }[s];
   return (
-    <span className="pill" style={{ background: c + "1f", color: s === "Baja" ? "var(--ink-2)" : c }}>
+    <span
+      className="pill"
+      style={{ background: c + "1f", color: s === "Baja" ? "var(--ink-2)" : c }}
+    >
       <Pips n={n} color={c} />
       {s}
     </span>
@@ -67,7 +76,8 @@ export function Dd({
   React.useEffect(() => {
     if (!open) return;
     const h = (e) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node))
+        setOpen(false);
     };
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
@@ -93,7 +103,11 @@ export function Dd({
         setOpen(true);
         return;
       }
-      setHi((h) => (h + (e.key === "ArrowDown" ? 1 : -1) + options.length) % options.length);
+      setHi(
+        (h) =>
+          (h + (e.key === "ArrowDown" ? 1 : -1) + options.length) %
+          options.length,
+      );
     } else if ((e.key === "Enter" || e.key === " ") && open) {
       e.preventDefault();
       pick(options[hi][0]);
@@ -124,7 +138,11 @@ export function Dd({
               key={o[0]}
               role="option"
               aria-selected={o[0] === value}
-              className={"dd-opt" + (i === hi ? " hi" : "") + (o[0] === value ? " on" : "")}
+              className={
+                "dd-opt" +
+                (i === hi ? " hi" : "") +
+                (o[0] === value ? " on" : "")
+              }
               onMouseEnter={() => setHi(i)}
               onClick={() => pick(o[0])}
             >
@@ -156,9 +174,18 @@ export function Fseg({
   tone?: "dark";
 }) {
   return (
-    <div className={"fseg" + (tone === "dark" ? " on-dark" : "")} role="group" aria-label={label}>
+    <div
+      className={"fseg" + (tone === "dark" ? " on-dark" : "")}
+      role="group"
+      aria-label={label}
+    >
       {items.map((k) => (
-        <button type="button" key={k} aria-pressed={v === k} onClick={() => set(k)}>
+        <button
+          type="button"
+          key={k}
+          aria-pressed={v === k}
+          onClick={() => set(k)}
+        >
           {k}
         </button>
       ))}
@@ -179,9 +206,24 @@ export function DdState({
   pre?: string;
 }) {
   const [v, setV] = useState(init || options[0][0]);
-  return <Dd value={v} onChange={setV} options={options} label={label} tone={tone} pre={pre} />;
+  return (
+    <Dd
+      value={v}
+      onChange={setV}
+      options={options}
+      label={label}
+      tone={tone}
+      pre={pre}
+    />
+  );
 }
-export function FsegState({ items, label }: { items: string[]; label: string }) {
+export function FsegState({
+  items,
+  label,
+}: {
+  items: string[];
+  label: string;
+}) {
   const [v, setV] = useState(items[0]);
   return <Fseg v={v} set={setV} items={items} label={label} />;
 }
@@ -202,7 +244,12 @@ export function Ctl({ f, setF, d, setD, vlabel, vpre }: any) {
             <i></i>
           </span>
         </span>
-        <Fseg v={f} set={setF} items={["Todos", "Alta", "Media", "Baja"]} label="Nivel de severidad" />
+        <Fseg
+          v={f}
+          set={setF}
+          items={["Todos", "Alta", "Media", "Baja"]}
+          label="Nivel de severidad"
+        />
       </div>
       <div className="cg cg-view">
         <span className="clbl clbl-t">{vlabel || "Filtros"}</span>
@@ -217,7 +264,18 @@ export function Ctl({ f, setF, d, setD, vlabel, vpre }: any) {
     </div>
   );
 }
-export function DonutList({ data, totalLabel, size, heads, aria, marker, legend, unit }: any) {
+export function DonutList({
+  data,
+  totalLabel,
+  size,
+  heads,
+  aria,
+  marker,
+  legend,
+  unit,
+  sel,
+  onSel,
+}: any) {
   const [hs, setHs] = useState(null);
   const tot = data.reduce((a, d) => a + d.value, 0);
   const raw = data.map((d: any) => (tot ? (d.value / tot) * 1000 : 0)),
@@ -228,10 +286,19 @@ export function DonutList({ data, totalLabel, size, heads, aria, marker, legend,
     .sort((a, b) => b[0] - a[0])
     .slice(0, rem)
     .forEach(([, i]) => fl[i]++);
-  const dd = data.map((d, i) => ({ ...d, i, pc: (fl[i] / 10).toFixed(1).replace(".", ",") }));
+  const dd = data.map((d, i) => ({
+    ...d,
+    i,
+    pc: (fl[i] / 10).toFixed(1).replace(".", ","),
+  }));
   const hsel = hs != null ? dd[hs] : null;
+  const si = onSel ? dd.findIndex((d) => d.name === sel) : -1; // X1: fila elegida (se queda marcada; el hover solo la acompaña)
+  const act = hs != null ? hs : si >= 0 ? si : -1;
   return (
-    <div className="sevbody" style={{ "--ds": (size || 244) + "px" }}>
+    <div
+      className={"sevbody" + (onSel ? " selectable" : "")}
+      style={{ "--ds": (size || 244) + "px" }}
+    >
       <div className="donut" aria-hidden="true">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
@@ -249,7 +316,7 @@ export function DonutList({ data, totalLabel, size, heads, aria, marker, legend,
               cornerRadius={9}
               stroke="none"
               isAnimationActive={false}
-              activeIndex={hs == null ? -1 : hs}
+              activeIndex={act}
               activeShape={(q) => (
                 <Sector
                   cx={q.cx}
@@ -265,9 +332,14 @@ export function DonutList({ data, totalLabel, size, heads, aria, marker, legend,
               labelLine={false}
               onMouseEnter={(_, i) => setHs(i)}
               onMouseLeave={() => setHs(null)}
+              onClick={onSel ? (_, i) => onSel(dd[i].name) : undefined}
             >
               {dd.map((d) => (
-                <Cell key={d.name} fill={d.color} fillOpacity={hs == null || hs === d.i ? 1 : 0.3} />
+                <Cell
+                  key={d.name}
+                  fill={d.color}
+                  fillOpacity={hs == null || hs === d.i ? 1 : 0.3}
+                />
               ))}
             </Pie>
           </PieChart>
@@ -297,7 +369,9 @@ export function DonutList({ data, totalLabel, size, heads, aria, marker, legend,
         {legend || null}
         <div className="sevhd" aria-hidden="true">
           <span>{heads[0]}</span>
-          <span>{unit ? unit[0].toUpperCase() + unit.slice(1) : "Barreras"}</span>
+          <span>
+            {unit ? unit[0].toUpperCase() + unit.slice(1) : "Barreras"}
+          </span>
           <span>% total</span>
         </div>
         <ul className="sevlist" aria-label={aria}>
@@ -305,26 +379,51 @@ export function DonutList({ data, totalLabel, size, heads, aria, marker, legend,
             <li
               key={d.name}
               tabIndex="0"
-              className={hs === d.i ? "on" : ""}
+              className={(hs === d.i ? "on" : "") + (si === d.i ? " sel" : "")}
               style={{ "--c": d.color }}
               onMouseEnter={() => setHs(d.i)}
               onMouseLeave={() => setHs(null)}
               onFocus={() => setHs(d.i)}
               onBlur={() => setHs(null)}
+              {...(onSel
+                ? {
+                    role: "button",
+                    "aria-pressed": si === d.i,
+                    onClick: () => onSel(d.name),
+                    onKeyDown: (e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        onSel(d.name);
+                      }
+                    },
+                  }
+                : {})}
             >
               <span className="sl">
-                {marker === "pips" ? <Pips n={3 - d.i} color={d.color} /> : <i className="dot"></i>}
+                {marker === "pips" ? (
+                  <Pips n={3 - d.i} color={d.color} />
+                ) : (
+                  <i className="dot"></i>
+                )}
                 <span>{d.name}</span>
               </span>
               <b className="n1">{fmtInt(d.value)}</b>
               <span className="n2">{d.pc} %</span>
+              {d.desc ? (
+                <p className="rdesc">
+                  <span className="tbd">Pendiente</span> Por definir por el BID.
+                </p>
+              ) : null}
               {d.parts ? (
                 <div className="sevsub">
                   <div className="sbar" aria-hidden="true">
                     {d.parts
                       .filter((q) => q.v > 0)
                       .map((q) => (
-                        <i key={q.k} style={{ flex: q.v, background: q.color }}></i>
+                        <i
+                          key={q.k}
+                          style={{ flex: q.v, background: q.color }}
+                        ></i>
                       ))}
                   </div>
                   <div className="svals">
@@ -344,6 +443,7 @@ export function DonutList({ data, totalLabel, size, heads, aria, marker, legend,
     </div>
   );
 }
+
 export function CtlSev({ f, setF }: any) {
   return (
     <div className="ctlrow" role="group" aria-label="Filtros de la gráfica">
@@ -356,8 +456,225 @@ export function CtlSev({ f, setF }: any) {
             <i></i>
           </span>
         </span>
-        <Fseg v={f} set={setF} items={["Todos", "Alta", "Media", "Baja"]} label="Nivel de severidad" />
+        <Fseg
+          v={f}
+          set={setF}
+          items={["Todos", "Alta", "Media", "Baja"]}
+          label="Nivel de severidad"
+        />
       </div>
     </div>
+  );
+}
+
+/* B10: banderas simplificadas en SVG (sin escudos ni detalles finos), proporción 3:2 */
+export const starPts = (cx: number, cy: number, R: number) => {
+  const r = R * 0.42;
+  return [...Array(10)]
+    .map((_, k) => {
+      const a = -Math.PI / 2 + (k * Math.PI) / 5,
+        rr = k % 2 ? r : R;
+      return (
+        (cx + rr * Math.cos(a)).toFixed(2) +
+        "," +
+        (cy + rr * Math.sin(a)).toFixed(2)
+      );
+    })
+    .join(" ");
+};
+export const FLAGS: Record<string, React.ReactNode> = {
+  AR: (
+    <>
+      <rect width="30" height="20" fill="#fff" />
+      <rect width="30" height="6.67" fill="#74acdf" />
+      <rect y="13.33" width="30" height="6.67" fill="#74acdf" />
+      <circle cx="15" cy="10" r="2.2" fill="#f6b40e" />
+    </>
+  ),
+  BO: (
+    <>
+      <rect width="30" height="6.67" fill="#d52b1e" />
+      <rect y="6.67" width="30" height="6.67" fill="#f9e300" />
+      <rect y="13.33" width="30" height="6.67" fill="#007934" />
+    </>
+  ),
+  CL: (
+    <>
+      <rect width="30" height="20" fill="#fff" />
+      <rect y="10" width="30" height="10" fill="#d52b1e" />
+      <rect width="10" height="10" fill="#0039a6" />
+      <polygon points={starPts(5, 5, 3)} fill="#fff" />
+    </>
+  ),
+  CO: (
+    <>
+      <rect width="30" height="10" fill="#fcd116" />
+      <rect y="10" width="30" height="5" fill="#003893" />
+      <rect y="15" width="30" height="5" fill="#ce1126" />
+    </>
+  ),
+  PE: (
+    <>
+      <rect width="30" height="20" fill="#fff" />
+      <rect width="10" height="20" fill="#d91023" />
+      <rect x="20" width="10" height="20" fill="#d91023" />
+    </>
+  ),
+  PA: (
+    <>
+      <rect width="30" height="20" fill="#fff" />
+      <rect x="15" width="15" height="10" fill="#da121a" />
+      <rect y="10" width="15" height="10" fill="#072357" />
+      <polygon points={starPts(7.5, 5, 2.6)} fill="#072357" />
+      <polygon points={starPts(22.5, 15, 2.6)} fill="#da121a" />
+    </>
+  ),
+};
+export function Flag({ id, name }: { id: string; name: string }) {
+  const cid = "fl-" + id;
+  return (
+    <svg
+      className="flagsvg"
+      viewBox="0 0 30 20"
+      role="img"
+      aria-label={"Bandera de " + name}
+    >
+      <defs>
+        <clipPath id={cid}>
+          <rect width="30" height="20" rx="3" />
+        </clipPath>
+      </defs>
+      <g clipPath={"url(#" + cid + ")"}>{FLAGS[id] || null}</g>
+      <rect
+        x=".25"
+        y=".25"
+        width="29.5"
+        height="19.5"
+        rx="2.8"
+        fill="none"
+        stroke="rgba(16,34,45,.18)"
+        strokeWidth=".5"
+      />
+    </svg>
+  );
+}
+/* Definiciones de los niveles de severidad: texto literal del BID (comentarios del 6 oct). Aplican a barreras y trámites. */
+export const SEV_DEFS: Record<string, string> = {
+  Alta: "La restricción o carga es severa y puede bloquear, excluir, desalentar fuertemente o dificultar sustancialmente la entrada, operación o cumplimiento.",
+  Media:
+    "La carga o restricción es significativa y exige recursos, tiempo o ajustes no triviales que alteran las opciones o decisiones que toma la empresa.",
+  Baja: "Existe una carga o restricción menor concreta y observable que implica costo, tiempo o incertidumbre marginal.",
+};
+/* B4: severidad en un solo recuadro; las definiciones van en un panel interno diferenciado */
+/* B4: severidad en un solo recuadro. El panel conserva «Cómo leer la severidad»; las definiciones de nivel se abren
+   con un botón (panel flotante fijo en escritorio, despliegue dentro de la tarjeta en celular) para mantener la altura original. */
+export function SevPanel({ T, title, data, totalLabel, unit, aria, def }: any) {
+  const [open, setOpen] = useState(false);
+  const wrap = React.useRef(null),
+    btn = React.useRef(null);
+  const id = React.useId();
+  React.useEffect(() => {
+    if (!open) return;
+    const down = (e) => {
+      if (wrap.current && !wrap.current.contains(e.target)) setOpen(false);
+    };
+    const key = (e) => {
+      if (e.key === "Escape") {
+        setOpen(false);
+        btn.current && btn.current.focus();
+      }
+    };
+    document.addEventListener("mousedown", down);
+    document.addEventListener("keydown", key);
+    return () => {
+      document.removeEventListener("mousedown", down);
+      document.removeEventListener("keydown", key);
+    };
+  }, [open]);
+  return (
+    <section className="card sevone">
+      <CardHead title={title} noInfo={true} />
+      <div className="sevone-in">
+        <div className="sevone-chart">
+          <DonutList
+            data={data}
+            totalLabel={totalLabel}
+            unit={unit}
+            heads={["Nivel"]}
+            aria={aria}
+            marker="pips"
+          />
+        </div>
+        <div className="sevone-defs" ref={wrap}>
+          <span className="sd-top">
+            <span className="ico" aria-hidden="true">
+              <Icon d={I.info} />
+            </span>
+            Cómo leer la severidad
+          </span>
+          <p className="sd-lead">{def.d.split(". ")[0]}.</p>
+          <button
+            type="button"
+            ref={btn}
+            className={"sd-btn" + (open ? " is-open" : "")}
+            aria-expanded={open}
+            aria-controls={id}
+            onClick={() => setOpen((o) => !o)}
+          >
+            <span className="sd-pips" aria-hidden="true">
+              {["Alta", "Media", "Baja"].map((s, i) => (
+                <Pips key={s} n={3 - i} color={T.sev[s]} />
+              ))}
+            </span>
+            <span>Qué significa cada nivel</span>
+            <Icon d={I.chev} cls="dd-chev" />
+          </button>
+          <p className="sd-how">{def.how}</p>
+          {open ? (
+            <div
+              className="sd-pop"
+              id={id}
+              role="region"
+              aria-label="Qué significa cada nivel"
+            >
+              <div className="sd-pop-h">
+                <span>Qué significa cada nivel</span>
+                <button
+                  type="button"
+                  className="ipop-x"
+                  aria-label="Cerrar"
+                  onClick={() => {
+                    setOpen(false);
+                    btn.current && btn.current.focus();
+                  }}
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M6 6l12 12M18 6L6 18" />
+                  </svg>
+                </button>
+              </div>
+              <ul className="sd-list">
+                {["Alta", "Media", "Baja"].map((s, i) => (
+                  <li key={s}>
+                    <span className="sd-k">
+                      <Pips n={3 - i} color={T.sev[s]} />
+                      <b>{s}</b>
+                    </span>
+                    <p>{SEV_DEFS[s]}</p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </section>
   );
 }

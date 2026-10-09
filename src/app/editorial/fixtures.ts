@@ -5,7 +5,14 @@
 //
 // Al conectar el backend se pasa `data` a cada pantalla y este archivo deja de
 // usarse (se puede borrar).
-import type { BarrerasData, DesgloseBarrera, DesgloseTramite, PanoramaData, PaisRef, TramitesData } from "./types";
+import type {
+  BarrerasData,
+  DesgloseBarrera,
+  DesgloseTramite,
+  PanoramaData,
+  PaisRef,
+  TramitesData,
+} from "./types";
 import { fmtInt } from "./format";
 
 const YEARS = [2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024];
@@ -17,7 +24,10 @@ const PAISES_BASE = [
   { id: "PE", name: "Perú", now: 5104 },
   { id: "PA", name: "Panamá", now: 3287 },
 ];
-export const PAISES_FIXTURE: PaisRef[] = PAISES_BASE.map(({ id, name }) => ({ id, name }));
+export const PAISES_FIXTURE: PaisRef[] = PAISES_BASE.map(({ id, name }) => ({
+  id,
+  name,
+}));
 
 function growth(final: number, startRatio: number, seed: number): number[] {
   const out: number[] = [];
@@ -25,7 +35,8 @@ function growth(final: number, startRatio: number, seed: number): number[] {
   for (let i = 0; i < YEARS.length; i++) {
     const t = i / (YEARS.length - 1);
     const ease = t * (0.85 + 0.15 * t);
-    const wob = Math.sin((i + 1) * seed) * 0.012 * final * (i > 0 && i < 9 ? 1 : 0);
+    const wob =
+      Math.sin((i + 1) * seed) * 0.012 * final * (i > 0 && i < 9 ? 1 : 0);
     out.push(Math.round(s0 + (final - s0) * ease + wob));
   }
   out[out.length - 1] = final;
@@ -33,7 +44,9 @@ function growth(final: number, startRatio: number, seed: number): number[] {
 }
 
 // ── Panorama ────────────────────────────────────────────────────────────────
-const seriePais = PAISES_BASE.map((c, i) => growth(c.now, [0.58, 0.66, 0.6, 0.52, 0.55, 0.63][i], 1.3 + i * 0.7));
+const seriePais = PAISES_BASE.map((c, i) =>
+  growth(c.now, [0.58, 0.66, 0.6, 0.52, 0.55, 0.63][i], 1.3 + i * 0.7),
+);
 const SECTORES: [string, number][] = [
   ["Comercio", 2210],
   ["Energía", 1340],
@@ -47,7 +60,11 @@ const SECTORES: [string, number][] = [
   ["Trabajo", 540],
 ];
 const sectorSeries = SECTORES.map((s, i) =>
-  growth(s[1], [0.42, 0.6, 0.55, 0.5, 0.62, 0.58, 0.48, 0.66, 0.64, 0.7][i], 2 + i * 0.5),
+  growth(
+    s[1],
+    [0.42, 0.6, 0.55, 0.5, 0.62, 0.58, 0.48, 0.66, 0.64, 0.7][i],
+    2 + i * 0.5,
+  ),
 );
 const TIPOS: [string, number][] = [
   ["Ley", 2210],
@@ -57,7 +74,9 @@ const TIPOS: [string, number][] = [
   ["Reglamento", 310],
   ["Otro", 260],
 ];
-const tipoSeries = TIPOS.map((s, i) => growth(s[1], [0.5, 0.55, 0.45, 0.6, 0.65, 0.7][i], 1 + i * 0.9));
+const tipoSeries = TIPOS.map((s, i) =>
+  growth(s[1], [0.5, 0.55, 0.45, 0.6, 0.65, 0.7][i], 1 + i * 0.9),
+);
 const INDICADORES = {
   count: {
     label: "Cantidad de regulaciones vigentes",
@@ -97,7 +116,9 @@ export function panoramaFixture(country: string): PanoramaData {
     0,
     PAISES_BASE.findIndex((c) => c.name === country),
   );
-  const share = one ? PAISES_BASE[ci].now / PAISES_BASE.reduce((a, c) => a + c.now, 0) : 1;
+  const share = one
+    ? PAISES_BASE[ci].now / PAISES_BASE.reduce((a, c) => a + c.now, 0)
+    : 1;
   const stats: PanoramaData["stats"] = one
     ? [
         [fmtInt(PAISES_BASE[ci].now), "regulaciones vigentes en " + country],
@@ -106,7 +127,10 @@ export function panoramaFixture(country: string): PanoramaData {
       ]
     : [
         [String(PAISES_BASE.length), "países analizados"],
-        [fmtInt(PAISES_BASE.reduce((a, c) => a + c.now, 0)), "regulaciones vigentes"],
+        [
+          fmtInt(PAISES_BASE.reduce((a, c) => a + c.now, 0)),
+          "regulaciones vigentes",
+        ],
         ["2015–2024", "años analizados"],
       ];
   const serieIndicador = one
@@ -115,7 +139,10 @@ export function panoramaFixture(country: string): PanoramaData {
           k,
           YEARS.map(
             (_, yi) =>
-              +(o.valores[ci] * (0.72 + (0.28 * yi) / 9) + Math.sin(yi * 1.7) * o.valores[ci] * 0.015).toFixed(o.decimals),
+              +(
+                o.valores[ci] * (0.72 + (0.28 * yi) / 9) +
+                Math.sin(yi * 1.7) * o.valores[ci] * 0.015
+              ).toFixed(o.decimals),
           ),
         ]),
       )
@@ -129,12 +156,29 @@ export function panoramaFixture(country: string): PanoramaData {
       ([n], si) =>
         [
           n,
-          YEARS.map((_, yi) => Math.round(sectorSeries[si][yi] * share * (one ? 1 + (((si * 7 + ci * 3) % 5) - 2) * 0.08 : 1))),
+          YEARS.map((_, yi) =>
+            Math.round(
+              sectorSeries[si][yi] *
+                share *
+                (one ? 1 + (((si * 7 + ci * 3) % 5) - 2) * 0.08 : 1),
+            ),
+          ),
         ] as [string, number[]],
     ),
-    tipos: TIPOS.map(([n], si) => [n, YEARS.map((_, yi) => Math.round(tipoSeries[si][yi] * share))] as [string, number[]]),
+    tipos: TIPOS.map(
+      ([n], si) =>
+        [n, YEARS.map((_, yi) => Math.round(tipoSeries[si][yi] * share))] as [
+          string,
+          number[],
+        ],
+    ),
     indicadores: INDICADORES,
     serieIndicador,
+    // Promedio ALC (referencia punteada). Aquí: promedio simple de los países de ejemplo;
+    // el cálculo real (26 países, simple o ponderado) lo entrega desarrollo.
+    promedioAlc: YEARS.map((_, yi) =>
+      Math.round(seriePais.reduce((a, s) => a + s[yi], 0) / seriePais.length),
+    ),
   };
 }
 
@@ -162,11 +206,12 @@ const B = {
     ["Innovación", 150, 110],
   ] as [string, number, number][],
   jerarquia: [
-    ["Legislativo", 150],
-    ["Reglamentario", 330],
-    ["Resolutivo / Agencias", 420],
-    ["Técnico-operativo", 240],
-    ["Procedimental / Trámites", 110],
+    ["Ley", 280],
+    ["Decreto", 360],
+    ["Resolución", 330],
+    ["Circular", 120],
+    ["Reglamento", 100],
+    ["Otro", 60],
   ] as [string, number][],
   sector: [
     ["Servicios financieros", 110, 70],
@@ -217,7 +262,7 @@ const BARRERAS_TABLA: BarrerasData["tabla"] = [
     regulacion: "Ley 1328 de 2009",
     entidad: "Superintendencia Financiera",
     severidad: "Alta",
-    accion: "Simplificar",
+    accion: "Simplificar cargas",
   },
   {
     barrera: "Restricción a la inversión extranjera en telecomunicaciones",
@@ -227,7 +272,7 @@ const BARRERAS_TABLA: BarrerasData["tabla"] = [
     regulacion: "Ley 1341 de 2009",
     entidad: "Ministerio de TIC",
     severidad: "Media",
-    accion: "Eliminar",
+    accion: "Regular según riesgo",
   },
   {
     barrera: "Cupos de importación en productos agropecuarios",
@@ -237,7 +282,7 @@ const BARRERAS_TABLA: BarrerasData["tabla"] = [
     regulacion: "Decreto 1071 de 2015",
     entidad: "Ministerio de Agricultura",
     severidad: "Media",
-    accion: "Simplificar",
+    accion: "Reducir discrecionalidad",
   },
   {
     barrera: "Control de precios en medicamentos",
@@ -247,7 +292,7 @@ const BARRERAS_TABLA: BarrerasData["tabla"] = [
     regulacion: "Resolución 2013 de 2020",
     entidad: "Ministerio de Salud",
     severidad: "Alta",
-    accion: "Clarificar",
+    accion: "Corregir distorsiones de mercado",
   },
   {
     barrera: "Requisitos adicionales para la apertura de establecimientos",
@@ -257,14 +302,15 @@ const BARRERAS_TABLA: BarrerasData["tabla"] = [
     regulacion: "Decreto 1074 de 2015",
     entidad: "Ministerio de Comercio",
     severidad: "Baja",
-    accion: "Proporcionalizar",
+    accion: "Digitalizar e interoperar",
   },
 ];
 const ACC_B: [string, number][] = [
-  ["Simplificar", 0.34],
-  ["Eliminar", 0.26],
-  ["Clarificar", 0.22],
-  ["Proporcionalizar", 0.18],
+  ["Simplificar cargas", 0.3],
+  ["Digitalizar e interoperar", 0.24],
+  ["Reducir discrecionalidad", 0.19],
+  ["Regular según riesgo", 0.15],
+  ["Corregir distorsiones de mercado", 0.12],
 ];
 
 // Pesos de severidad de ejemplo (alta, media, baja) que varían por fila.
@@ -273,11 +319,21 @@ const sevW = (i: number) => {
     b = 0.416 - 0.03 * Math.sin(i * 1.3);
   return [a, b, 1 - a - b];
 };
-function filaBarrera(k: string, entrada: number, operacion: number, i: number): DesgloseBarrera {
+function filaBarrera(
+  k: string,
+  entrada: number,
+  operacion: number,
+  i: number,
+): DesgloseBarrera {
   const [alta, media, baja] = alloc(entrada + operacion, sevW(i));
   return { k, entrada, operacion, alta, media, baja };
 }
-function filaBarreraTot(k: string, total: number, i: number, eShare: number): DesgloseBarrera {
+function filaBarreraTot(
+  k: string,
+  total: number,
+  i: number,
+  eShare: number,
+): DesgloseBarrera {
   const [entrada, operacion] = alloc(total, [eShare, 1 - eShare]);
   return filaBarrera(k, entrada, operacion, i);
 }
@@ -296,8 +352,11 @@ export function barrerasFixture(country: string): BarrerasData {
     : B.sev.map((x) => [...x] as [string, number]);
   if (nat) sev[0][1] += tot - sev.reduce((a, x) => a + x[1], 0);
   const total = nat ? tot : B.total;
-  const acciones = ACC_B.map(([k, w]) => [k, Math.round(total * w)] as [string, number]);
-  acciones[3][1] += total - acciones.reduce((a, x) => a + x[1], 0);
+  const acciones = ACC_B.map(
+    ([k, w]) => [k, Math.round(total * w)] as [string, number],
+  );
+  acciones[acciones.length - 1][1] +=
+    total - acciones.reduce((a, x) => a + x[1], 0);
   return {
     stats: nat
       ? [
@@ -314,12 +373,38 @@ export function barrerasFixture(country: string): BarrerasData {
     entrada: nat ? e : B.entrada,
     operacion: nat ? o : B.operacion,
     sev: sev as BarrerasData["sev"],
-    ambito: B.ambito.map(([k, x, y], i) => filaBarrera(k, nat ? Math.round(x * fe) : x, nat ? Math.round(y * fo) : y, i)),
-    jerarquia: B.jerarquia.map(([k, v], i) => filaBarreraTot(k, nat ? Math.round(v * f) : v, i, 0.55 + 0.12 * Math.sin(i * 2.1))),
-    sector: B.sector.map(([k, x, y], i) => filaBarrera(k, nat ? Math.round(x * fe) : x, nat ? Math.round(y * fo) : y, i)),
+    ambito: B.ambito.map(([k, x, y], i) =>
+      filaBarrera(
+        k,
+        nat ? Math.round(x * fe) : x,
+        nat ? Math.round(y * fo) : y,
+        i,
+      ),
+    ),
+    jerarquia: B.jerarquia.map(([k, v], i) =>
+      filaBarreraTot(
+        k,
+        nat ? Math.round(v * f) : v,
+        i,
+        0.55 + 0.12 * Math.sin(i * 2.1),
+      ),
+    ),
+    sector: B.sector.map(([k, x, y], i) =>
+      filaBarrera(
+        k,
+        nat ? Math.round(x * fe) : x,
+        nat ? Math.round(y * fo) : y,
+        i,
+      ),
+    ),
     instrumentos: B.instr.map((n) => n * (nat ? total / B.total : 1)),
     entidad: B.entidad.map(([k, v], i) =>
-      filaBarreraTot(k, nat ? Math.max(1, Math.round(v * f)) : v, i, 0.5 + 0.14 * Math.sin(i * 1.6 + 1)),
+      filaBarreraTot(
+        k,
+        nat ? Math.max(1, Math.round(v * f)) : v,
+        i,
+        0.5 + 0.14 * Math.sin(i * 1.6 + 1),
+      ),
     ),
     paises: nat ? undefined : B.paises,
     acciones: nat ? acciones : undefined,
@@ -527,7 +612,11 @@ const TR_TABLA: TramitesData["tabla"] = [
 ];
 
 // Filas de trámites con su severidad (alta, media, baja) repartida según la severidad del alcance.
-function filasSev(rows: [string, number][], sev: S3, tot: number): DesgloseTramite[] {
+function filasSev(
+  rows: [string, number][],
+  sev: S3,
+  tot: number,
+): DesgloseTramite[] {
   const share = sev.map((x) => x / tot);
   return rows.map(([k, v], i) => {
     const a = share[0] + 0.06 * Math.sin(i * 1.9 + 0.5),
@@ -550,12 +639,18 @@ export function tramitesFixture(country: string): TramitesData {
       entidad: filasSev(TR_REG.entidad, TR_REG.sev, TR_REG.tot),
       etapa: filasSev(TR_REG.etapa, TR_REG.sev, TR_REG.tot),
       usuario: filasSev(TR_REG.usuario, TR_REG.sev, TR_REG.tot),
-      paises: Object.entries(TR_PAIS).map(([name, [tot, sev]], i) => ({ name, tot, sev, id: PAISES_BASE[i].id })),
+      paises: Object.entries(TR_PAIS).map(([name, [tot, sev]], i) => ({
+        name,
+        tot,
+        sev,
+        id: PAISES_BASE[i].id,
+      })),
     };
   }
   const [tot, sev, ent, sec] = TR_PAIS[country] || TR_PAIS.Colombia;
   const f = tot / 275;
-  const sc = (a: [string, number][]) => a.map(([k, v]) => [k, Math.max(1, Math.round(v * f))] as [string, number]);
+  const sc = (a: [string, number][]) =>
+    a.map(([k, v]) => [k, Math.max(1, Math.round(v * f))] as [string, number]);
   return {
     stats: [
       [fmtInt(tot), "trámites identificados en " + country],

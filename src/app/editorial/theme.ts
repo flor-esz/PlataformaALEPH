@@ -5,7 +5,9 @@ import { E } from "../themeEditorial";
 
 /** Paleta de 26 países (orden fijo; los 6 primeros son los de hoy).
  *  Paleta fría: sin rojo, naranja ni amarillo, que quedan reservados a severidad. */
-export const PALETA_PAISES: ReadonlyArray<readonly [id: string, nombre: string, color: string]> = [
+export const PALETA_PAISES: ReadonlyArray<
+  readonly [id: string, nombre: string, color: string]
+> = [
   ["AR", "Argentina", "#004E70"],
   ["CL", "Chile", "#2FB0E8"],
   ["CO", "Colombia", "#308144"],
@@ -44,6 +46,8 @@ export function colorPais(nombre: string, indice = 0): string {
 /** Tema de gráficas ("Editorial luminosa"). */
 export const T = {
   entrada: E.entrada,
+  /** Mismo azul de Entrada, un tono más oscuro para texto (contraste 4,9:1). */
+  entradaTxt: "#1676b5",
   operacion: E.operacion,
   opInk: "#FFFFFF",
   sev: E.sev as { Alta: string; Media: string; Baja: string },
@@ -71,4 +75,32 @@ export type Sev = (typeof SEVS)[number];
 
 /** Colores de series nominales de hasta 6 elementos (tipos de regulación, etc.).
  *  Son los 6 primeros espacios de la paleta de países. */
-export const COLORES_SERIE = ["#004E70", "#44A68C", "#2FB0E8", "#308144", "#8DBA38", "#7D6BB0"];
+export const COLORES_SERIE = [
+  "#004E70",
+  "#44A68C",
+  "#2FB0E8",
+  "#308144",
+  "#8DBA38",
+  "#7D6BB0",
+];
+
+/** Promedio regional (ALC): se dibuja punteado y en gris oscuro en las gráficas. */
+export const ALC = "Promedio ALC";
+export const ALC_COLOR = "#3c3b3b";
+export const ALC_DASH = "5 4";
+
+/** Colores de sectores (orden fijo; el mismo en toda la plataforma). */
+export const SECTOR_COLORS = [
+  "#004e70",
+  "#2fb0e8",
+  "#308144",
+  "#8dba38",
+  "#7d6bb0",
+  "#44a68c",
+  "#6a86e1",
+  "#875387",
+  "#4cc8bd",
+  "#376e00",
+];
+export const colorSector = (i: number) =>
+  SECTOR_COLORS[i % SECTOR_COLORS.length];

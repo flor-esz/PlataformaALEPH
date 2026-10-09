@@ -54,6 +54,8 @@ export interface IndicadorAcervo {
   decimals: number;
   /** Un valor por país, en el orden de `PanoramaData.paises`. */
   valores: number[];
+  /** Promedio regional (ALC) del indicador. Si falta, se calcula con `valores`. */
+  promedio?: number;
 }
 export interface PanoramaData {
   stats: HeroStat[];
@@ -70,6 +72,10 @@ export interface PanoramaData {
   indicadores: Record<string, IndicadorAcervo>;
   /** Solo vista por país: serie anual de cada indicador (por clave). */
   serieIndicador?: Record<string, number[]>;
+  /** Promedio ALC del acervo vigente por año (mismo orden que `years`). Si falta, se calcula. */
+  promedioAlc?: number[];
+  /** Solo vista por país: serie anual del promedio ALC de cada indicador (por clave). */
+  serieIndicadorAlc?: Record<string, number[]>;
 }
 
 // ── Barreras ────────────────────────────────────────────────────────────────
@@ -115,6 +121,10 @@ export interface BarrerasData {
   paises?: [string, string, number, number][];
   /** Solo vista por país. */
   acciones?: Par[];
+  /** Opcional, vista por país: desagregación de cada acción sugerida →
+   *  `accionMatriz[acción][tipo de norma][sector] = n.º de barreras`. Los tipos y sectores deben
+   *  coincidir con `jerarquia[].k` y `sector[].k`. Si falta, la pantalla reparte un ejemplo. */
+  accionMatriz?: Record<string, Record<string, Record<string, number>>>;
   tabla?: BarreraFila[];
 }
 
@@ -154,7 +164,12 @@ export interface TramitesData {
   opo: Par[];
   acc: Par[];
   /** Solo vista regional. */
-  paises?: { id: string; name: string; tot: number; sev: [number, number, number] }[];
+  paises?: {
+    id: string;
+    name: string;
+    tot: number;
+    sev: [number, number, number];
+  }[];
   /** Solo vista por país. */
   afe?: Par[];
   mip?: Par[];

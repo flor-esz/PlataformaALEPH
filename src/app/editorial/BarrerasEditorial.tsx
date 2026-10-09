@@ -9,16 +9,36 @@ import {
   LabelList,
   Cell,
 } from "recharts";
-import { axisProps } from "./charts";
+import {
+  AX_TOP,
+  AX_XH0,
+  OTROS,
+  axT,
+  axisProps,
+  otrosNote,
+  star,
+  valAxis,
+} from "./charts";
 import { CardHead } from "./cardhead";
 import { DEFS } from "./defs";
 import { fmt1, fmtInt, pct } from "./format";
 import { I, Icon } from "./icons";
 import { InfoBtn } from "./info";
-import { Ctl, DdState, DonutList, Dd, Mejora, Pips, SevPill } from "./ui";
+import {
+  Ctl,
+  CtlSev,
+  DdState,
+  DonutList,
+  Dd,
+  Flag,
+  Mejora,
+  Pips,
+  SevPanel,
+  SevPill,
+} from "./ui";
 import { PageShell } from "./PageShell";
 import { PAISES_FIXTURE, barrerasFixture } from "./fixtures";
-import { RAMPS, T, colorPais } from "./theme";
+import { COLORES_SERIE, RAMPS, T, colorPais } from "./theme";
 import type { BarrerasData, DesgloseBarrera, ScreenProps } from "./types";
 
 const SEV_CLAVE = { Alta: "alta", Media: "media", Baja: "baja" } as const;
@@ -46,10 +66,12 @@ function BarrerasBody({
     [f2, setF2] = useState("Todos"),
     [f3, setF3] = useState("Todos"),
     [f4, setF4] = useState("Todos");
-  const [d1, setD1] = useState("tipo"),
-    [d2, setD2] = useState("tipo"),
-    [d3, setD3] = useState("tipo"),
-    [d4, setD4] = useState("tipo");
+  const [d2, setD2] = useState("total"),
+    [d3, setD3] = useState("total"),
+    [d4, setD4] = useState("total"); // B5: por defecto sin desagregación
+  const [xAcc, setXAcc] = useState<string | null>(null),
+    [xTipo, setXTipo] = useState("Todas"),
+    [xSec, setXSec] = useState("Todos"); // X1: acción elegida y filtros del panel
   const barFill0 = T.entrada;
   const SEGS = {
     tipo: [
@@ -92,24 +114,14 @@ function BarrerasBody({
     o.total = segs.reduce((x, sg) => x + o[sg.key], 0);
     return o;
   };
-  const byTot = (a, b) => b.total - a.total; // rankings: mayor a menor
+  const byTot = (a, b) =>
+    (OTROS[a.k] ? 1 : 0) - (OTROS[b.k] ? 1 : 0) || b.total - a.total; // rankings: mayor a menor; «Otro/Otras…» siempre al final
   const AMB_C = ["#196e8c", "#4b894a", "#8dba38", "#009ade"]; // categorías nominales: el color sigue al ámbito, no al ranking
+  /* B6: ámbito sin desagregación (una sola leyenda de color: la del ámbito) y con espacio para la definición de cada uno */
   const ambDon = BB.ambito
     .map((a, i) => {
-      const o = mk(d1, a.k, a, f1);
-      return {
-        name: a.k,
-        value: o.total,
-        color: AMB_C[i],
-        parts:
-          d1 === "total"
-            ? null
-            : SEGS[d1].map((sg) => ({
-                k: sg.key,
-                v: o[sg.key],
-                color: sg.color,
-              })),
-      };
+      const o = mk("total", a.k, a, f1);
+      return { name: a.k, value: o.total, color: AMB_C[i], desc: true };
     })
     .sort((x, y) => y.value - x.value);
   const jer = BB.jerarquia
@@ -131,15 +143,7 @@ function BarrerasBody({
     .sort(byTot);
   const sec = n3 === "all" ? secAll : secAll.slice(0, +n3);
   const fv = inst ? fmt1 : fmtInt;
-  const entAll = BB.entidad
-    .map((e) => mk(d4, e.k, e, f4))
-    .sort((a, b) =>
-      a.k === "Otras entidades"
-        ? 1
-        : b.k === "Otras entidades"
-          ? -1
-          : b.total - a.total,
-    );
+  const entAll = BB.entidad.map((e) => mk(d4, e.k, e, f4)).sort(byTot);
   const ent = n4 === "all" ? entAll : entAll.slice(0, +n4);
   const pd = (n) =>
     (Math.round((n / BB.total) * 1000) / 10).toFixed(1).replace(".", ",");
@@ -160,13 +164,15 @@ function BarrerasBody({
           <span>Total de barreras</span>
           <b>{fmtInt(payload[0].payload.total)}</b>
         </div>
-        {payload.map((x) => (
-          <div className="r" key={x.dataKey}>
-            <i style={{ background: x.color }}></i>
-            <span>{x.name}</span>
-            <b>{fmtInt(x.value)}</b>
-          </div>
-        ))}
+        {payload.length > 1
+          ? payload.map((x) => (
+              <div className="r" key={x.dataKey}>
+                <i style={{ background: x.color }}></i>
+                <span>{x.name}</span>
+                <b>{fmtInt(x.value)}</b>
+              </div>
+            ))
+          : null}
       </div>
     ) : null;
   const secTip = ({ active, payload, label }) =>
@@ -178,13 +184,15 @@ function BarrerasBody({
           <span>{inst ? "Barreras por instrumento" : "Total de barreras"}</span>
           <b>{fv(payload[0].payload.total)}</b>
         </div>
-        {payload.map((x) => (
-          <div className="r" key={x.dataKey}>
-            <i style={{ background: x.color }}></i>
-            <span>{x.name}</span>
-            <b>{fv(x.value)}</b>
-          </div>
-        ))}
+        {payload.length > 1
+          ? payload.map((x) => (
+              <div className="r" key={x.dataKey}>
+                <i style={{ background: x.color }}></i>
+                <span>{x.name}</span>
+                <b>{fv(x.value)}</b>
+              </div>
+            ))
+          : null}
       </div>
     ) : null;
   const oneTip =
@@ -223,7 +231,15 @@ function BarrerasBody({
     fontWeight: 700,
     fontFamily: "Inter, system-ui, sans-serif",
   };
-  const bars = (dis, stackId, maxBar, horizontal, inside, cells, fmtL) => {
+  const bars = (
+    dis: any,
+    stackId: any,
+    maxBar: any,
+    horizontal?: any,
+    inside?: any,
+    cells?: any,
+    fmtL?: any,
+  ) => {
     const segs = SEGS[dis];
     return segs.map((sg, i) => (
       <Bar
@@ -255,32 +271,27 @@ function BarrerasBody({
       </Bar>
     ));
   };
-  const subOf = (dis, base) =>
-    dis === "tipo"
-      ? base + " · Entrada y Operación"
-      : dis === "sev"
-        ? base + " · Por nivel de severidad"
-        : base;
-  const Leg = (dis) => (
-    <div className="dislegend" style={{ marginLeft: 0 }} aria-label="Leyenda">
-      {SEGS[dis].map((sg, i) => (
-        <span className="dl" key={sg.key}>
-          {dis === "sev" ? (
-            <Pips n={3 - i} color={sg.color} />
-          ) : (
-            <i
-              style={{ background: dis === "total" ? barFill0 : sg.color }}
-            ></i>
-          )}
-          {dis === "total" ? "Total de barreras" : sg.key}
-        </span>
-      ))}
-    </div>
-  );
+  const Leg = (dis) =>
+    dis === "total" ? null : (
+      <div className="dislegend" style={{ marginLeft: 0 }} aria-label="Leyenda">
+        {SEGS[dis].map((sg, i) => (
+          <span className="dl" key={sg.key}>
+            {dis === "sev" ? (
+              <Pips n={3 - i} color={sg.color} />
+            ) : (
+              <i
+                style={{ background: dis === "total" ? barFill0 : sg.color }}
+              ></i>
+            )}
+            {dis === "total" ? "Total de barreras" : sg.key}
+          </span>
+        ))}
+      </div>
+    );
 
   const pE = pct(BB.entrada, BB.total),
     pO = 100 - pE;
-  const ACC_C = ["#266736", "#4b894a", "#83b38f", "#8dba38"];
+  const ACC_C = ["#266736", "#8dba38", "#4b894a", "#83b38f", "#557022"];
   const accDon = (BB.acciones ?? [])
     .map(([k, v]: any, i: number) => ({
       name: k,
@@ -288,6 +299,95 @@ function BarrerasBody({
       color: ACC_C[i % ACC_C.length],
     }))
     .sort((a: any, b: any) => b.value - a.value);
+  /* X1 · Desagregación de la acción sugerida: matriz tipo de norma × sector para la acción elegida.
+     Con datos reales llega en `BB.accionMatriz[acción][tipo][sector]`; sin ella se reparte un ejemplo. */
+  const acc = accDon.find((a) => a.name === xAcc) ||
+    accDon[0] || { name: "", value: 0, color: T.entrada }; // vista regional: sin acciones
+  const hsh = (str: string) => {
+    let h = 2166136261;
+    for (const c of str) {
+      h ^= c.charCodeAt(0);
+      h = Math.imul(h, 16777619);
+    }
+    return ((h >>> 0) % 1000) / 1000;
+  };
+  const tot2 = (r: { entrada: number; operacion: number }) =>
+    r.entrada + r.operacion;
+  const xTypes = BB.jerarquia.map((j) => j.k),
+    xSecs = BB.sector.map((x) => x.k);
+  const xDemo = () => {
+    const xW = BB.jerarquia.flatMap((j) =>
+      BB.sector.map(
+        (sc) =>
+          tot2(j) *
+          (0.5 + hsh(acc.name + j.k)) *
+          tot2(sc) *
+          (0.5 + hsh(acc.name + sc.k)) *
+          (0.6 + 0.8 * hsh(acc.name + j.k + sc.k)),
+      ),
+    );
+    const xWs = xW.reduce((a, b) => a + b, 0);
+    return xW.map((w) => Math.round((acc.value * w) / xWs));
+  };
+  const xMat = BB.accionMatriz?.[acc.name];
+  const xM: number[] = xMat
+    ? xTypes.flatMap((t) => xSecs.map((sc) => xMat[t]?.[sc] ?? 0))
+    : xDemo(); // xM[ti*nS+si]
+  const nS = xSecs.length;
+  const xByTipo = xTypes
+    .map((t, ti) => ({
+      k: t,
+      total: xSecs.reduce(
+        (a, _, si) =>
+          a + (xSec === "Todos" || xSec === xSecs[si] ? xM[ti * nS + si] : 0),
+        0,
+      ),
+      ci: ti, // mismo orden de tipos que Panorama → mismo color
+    }))
+    .sort(
+      (a, b) =>
+        (OTROS[a.k] ? 1 : 0) - (OTROS[b.k] ? 1 : 0) || b.total - a.total,
+    );
+  const xSecAll = xSecs
+    .map((sc, si) => ({
+      k: sc,
+      total: xTypes.reduce(
+        (a, t, ti) =>
+          a + (xTipo === "Todas" || xTipo === t ? xM[ti * nS + si] : 0),
+        0,
+      ),
+    }))
+    .sort((a, b) => b.total - a.total);
+  const xBySec =
+    xSecAll.length > 7
+      ? [
+          ...xSecAll.slice(0, 6),
+          {
+            k: "Otros sectores",
+            total: xSecAll.slice(6).reduce((a, r) => a + r.total, 0),
+          },
+        ]
+      : xSecAll;
+  const xTotT = xByTipo.reduce((a, r) => a + r.total, 0),
+    xTotS = xBySec.reduce((a, r) => a + r.total, 0);
+  const xTip = ({ active, payload, label }: any) =>
+    active && payload && payload.length ? (
+      <div className="tt">
+        <div className="t">{label}</div>
+        <div className="r">
+          <i
+            style={{
+              background:
+                payload[0].payload.ci != null
+                  ? COLORES_SERIE[payload[0].payload.ci % COLORES_SERIE.length]
+                  : acc.color,
+            }}
+          ></i>
+          <span>Barreras</span>
+          <b>{fmtInt(payload[0].value)}</b>
+        </div>
+      </div>
+    ) : null;
   const ambTot = BB.ambito
     .map((a) => [a.k, totalFila(a)] as [string, number])
     .sort((a, b) => b[1] - a[1]);
@@ -339,7 +439,6 @@ function BarrerasBody({
               ></span>
               <div className="k">
                 Barreras regulatorias totales
-                <InfoBtn k="tot" />
                 <span className="ksub">Entrada + Operación</span>
               </div>
               <div className="v">
@@ -350,28 +449,9 @@ function BarrerasBody({
                     : "en " + (BB.paises?.length ?? 0) + " países"}
                 </small>
               </div>
-              <div className="tsplit">
-                <div className="kd-t">Distribución</div>
-                <div
-                  className="splitrow"
-                  role="img"
-                  aria-label={"Entrada " + pE + " %, operación " + pO + " %"}
-                >
-                  <span className="pl">{pE} %</span>
-                  <div className="split" aria-hidden="true">
-                    <i style={{ width: pE + "%", background: T.entrada }}></i>
-                    <i style={{ flex: 1, background: T.operacion }}></i>
-                  </div>
-                  <span className="pl">{pO} %</span>
-                </div>
-                <div className="tleg" aria-hidden="true">
-                  <span>
-                    <i style={{ background: T.entrada }}></i>Entrada
-                  </span>
-                  <span>
-                    <i style={{ background: T.operacion }}></i>Operación
-                  </span>
-                </div>
+              <div className="kdef">
+                <div className="kd-t">Definición</div>
+                <p>{DEFS.tot.d}</p>
               </div>
             </div>
             <div className="op" aria-hidden="true">
@@ -379,9 +459,8 @@ function BarrerasBody({
             </div>
             <div className="kpi has-share">
               <span className="band" style={{ background: T.entrada }}></span>
-              <div className="k">
+              <div className="k ktint" style={{ color: T.entradaTxt }}>
                 Barreras de entrada y acceso al mercado
-                <InfoBtn k="ent" />
               </div>
               <div
                 className="share"
@@ -402,8 +481,7 @@ function BarrerasBody({
               <div className="kdef">
                 <div className="kd-t">Definición</div>
                 <p>
-                  Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed
-                  do eiusmod tempor incididunt ut labore et dolore.
+                  <span className="tbd">Pendiente</span> Por definir por el BID.
                 </p>
               </div>
             </div>
@@ -412,9 +490,8 @@ function BarrerasBody({
             </div>
             <div className="kpi has-share">
               <span className="band" style={{ background: T.operacion }}></span>
-              <div className="k">
+              <div className="k ktint" style={{ color: T.operacion }}>
                 Barreras de operación y modelos de negocio
-                <InfoBtn k="ope" />
               </div>
               <div
                 className="share"
@@ -435,56 +512,20 @@ function BarrerasBody({
               <div className="kdef">
                 <div className="kd-t">Definición</div>
                 <p>
-                  Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed
-                  do eiusmod tempor incididunt ut labore et dolore.
+                  <span className="tbd">Pendiente</span> Por definir por el BID.
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="sevrow">
-            <section className="card sevcard">
-              <CardHead
-                title="Barreras por nivel de severidad"
-                sub="Participación de cada nivel en el total de barreras"
-              />
-              <DonutList
-                data={sevData}
-                totalLabel="Total de barreras"
-                heads={["Nivel"]}
-                aria="Barreras por nivel de severidad"
-                marker="pips"
-              />
-            </section>
-            <aside className="sevnote" aria-label="Definición de severidad">
-              <div className="sn-in">
-                <div className="sn-l">
-                  <span className="eb">
-                    <span className="ico" aria-hidden="true">
-                      <Icon d={I.info} />
-                    </span>
-                    Cómo leer la severidad
-                  </span>
-                  <p className="lead">{DEFS.sev.d.split(". ")[0]}.</p>
-                </div>
-                <div className="sn-r">
-                  <p className="body">
-                    Cada barrera se clasifica en un nivel: <b>Alta</b>,{" "}
-                    <b>Media</b> o <b>Baja</b>.
-                  </p>
-                  <div className="sevkey" aria-label="Marcador de severidad">
-                    {BB.sev.map(([s], i) => (
-                      <span className="kc" key={s}>
-                        <Pips n={3 - i} color={T.sev[s]} />
-                        {s}
-                      </span>
-                    ))}
-                  </div>
-                  <p className="how">{DEFS.sev.how}</p>
-                </div>
-              </div>
-            </aside>
-          </div>
+          <SevPanel
+            T={T}
+            title="Barreras por nivel de severidad"
+            data={sevData}
+            totalLabel="Total de barreras"
+            aria="Barreras por nivel de severidad"
+            def={DEFS.sev}
+          />
         </div>
       </div>
       <section className="zone z-alt" aria-labelledby="sec1">
@@ -505,14 +546,8 @@ function BarrerasBody({
 
           <div className="grid2">
             <section className="card">
-              <CardHead
-                title="Barreras por ámbito de impacto"
-                sub={
-                  subOf(d1, "Participación de cada ámbito en el total") +
-                  (f1 === "Todos" ? "" : " · Severidad " + f1.toLowerCase())
-                }
-              />
-              <Ctl f={f1} setF={setF1} d={d1} setD={setD1} />
+              <CardHead title="Barreras por ámbito de impacto" />
+              <CtlSev f={f1} setF={setF1} />
               <DonutList
                 data={ambDon}
                 totalLabel="Total de barreras"
@@ -520,35 +555,36 @@ function BarrerasBody({
                 heads={["Ámbito"]}
                 aria="Barreras por ámbito de impacto"
                 marker="dot"
-                legend={d1 === "total" ? null : Leg(d1)}
               />
             </section>
 
             <section className="card">
-              <CardHead
-                title="Barreras por jerarquía normativa"
-                sub={subOf(d2, "Por nivel normativo")}
-              />
+              <CardHead title="Barreras por jerarquía normativa" />
               <Ctl f={f2} setF={setF2} d={d2} setD={setD2} />
-              <div className="chart tall">
+              <div
+                className="chart"
+                style={{ height: jer.length * 40 + 12 + AX_TOP + AX_XH0 }}
+              >
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
                     data={jer}
                     layout="vertical"
-                    margin={{ top: 4, right: 44, left: 0, bottom: 0 }}
+                    margin={{ top: AX_TOP, right: 44, left: 0, bottom: 0 }}
                     barCategoryGap="32%"
                   >
-                    <XAxis type="number" hide={true} />
+                    {valAxis("Número de barreras")}
                     <YAxis
                       type="category"
                       dataKey="k"
                       {...axisProps(T)}
-                      width={170}
+                      width={110}
                       tick={{
                         fill: T.axis,
                         fontSize: 12,
                         fontFamily: "Inter, system-ui, sans-serif",
                       }}
+                      tickFormatter={star}
+                      label={axT("Tipo de norma", "y")}
                     />
                     <Tooltip
                       cursor={{ fill: T.grid, opacity: 0.5 }}
@@ -561,7 +597,10 @@ function BarrerasBody({
                       true,
                       false,
                       jer.map((d) => (
-                        <Cell key={d.ci} fill={RAMPS.azul.steps[4 - d.ci]} />
+                        <Cell
+                          key={d.ci}
+                          fill={COLORES_SERIE[d.ci % COLORES_SERIE.length]}
+                        />
                       )),
                     )}
                   </BarChart>
@@ -570,26 +609,13 @@ function BarrerasBody({
               {Leg(d2)}
               <p className="csub" style={{ margin: 0 }}>
                 <b style={{ color: "var(--ink)" }}>Hallazgo:</b> 2 de cada 3
-                barreras de severidad alta están en normas de nivel
-                reglamentario o inferior.
+                barreras de severidad alta están en decretos y resoluciones.
               </p>
+              {otrosNote(jer.map((r) => r.k))}
             </section>
 
             <section className="card">
-              <CardHead
-                title="Barreras por sector económico"
-                sub={
-                  (n3 === "all"
-                    ? "Todos los sectores"
-                    : "Top " + n3 + " sectores") +
-                  (inst ? " · Barreras por instrumento normativo" : "") +
-                  (d3 === "tipo"
-                    ? " · Entrada y Operación"
-                    : d3 === "sev"
-                      ? " · Por nivel de severidad"
-                      : "")
-                }
-              />
+              <CardHead title="Barreras por sector económico" />
               <Ctl f={f3} setF={setF3} d={d3} setD={setD3} />
               <div
                 className="ctlrow"
@@ -627,15 +653,22 @@ function BarrerasBody({
                   />
                 </div>
               </div>
-              <div className="chart" style={{ height: sec.length * 30 + 12 }}>
+              <div
+                className="chart"
+                style={{ height: sec.length * 30 + 12 + AX_TOP + AX_XH0 }}
+              >
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
                     data={sec}
                     layout="vertical"
-                    margin={{ top: 0, right: 40, left: 0, bottom: 0 }}
+                    margin={{ top: AX_TOP, right: 40, left: 0, bottom: 0 }}
                     barCategoryGap="26%"
                   >
-                    <XAxis type="number" hide={true} />
+                    {valAxis(
+                      inst
+                        ? "Barreras por instrumento normativo"
+                        : "Número de barreras",
+                    )}
                     <YAxis
                       type="category"
                       dataKey="k"
@@ -646,6 +679,7 @@ function BarrerasBody({
                         fontSize: 12,
                         fontFamily: "Inter, system-ui, sans-serif",
                       }}
+                      label={axT("Sector económico", "y")}
                     />
                     <Tooltip
                       cursor={{ fill: T.grid, opacity: 0.5 }}
@@ -659,15 +693,7 @@ function BarrerasBody({
             </section>
 
             <section className="card">
-              <CardHead
-                title="Barreras por entidad emisora"
-                sub={subOf(
-                  d4,
-                  n4 === "all"
-                    ? "Todas las entidades"
-                    : "Top " + n4 + " entidades",
-                )}
-              />
+              <CardHead title="Barreras por entidad emisora" />
               <Ctl f={f4} setF={setF4} d={d4} setD={setD4} />
               <div
                 className="ctlrow"
@@ -688,15 +714,18 @@ function BarrerasBody({
                   />
                 </div>
               </div>
-              <div className="chart" style={{ height: ent.length * 30 + 12 }}>
+              <div
+                className="chart"
+                style={{ height: ent.length * 30 + 12 + AX_TOP + AX_XH0 }}
+              >
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
                     data={ent}
                     layout="vertical"
-                    margin={{ top: 0, right: 44, left: 0, bottom: 0 }}
+                    margin={{ top: AX_TOP, right: 44, left: 0, bottom: 0 }}
                     barCategoryGap="30%"
                   >
-                    <XAxis type="number" hide={true} />
+                    {valAxis("Número de barreras")}
                     <YAxis
                       type="category"
                       dataKey="k"
@@ -707,6 +736,8 @@ function BarrerasBody({
                         fontSize: 12,
                         fontFamily: "Inter, system-ui, sans-serif",
                       }}
+                      tickFormatter={star}
+                      label={axT("Entidad emisora", "y")}
                     />
                     <Tooltip
                       cursor={{ fill: T.grid, opacity: 0.5 }}
@@ -717,33 +748,58 @@ function BarrerasBody({
                 </ResponsiveContainer>
               </div>
               {Leg(d4)}
+              {otrosNote(
+                ent.map((r) => r.k),
+                "barreras",
+              )}
             </section>
           </div>
         </div>
       </section>
       {nat ? (
         <>
-          <section className="zone z-base" aria-labelledby="sec2">
+          <section className="zone z-base" aria-labelledby="secH">
             <div className="zi">
               <div className="sechead">
                 <span className="num">2</span>
+                <div>
+                  <h2 id="secH">
+                    Hallazgos clave
+                    <InfoBtn k="thall" />
+                  </h2>
+                  <p>Lectura rápida de los datos de {country}</p>
+                </div>
+              </div>
+              <section className="card">
+                <ul className="finds tri">
+                  {finds.map((f, i) => (
+                    <li key={i}>
+                      <span className="fv">{f[0]}</span>
+                      <span className="ft">{f[1]}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            </div>
+          </section>
+          <section className="zone z-alt" aria-labelledby="sec2">
+            <div className="zi">
+              <div className="sechead">
+                <span className="num">3</span>
                 <div>
                   <h2 id="sec2">
                     ¿Dónde actuar para reducir las barreras?
                     <InfoBtn k="bact" />
                   </h2>
                   <p>
-                    Acciones sugeridas y lectura rápida de los datos de{" "}
+                    Acciones sugeridas para reducir o eliminar las barreras de{" "}
                     {country}
                   </p>
                 </div>
               </div>
-              <div className="grid2">
-                <section className="card">
-                  <CardHead
-                    title="Barreras por acción sugerida"
-                    sub="Participación de cada acción en el total de barreras"
-                  />
+              <div className="actgrid">
+                <section className="card dcard">
+                  <CardHead title="Barreras por acción sugerida" />
                   <DonutList
                     data={accDon}
                     totalLabel="Total de barreras"
@@ -751,21 +807,204 @@ function BarrerasBody({
                     heads={["Acción"]}
                     aria="Barreras por acción sugerida"
                     marker="dot"
+                    sel={acc.name}
+                    onSel={setXAcc}
                   />
+                  <p className="dxhint">
+                    Selecciona una acción para ver su desagregación.
+                  </p>
                 </section>
-                <section className="card">
-                  <CardHead
-                    title="Hallazgos clave"
-                    sub={"Lectura rápida de los datos de " + country}
-                  />
-                  <ul className="finds one">
-                    {finds.map((f, i) => (
-                      <li key={i}>
-                        <span className="fv">{f[0]}</span>
-                        <span className="ft">{f[1]}</span>
-                      </li>
-                    ))}
-                  </ul>
+                <section
+                  className="card dxp"
+                  aria-label="Desagregación de la acción sugerida"
+                >
+                  <CardHead title="Desagregación de la acción sugerida" />
+                  <div
+                    className="ctlrow"
+                    role="group"
+                    aria-label="Filtros de la desagregación"
+                  >
+                    <div className="cg">
+                      <span className="clbl clbl-t">Acción</span>
+                      <Dd
+                        value={acc.name}
+                        onChange={setXAcc}
+                        options={accDon.map((a) => [a.name, a.name])}
+                        label="Acción sugerida"
+                        pre="Acción"
+                      />
+                    </div>
+                    <div className="cg">
+                      <span className="clbl clbl-t">Tipo de regulación</span>
+                      <Dd
+                        value={xTipo}
+                        onChange={setXTipo}
+                        options={[
+                          ["Todas", "Todas"],
+                          ...xTypes.map((t) => [t, t]),
+                        ]}
+                        label="Tipo de regulación"
+                        pre="Tipo"
+                      />
+                    </div>
+                    <div className="cg">
+                      <span className="clbl clbl-t">Sector económico</span>
+                      <Dd
+                        value={xSec}
+                        onChange={setXSec}
+                        options={[
+                          ["Todos", "Todos"],
+                          ...xSecs.map((t) => [t, t]),
+                        ]}
+                        label="Sector económico"
+                        pre="Sector"
+                      />
+                    </div>
+                  </div>
+                  <div className="dxcharts">
+                    <div className="dxc">
+                      <h4>Por tipo de regulación</h4>
+                      <div
+                        className="chart"
+                        style={{
+                          height: xByTipo.length * 30 + 12 + AX_TOP + AX_XH0,
+                        }}
+                      >
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart
+                            data={xByTipo}
+                            layout="vertical"
+                            margin={{
+                              top: AX_TOP,
+                              right: 34,
+                              left: 0,
+                              bottom: 0,
+                            }}
+                            barCategoryGap="28%"
+                          >
+                            {valAxis("Número de barreras")}
+                            <YAxis
+                              type="category"
+                              dataKey="k"
+                              {...axisProps(T)}
+                              width={92}
+                              tick={{
+                                fill: T.axis,
+                                fontSize: 12,
+                                fontFamily: "Inter, system-ui, sans-serif",
+                              }}
+                              tickFormatter={star}
+                              label={axT("Tipo de regulación", "y")}
+                            />
+                            <Tooltip
+                              cursor={{ fill: T.grid, opacity: 0.5 }}
+                              content={xTip}
+                            />
+                            <Bar
+                              dataKey="total"
+                              name="Barreras"
+                              maxBarSize={18}
+                              radius={[0, 4, 4, 0]}
+                              isAnimationActive={false}
+                            >
+                              {xByTipo.map((d) => (
+                                <Cell
+                                  key={d.k}
+                                  fill={
+                                    COLORES_SERIE[d.ci % COLORES_SERIE.length]
+                                  }
+                                  fillOpacity={
+                                    xTipo === "Todas" || xTipo === d.k ? 1 : 0.3
+                                  }
+                                />
+                              ))}
+                              <LabelList
+                                dataKey="total"
+                                position="right"
+                                style={lblStyle}
+                                formatter={fmtInt}
+                              />
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                    <div className="dxc">
+                      <h4>Por sector económico</h4>
+                      <div
+                        className="chart"
+                        style={{
+                          height: xBySec.length * 30 + 12 + AX_TOP + AX_XH0,
+                        }}
+                      >
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart
+                            data={xBySec}
+                            layout="vertical"
+                            margin={{
+                              top: AX_TOP,
+                              right: 34,
+                              left: 0,
+                              bottom: 0,
+                            }}
+                            barCategoryGap="28%"
+                          >
+                            {valAxis("Número de barreras")}
+                            <YAxis
+                              type="category"
+                              dataKey="k"
+                              {...axisProps(T)}
+                              width={140}
+                              tick={{
+                                fill: T.axis,
+                                fontSize: 12,
+                                fontFamily: "Inter, system-ui, sans-serif",
+                              }}
+                              tickFormatter={star}
+                              label={axT("Sector económico", "y")}
+                            />
+                            <Tooltip
+                              cursor={{ fill: T.grid, opacity: 0.5 }}
+                              content={xTip}
+                            />
+                            <Bar
+                              dataKey="total"
+                              name="Barreras"
+                              fill={acc.color}
+                              maxBarSize={18}
+                              radius={[0, 4, 4, 0]}
+                              isAnimationActive={false}
+                            >
+                              {xBySec.map((d) => (
+                                <Cell
+                                  key={d.k}
+                                  fill={acc.color}
+                                  fillOpacity={
+                                    xSec === "Todos" ||
+                                    xSec === d.k ||
+                                    (d.k === "Otros sectores" &&
+                                      !xBySec.some((r) => r.k === xSec))
+                                      ? 1
+                                      : 0.3
+                                  }
+                                />
+                              ))}
+                              <LabelList
+                                dataKey="total"
+                                position="right"
+                                style={lblStyle}
+                                formatter={fmtInt}
+                              />
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="dxnotes">
+                    {otrosNote(xByTipo.map((r) => r.k))}
+                    {otrosNote(xBySec.map((r) => r.k))}
+                  </div>
                 </section>
               </div>
             </div>
@@ -773,7 +1012,7 @@ function BarrerasBody({
           <section className="zone z-base" aria-labelledby="sec3">
             <div className="zi">
               <div className="sechead">
-                <span className="num">3</span>
+                <span className="num">4</span>
                 <div>
                   <h2 id="sec3">
                     Principales barreras identificadas en {country}
@@ -898,28 +1137,13 @@ function BarrerasBody({
                   <section className="card cc" key={id}>
                     <div className="top2">
                       <div className="name">
+                        <Flag id={id} name={name} />
                         <span
-                          className="flag"
-                          style={{ background: colorPais(name, i) }}
+                          className="cname"
+                          style={{ "--cc": colorPais(name, i) }}
                         >
-                          {id}
+                          {name}
                         </span>
-                        {name}
-                      </div>
-                    </div>
-                    <div className="ctlrow">
-                      <div className="cg">
-                        <span className="clbl">Ámbito</span>
-                        <DdState
-                          label={"Ámbito de impacto, " + name}
-                          options={[
-                            ["todos", "Todos los ámbitos"],
-                            ["Competencia", "Competencia"],
-                            ["Comercio", "Comercio"],
-                            ["Inversión", "Inversión"],
-                            ["Innovación", "Innovación"],
-                          ]}
-                        />
                       </div>
                     </div>
                     <div className="big">

@@ -43,8 +43,8 @@ export const DEFS: Record<string, Def> = {
   },
   jer: {
     t: "Jerarquía normativa",
-    d: "Rango de la norma donde está la barrera, desde el nivel legislativo hasta el procedimental o de trámites.",
-    how: "Se ordenan de mayor a menor número de barreras; el tono de azul identifica cada nivel.",
+    d: "Tipo de norma donde está la barrera: ley, decreto, resolución, circular, reglamento u otro. Son las mismas categorías de Panorama regulatorio.",
+    how: "Se ordenan de mayor a menor número de barreras; cada tipo conserva su color en toda la plataforma.",
   },
   sec: {
     t: "Sector económico",
@@ -73,7 +73,10 @@ export const DEFS: Record<string, Def> = {
     t: "Tipo de barrera",
     d: "Entrada, si limita el acceso al mercado; Operación, si afecta cómo se opera o se desarrolla un modelo de negocio.",
   },
-  accion: { t: "Acción sugerida", d: "Recomendación de mejora para reducir o eliminar la barrera." },
+  accion: {
+    t: "Acción sugerida",
+    d: "Recomendación de mejora para reducir o eliminar la barrera.",
+  },
   vig: {
     t: "Regulaciones vigentes",
     d: "Número de regulaciones que están en vigor cada año. Es un acervo acumulado: suma las nuevas y descuenta las derogadas.",
@@ -100,7 +103,7 @@ export const DEFS: Record<string, Def> = {
   },
   bacc: {
     t: "Barreras por acción sugerida",
-    d: "Recomendación de mejora para cada barrera: simplificar, eliminar, clarificar o proporcionalizar.",
+    d: "Recomendación de mejora para cada barrera: simplificar cargas, digitalizar e interoperar, reducir discrecionalidad, regular según riesgo o corregir distorsiones de mercado.",
     how: "Cada porción es una acción; se ordenan de mayor a menor.",
   },
   tra: {
@@ -113,8 +116,10 @@ export const DEFS: Record<string, Def> = {
     d: "Número de trámites con potencial de mejora identificados en los países analizados.",
     how: "Un trámite se cuenta una sola vez.",
   },
-  kent: { t: "Entidades responsables", d: "Entidades públicas que gestionan los trámites identificados." },
-  ksec: { t: "Sectores cubiertos", d: "Sectores económicos a los que pertenecen los trámites identificados." },
+  kent: {
+    t: "Entidades responsables",
+    d: "Entidades públicas que gestionan los trámites identificados.",
+  },
   kcost: {
     t: "Costo administrativo estimado",
     d: "Estimación del costo, en millones de dólares, que los trámites identificados generan a quienes deben cumplirlos.",
@@ -165,22 +170,28 @@ export const DEFS: Record<string, Def> = {
     d: "Costo estimado que los trámites generan según el tipo de usuario que los realiza.",
   },
   tafe: {
-    t: "Afectaciones",
+    t: "Tipo de carga que genera",
     d: "Principales problemas que los trámites generan a los usuarios, como costos, demoras o duplicidad.",
-    how: "Un trámite puede presentar más de una afectación.",
+    how: "Un trámite puede generar más de un tipo de carga.",
   },
   tmip: {
     t: "Afectación a la MIPYME",
     d: "Qué tanto afectan los trámites a las micro, pequeñas y medianas empresas. Se clasifica en Alta, Media y Baja.",
     how: "Más barras llenas en el marcador, mayor afectación.",
   },
-  thall: { t: "Hallazgos clave", d: "Lectura rápida de los datos más relevantes de la vista." },
+  thall: {
+    t: "Hallazgos clave",
+    d: "Lectura rápida de los datos más relevantes de la vista.",
+  },
   tsec1: {
     t: "Dónde se concentran los trámites",
     d: "Compara cómo se reparten los trámites según sector, entidad, etapa del ciclo empresarial y tipo de usuario.",
     how: "Cada gráfica tiene sus propios filtros.",
   },
-  tcar: { t: "Cargas para los usuarios", d: "Estimación de costos y principales afectaciones que generan los trámites." },
+  tcar: {
+    t: "Cargas para los usuarios",
+    d: "Estimación de costos y principales afectaciones que generan los trámites.",
+  },
   tact: {
     t: "Dónde actuar para simplificar",
     d: "Oportunidades de mejora y acciones sugeridas para reducir la carga de los trámites.",
@@ -193,14 +204,21 @@ export const DEFS: Record<string, Def> = {
     t: "Principales trámites",
     d: "Muestra de los trámites identificados en un país, con su sector, entidad, etapa, usuario, severidad, oportunidad de mejora, costo y acción sugerida.",
   },
+  dacc: {
+    t: "Desagregación de la acción sugerida",
+    d: "El filtro permite ver qué instrumentos regulatorios y sectores económicos se relacionan con las acciones sugeridas.",
+    how: "Selecciona una acción en la gráfica de la izquierda o en el filtro «Acción».",
+  },
   demo: {
     t: "Ejemplo de definición",
     d: "Texto breve que explica qué es el elemento, en lenguaje sencillo y sin jerga. Máximo unas 40 palabras.",
     how: "Una pista opcional de cómo leer el dato.",
   },
 };
+
 export const DEF_RULES: [RegExp, string][] = [
   [/^Barreras por acción sugerida/i, "bacc"],
+  [/^Desagregación de la acción/i, "dacc"],
   [/^Trámites por nivel de severidad/i, "tsev"],
   [/^Trámites por sector/i, "tsect"],
   [/^Trámites por entidad/i, "tent"],
@@ -210,7 +228,7 @@ export const DEF_RULES: [RegExp, string][] = [
   [/^Trámites por acción/i, "tacc"],
   [/^Costo estimado por actividad/i, "tcact"],
   [/^Costos administrativos por usuario/i, "tcusu"],
-  [/^Afectaciones/i, "tafe"],
+  [/^Tipo de carga que genera/i, "tafe"],
   [/^Afectación a la MIPYME/i, "tmip"],
   [/^Hallazgos/i, "thall"],
   [/ámbito de impacto/i, "amb"],
@@ -219,10 +237,11 @@ export const DEF_RULES: [RegExp, string][] = [
   [/entidad emisora/i, "eni"],
   [/nivel de severidad/i, "sev"],
   [/por año y sector/i, "vigsec"],
-  [/tipo de regulación/i, "vigtipo"],
+  [/tipo de regulación|por año y tipo$/i, "vigtipo"],
   [/por año/i, "vig"],
   [/Características del acervo/i, "car"],
 ];
+
 export const defFor = (title?: string) => {
   const r = DEF_RULES.find((x) => x[0].test(title || ""));
   return r ? DEFS[r[1]] : null;

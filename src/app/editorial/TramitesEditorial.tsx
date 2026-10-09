@@ -8,13 +8,31 @@ import {
   Tooltip,
   LabelList,
 } from "recharts";
-import { axisProps } from "./charts";
+import {
+  AX_TOP,
+  AX_XH0,
+  axT,
+  axisProps,
+  otrosNote,
+  star,
+  valAxis,
+} from "./charts";
 import { CardHead } from "./cardhead";
 import { DEFS } from "./defs";
 import { fmt1, fmtInt, pct } from "./format";
 import { I, Icon } from "./icons";
 import { InfoBtn } from "./info";
-import { Dd, DdState, DonutList, Fseg, Mejora, Pips, SevPill } from "./ui";
+import {
+  Dd,
+  DdState,
+  DonutList,
+  Flag,
+  Fseg,
+  Mejora,
+  Pips,
+  SevPanel,
+  SevPill,
+} from "./ui";
 import { PageShell } from "./PageShell";
 import { PAISES_FIXTURE, tramitesFixture } from "./fixtures";
 import { RAMPS, SEVS, TR_G, T, colorPais } from "./theme";
@@ -53,9 +71,21 @@ function TramitesBody({
     eta: "Todos",
     usu: "Todos",
   });
+  const [ds, setDs] = useState({
+    sec: "total",
+    ent: "total",
+    eta: "total",
+    usu: "total",
+  }); // B5: por defecto sin desagregación
+  const setD = (k) => (v) => setDs((x) => ({ ...x, [k]: v }));
+  const TR_DIS = [
+    ["total", "Total", "Sin desagregar", "Total de trámites"],
+    ["sev", "Severidad", "Nivel de severidad", "Alta, Media y Baja"],
+  ];
   const [ns, setNs] = useState({ sec: "10", ent: "10" });
   const [ind, setInd] = useState("usd");
   const [ord, setOrd] = useState("tot");
+  const [accSec, setAccSec] = useState("Todos"); // T6: filtro de sector en «Trámites por acción de mejora sugerida»
   const setF = (k) => (v) => setFs((s) => ({ ...s, [k]: v })),
     setN = (k) => (v) => setNs((s) => ({ ...s, [k]: v }));
   const SEGC = T.sev;
@@ -92,6 +122,7 @@ function TramitesBody({
   const tickP = (w) => ({
     ...axisProps(T),
     width: w,
+    tickFormatter: star,
     tick: {
       fill: T.axis,
       fontSize: 12,
@@ -107,13 +138,15 @@ function TramitesBody({
           <span>Total de trámites</span>
           <b>{fmtInt(payload[0].payload.total)}</b>
         </div>
-        {payload.map((x) => (
-          <div className="r" key={x.dataKey}>
-            <i style={{ background: x.color }}></i>
-            <span>{x.name}</span>
-            <b>{fmtInt(x.value)}</b>
-          </div>
-        ))}
+        {payload.length > 1
+          ? payload.map((x) => (
+              <div className="r" key={x.dataKey}>
+                <i style={{ background: x.color }}></i>
+                <span>{x.name}</span>
+                <b>{fmtInt(x.value)}</b>
+              </div>
+            ))
+          : null}
       </div>
     ) : null;
   const oneTip =
@@ -129,54 +162,102 @@ function TramitesBody({
           </div>
         </div>
       ) : null;
-  const hbarsStack = (data, yw, id) => (
-    <div className="chart" style={{ height: data.length * 28 + 14 }}>
+  const hbarsStack = (
+    data: any,
+    yw: any,
+    id: any,
+    catT?: any,
+    valT?: any,
+    dis?: any,
+  ) => (
+    <div
+      className="chart"
+      style={{ height: data.length * 28 + 14 + AX_TOP + AX_XH0 }}
+    >
       <ResponsiveContainer width="100%" height="100%">
         <BarChart
           data={data}
           layout="vertical"
-          margin={{ top: 0, right: 40, left: 0, bottom: 0 }}
+          margin={{ top: AX_TOP, right: 40, left: 0, bottom: 0 }}
           barCategoryGap="26%"
         >
-          <XAxis type="number" hide={true} />
-          <YAxis type="category" dataKey="k" {...tickP(yw)} />
+          {valAxis(valT || "Número de trámites")}
+          <YAxis
+            type="category"
+            dataKey="k"
+            {...tickP(yw)}
+            label={axT(catT, "y")}
+          />
           <Tooltip cursor={{ fill: T.grid, opacity: 0.5 }} content={stackTip} />
-          {SEVS.map((s, i) => (
+          {dis === "sev" ? (
+            SEVS.map((s, i) => (
+              <Bar
+                key={s}
+                dataKey={s}
+                name={s}
+                stackId={id}
+                fill={SEGC[s]}
+                maxBarSize={16}
+                radius={i === 2 ? [0, 4, 4, 0] : 0}
+                isAnimationActive={false}
+                stroke={T.surface}
+                strokeWidth={1}
+              >
+                {i === 2 ? (
+                  <LabelList
+                    dataKey="total"
+                    position="right"
+                    style={lblStyle}
+                  />
+                ) : null}
+              </Bar>
+            ))
+          ) : (
             <Bar
-              key={s}
-              dataKey={s}
-              name={s}
-              stackId={id}
-              fill={SEGC[s]}
+              key="total"
+              dataKey="total"
+              name="Trámites"
+              fill={TR_G}
               maxBarSize={16}
-              radius={i === 2 ? [0, 4, 4, 0] : 0}
+              radius={[0, 4, 4, 0]}
               isAnimationActive={false}
-              stroke={T.surface}
-              strokeWidth={1}
             >
-              {i === 2 ? (
-                <LabelList dataKey="total" position="right" style={lblStyle} />
-              ) : null}
+              <LabelList dataKey="total" position="right" style={lblStyle} />
             </Bar>
-          ))}
+          )}
         </BarChart>
       </ResponsiveContainer>
     </div>
   );
-  const hbarsOne = (rows, yw, unit, color, rw) => (
+  const hbarsOne = (
+    rows: any,
+    yw: any,
+    unit: any,
+    color: any,
+    rw?: any,
+    catT?: any,
+    valT?: any,
+  ) => (
     <div
       className="chart"
-      style={{ height: rows.length * (yw > 200 ? 40 : 30) + 14 }}
+      style={{
+        height: rows.length * (yw > 200 ? 40 : 30) + 14 + AX_TOP + AX_XH0,
+      }}
     >
       <ResponsiveContainer width="100%" height="100%">
         <BarChart
           data={rows}
           layout="vertical"
-          margin={{ top: 0, right: rw || 48, left: 0, bottom: 0 }}
+          margin={{ top: AX_TOP, right: rw || 48, left: 0, bottom: 0 }}
           barCategoryGap="30%"
         >
-          <XAxis type="number" hide={true} />
-          <YAxis type="category" dataKey="k" {...tickP(yw)} />
+          {valAxis(valT || "Número de trámites")}
+          <YAxis
+            type="category"
+            dataKey="k"
+            {...tickP(yw)}
+            label={axT(catT, "y")}
+          />
           <Tooltip
             cursor={{ fill: T.grid, opacity: 0.5 }}
             content={oneTip(unit)}
@@ -188,11 +269,23 @@ function TramitesBody({
             radius={[0, 4, 4, 0]}
             isAnimationActive={false}
           >
-            <LabelList dataKey="lab" position="right" style={lblStyle} />
+            <LabelList dataKey="lab" content={endLbl} />
           </Bar>
         </BarChart>
       </ResponsiveContainer>
     </div>
+  );
+  /* valor al final de la barra en una sola línea (sin partir «660 · 36 %») */
+  const endLbl = ({ x, y, width, height, value }) => (
+    <text
+      x={x + width + 6}
+      y={y + height / 2}
+      dominantBaseline="central"
+      style={{ ...lblStyle, whiteSpace: "pre" }}
+      fill="var(--ink)"
+    >
+      {value}
+    </text>
   );
   const Leg = (
     <div
@@ -208,52 +301,89 @@ function TramitesBody({
       ))}
     </div>
   );
-  const ctl = (key, topKey, allLabel) => (
-    <div className="ctlrow" role="group" aria-label="Filtros de la gráfica">
-      <div className="cg">
-        <span className="clbl">
-          <span className="clbl-t">Severidad</span>
-          <span className="clbl-ico" aria-hidden="true">
-            <i></i>
-            <i></i>
-            <i></i>
+  const ctl = (key: any, topKey?: any, allLabel?: any) => (
+    <>
+      <div className="ctlrow" role="group" aria-label="Filtros de la gráfica">
+        <div className="cg">
+          <span className="clbl">
+            <span className="clbl-t">Severidad</span>
+            <span className="clbl-ico" aria-hidden="true">
+              <i></i>
+              <i></i>
+              <i></i>
+            </span>
           </span>
-        </span>
-        <Fseg
-          v={fs[key]}
-          set={setF(key)}
-          items={["Todos", "Alta", "Media", "Baja"]}
-          label="Nivel de severidad"
-        />
-      </div>
-      {topKey ? (
-        <div className="cg cg-view">
-          <span className="clbl clbl-t">Mostrar</span>
-          <Dd
-            value={ns[topKey]}
-            onChange={setN(topKey)}
-            options={TOP_OPTS(allLabel)}
-            label="Cantidad de elementos a mostrar"
+          <Fseg
+            v={fs[key]}
+            set={setF(key)}
+            items={["Todos", "Alta", "Media", "Baja"]}
+            label="Nivel de severidad"
           />
         </div>
+        <div className="cg cg-view">
+          <span className="clbl clbl-t">Filtros</span>
+          <Dd
+            value={ds[key]}
+            onChange={setD(key)}
+            options={TR_DIS}
+            label="Desagregar barras por"
+            pre="Filtros:"
+          />
+        </div>
+      </div>
+      {topKey ? (
+        <div
+          className="ctlrow"
+          role="group"
+          aria-label="Opciones de la gráfica"
+        >
+          <div className="cg">
+            <span className="clbl clbl-t">Mostrar</span>
+            <Dd
+              value={ns[topKey]}
+              onChange={setN(topKey)}
+              options={TOP_OPTS(allLabel)}
+              label="Cantidad de elementos a mostrar"
+            />
+          </div>
+        </div>
       ) : null}
-    </div>
+    </>
   );
-  const subSev = (key, base) =>
-    base +
-    (fs[key] === "Todos"
-      ? " · Por nivel de severidad"
-      : " · Severidad " + fs[key].toLowerCase());
   const pcTot = (n) => Math.round((n / D.tot) * 100) + " %";
-  const withLab = (rows, fn, c) =>
+  const withLab = (rows: any, fn: any, c?: any) =>
     rows.map(([k, v]) => ({ k, v, lab: fn(v), c }));
 
   const sector = rank(D.sector, fs.sec, ns.sec),
     entidad = rank(D.entidad, fs.ent, ns.ent, "Otras entidades");
   const etapa = natural(D.etapa, fs.eta),
     usuario = rank(D.usuario, fs.usu);
-  const opo = withLab(D.opo, (v) => fmtInt(v) + " · " + pcTot(v)),
-    acc = withLab(D.acc, (v) => fmtInt(v) + " · " + pcTot(v));
+  /* T6 (datos de ejemplo): cada sector tiene su propia mezcla de acciones; % sobre los trámites del sector elegido */
+  const hsh = (str) => {
+    let h = 2166136261;
+    for (const c of str) {
+      h ^= c.charCodeAt(0);
+      h = Math.imul(h, 16777619);
+    }
+    return ((h >>> 0) % 1000) / 1000;
+  };
+  const secRow = D.sector.find((r) => r[0] === accSec),
+    accN = secRow ? secRow[1] : D.tot;
+  const accRows = secRow
+    ? D.acc
+        .map(([k, v]) => [
+          k,
+          Math.max(
+            1,
+            Math.round(((v * accN) / D.tot) * (0.55 + 0.9 * hsh(k + accSec))),
+          ),
+        ])
+        .sort((a, b) => b[1] - a[1])
+    : D.acc;
+  const acc = withLab(
+    accRows,
+    (v) => fmtInt(v) + " · " + Math.round((v / accN) * 100) + " %",
+  );
   const sevData = SEVS.map((name, i) => ({
     name,
     value: D.sev[i],
@@ -363,7 +493,7 @@ function TramitesBody({
       <div className="zone z-base">
         <div className="zi">
           <div
-            className="sum s4"
+            className="sum s3"
             aria-label="Indicadores generales de trámites"
           >
             {kpi(
@@ -385,15 +515,6 @@ function TramitesBody({
               "kent",
             )}
             {kpi(
-              "var(--primary)",
-              "Sectores cubiertos",
-              fmtInt(D.sec),
-              null,
-              "sectores económicos",
-              I.layers,
-              "ksec",
-            )}
-            {kpi(
               TR_G,
               "Costo administrativo estimado",
               "USD " + costTxt,
@@ -404,50 +525,15 @@ function TramitesBody({
             )}
           </div>
 
-          <div className="sevrow">
-            <section className="card sevcard">
-              <CardHead
-                title="Trámites por nivel de severidad"
-                sub="Participación de cada nivel en el total de trámites"
-              />
-              <DonutList
-                data={sevData}
-                totalLabel="Total de trámites"
-                unit="trámites"
-                heads={["Nivel"]}
-                aria="Trámites por nivel de severidad"
-                marker="pips"
-              />
-            </section>
-            <aside className="sevnote" aria-label="Definición de severidad">
-              <div className="sn-in">
-                <div className="sn-l">
-                  <span className="eb">
-                    <span className="ico" aria-hidden="true">
-                      <Icon d={I.info} />
-                    </span>
-                    Cómo leer la severidad
-                  </span>
-                  <p className="lead">{DEFS.tsev.d}</p>
-                </div>
-                <div className="sn-r">
-                  <p className="body">
-                    Cada trámite se clasifica en un nivel: <b>Alta</b>,{" "}
-                    <b>Media</b> o <b>Baja</b>.
-                  </p>
-                  <div className="sevkey" aria-label="Marcador de severidad">
-                    {SEVS.map((s, i) => (
-                      <span className="kc" key={s}>
-                        <Pips n={3 - i} color={SEGC[s]} />
-                        {s}
-                      </span>
-                    ))}
-                  </div>
-                  <p className="how">{DEFS.tsev.how}</p>
-                </div>
-              </div>
-            </aside>
-          </div>
+          <SevPanel
+            T={T}
+            title="Trámites por nivel de severidad"
+            data={sevData}
+            totalLabel="Total de trámites"
+            unit="trámites"
+            aria="Trámites por nivel de severidad"
+            def={DEFS.tsev}
+          />
         </div>
       </div>
 
@@ -468,53 +554,60 @@ function TramitesBody({
           </div>
           <div className="grid2">
             <section className="card">
-              <CardHead
-                title="Trámites por sector económico"
-                sub={subSev(
-                  "sec",
-                  ns.sec === "all"
-                    ? "Todos los sectores"
-                    : "Top " + ns.sec + " sectores",
-                )}
-              />
+              <CardHead title="Trámites por sector económico" />
               {ctl("sec", "sec", "Todos")}
-              {hbarsStack(sector, 150, "s")}
-              {Leg}
+              {hbarsStack(
+                sector,
+                150,
+                "s",
+                "Sector económico",
+                undefined,
+                ds.sec,
+              )}
+              {ds.sec === "sev" ? Leg : null}
             </section>
             <section className="card">
-              <CardHead
-                title="Trámites por entidad responsable"
-                sub={subSev(
-                  "ent",
-                  ns.ent === "all"
-                    ? "Todas las entidades"
-                    : "Top " + ns.ent + " entidades",
-                )}
-              />
+              <CardHead title="Trámites por entidad responsable" />
               {ctl("ent", "ent", "Todas")}
-              {hbarsStack(entidad, 190, "e")}
-              {Leg}
+              {hbarsStack(
+                entidad,
+                190,
+                "e",
+                "Entidad responsable",
+                undefined,
+                ds.ent,
+              )}
+              {ds.ent === "sev" ? Leg : null}
+              {otrosNote(
+                entidad.map((r) => r.k),
+                "trámites",
+              )}
             </section>
             <section className="card">
-              <CardHead
-                title="Trámites por etapa del ciclo empresarial"
-                sub={subSev(
-                  "eta",
-                  "Orden del ciclo: apertura, operación, expansión y cierre",
-                )}
-              />
+              <CardHead title="Trámites por etapa del ciclo empresarial" />
               {ctl("eta")}
-              {hbarsStack(etapa, 110, "c")}
-              {Leg}
+              {hbarsStack(
+                etapa,
+                110,
+                "c",
+                "Etapa del ciclo empresarial",
+                undefined,
+                ds.eta,
+              )}
+              {ds.eta === "sev" ? Leg : null}
             </section>
             <section className="card">
-              <CardHead
-                title="Trámites por tipo de usuario"
-                sub={subSev("usu", "Número de trámites")}
-              />
+              <CardHead title="Trámites por tipo de usuario" />
               {ctl("usu")}
-              {hbarsStack(usuario, 110, "u")}
-              {Leg}
+              {hbarsStack(
+                usuario,
+                110,
+                "u",
+                "Tipo de usuario",
+                undefined,
+                ds.usu,
+              )}
+              {ds.usu === "sev" ? Leg : null}
             </section>
           </div>
         </div>
@@ -537,14 +630,7 @@ function TramitesBody({
             </div>
             <div className="grid2">
               <section className="card">
-                <CardHead
-                  title="Costo estimado por actividad estándar"
-                  sub={
-                    ind === "usd"
-                      ? "Millones de dólares (USD)"
-                      : "Número de trámites"
-                  }
-                />
+                <CardHead title="Costo estimado por actividad estándar" />
                 <div
                   className="ctlrow"
                   role="group"
@@ -569,30 +655,41 @@ function TramitesBody({
                   ind === "usd" ? "Costo estimado" : "Trámites",
                   TR_G,
                   110,
+                  "Actividad estándar",
+                  ind === "usd"
+                    ? "Costo estimado (millones de USD)"
+                    : "Número de trámites",
+                )}
+                {otrosNote(cActRows.map((r) => r.k))}
+              </section>
+              <section className="card">
+                <CardHead title="Costos administrativos por usuario" />
+                {hbarsOne(
+                  cUsu,
+                  110,
+                  "Costo estimado",
+                  TR_G,
+                  110,
+                  "Tipo de usuario",
+                  "Costo estimado (millones de USD)",
                 )}
               </section>
               <section className="card">
-                <CardHead
-                  title="Costos administrativos por usuario"
-                  sub="Millones de dólares (USD), según tipo de usuario"
-                />
-                {hbarsOne(cUsu, 110, "Costo estimado", TR_G, 110)}
-              </section>
-              <section className="card">
-                <CardHead
-                  title="Afectaciones"
-                  sub="Principales afectaciones identificadas · número de trámites"
-                />
-                {hbarsOne(afe, 180, "Trámites", RAMPS.azul.steps[2], 48)}
+                <CardHead title="Tipo de carga que genera" />
+                {hbarsOne(
+                  afe,
+                  180,
+                  "Trámites",
+                  RAMPS.azul.steps[2],
+                  48,
+                  "Tipo de carga",
+                )}
                 <p className="csub" style={{ margin: 0 }}>
-                  Un trámite puede presentar más de una afectación.
+                  Un trámite puede generar más de un tipo de carga.
                 </p>
               </section>
               <section className="card">
-                <CardHead
-                  title="Afectación a la MIPYME"
-                  sub="Participación de cada nivel de afectación"
-                />
+                <CardHead title="Afectación a la MIPYME" />
                 <div className="mip">
                   <div
                     className="split"
@@ -636,13 +733,36 @@ function TramitesBody({
         </section>
       ) : null}
 
-      <section
-        className={"zone " + (nat ? "z-alt" : "z-base")}
-        aria-labelledby="t3"
-      >
+      {nat ? (
+        <section className="zone z-alt" aria-labelledby="tH">
+          <div className="zi">
+            <div className="sechead">
+              <span className="num">3</span>
+              <div>
+                <h2 id="tH">
+                  Hallazgos clave
+                  <InfoBtn k="thall" />
+                </h2>
+                <p>Lectura rápida de los datos de {country}</p>
+              </div>
+            </div>
+            <section className="card">
+              <ul className="finds tri">
+                {finds.map((f, i) => (
+                  <li key={i}>
+                    <span className="fv">{f[0]}</span>
+                    <span className="ft">{f[1]}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          </div>
+        </section>
+      ) : null}
+      <section className="zone z-base" aria-labelledby="t3">
         <div className="zi">
           <div className="sechead">
-            <span className="num">{nat ? 3 : 2}</span>
+            <span className="num">{nat ? 4 : 2}</span>
             <div>
               <h2 id="t3">
                 ¿Dónde actuar para simplificar?
@@ -654,53 +774,47 @@ function TramitesBody({
               </p>
             </div>
           </div>
-          <div className={nat ? "grid2 g-act" : "grid2"}>
-            <section className="card">
-              <CardHead
-                title="Trámites por oportunidad de mejora"
-                sub="Número de trámites y % del total"
-              />
-              {hbarsOne(opo, 230, "Trámites", TR_G, 100)}
-              <p className="csub" style={{ margin: 0 }}>
-                Un trámite puede presentar potencial de mejora en más de una
-                oportunidad.
-              </p>
-            </section>
-            <section className="card">
-              <CardHead
-                title="Trámites por acción de mejora sugerida"
-                sub="Número de trámites y % del total"
-              />
-              {hbarsOne(acc, 130, "Trámites", TR_G, 100)}
-              <p className="csub" style={{ margin: 0 }}>
-                Un trámite puede tener más de una acción sugerida.
-              </p>
-            </section>
-            {nat ? (
-              <section className="card finds-card g-wide">
-                <CardHead
-                  title="Hallazgos clave"
-                  sub={"Lectura rápida de los datos de " + country}
+          <section className="card">
+            <CardHead title="Trámites por acción de mejora sugerida" />
+            <div
+              className="ctlrow"
+              role="group"
+              aria-label="Filtros de la gráfica"
+            >
+              <div className="cg">
+                <span className="clbl clbl-t">Sector económico</span>
+                <Dd
+                  value={accSec}
+                  onChange={setAccSec}
+                  options={[
+                    ["Todos", "Todos"],
+                    ...D.sector.map((r) => [r[0], r[0]]),
+                  ]}
+                  label="Sector económico"
+                  pre="Sector"
                 />
-                <ul className="finds tri">
-                  {finds.map((f, i) => (
-                    <li key={i}>
-                      <span className="fv">{f[0]}</span>
-                      <span className="ft">{f[1]}</span>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ) : null}
-          </div>
+              </div>
+            </div>
+            {hbarsOne(
+              acc,
+              130,
+              "Trámites",
+              TR_G,
+              100,
+              "Acción de mejora sugerida",
+            )}
+            <p className="csub" style={{ margin: 0 }}>
+              Un trámite puede tener más de una acción sugerida.
+            </p>
+          </section>
         </div>
       </section>
 
       {nat ? (
-        <section className="zone z-base" aria-labelledby="t4">
+        <section className="zone z-alt" aria-labelledby="t4">
           <div className="zi">
             <div className="sechead">
-              <span className="num">4</span>
+              <span className="num">5</span>
               <div>
                 <h2 id="t4">
                   Principales trámites identificados en {country}
@@ -805,28 +919,13 @@ function TramitesBody({
                 <section className="card cc" key={r.name}>
                   <div className="top2">
                     <div className="name">
+                      <Flag id={r.id} name={r.name} />
                       <span
-                        className="flag"
-                        style={{ background: colorPais(r.name, r.i) }}
+                        className="cname"
+                        style={{ "--cc": colorPais(r.name, r.i) }}
                       >
-                        {r.id}
+                        {r.name}
                       </span>
-                      {r.name}
-                    </div>
-                  </div>
-                  <div className="ctlrow">
-                    <div className="cg">
-                      <span className="clbl">Ámbito</span>
-                      <DdState
-                        label={"Ámbito de impacto, " + r.name}
-                        options={[
-                          ["todos", "Todos los ámbitos"],
-                          ["Competencia", "Competencia"],
-                          ["Comercio", "Comercio"],
-                          ["Inversión", "Inversión"],
-                          ["Innovación", "Innovación"],
-                        ]}
-                      />
                     </div>
                   </div>
                   <div className="big">
@@ -910,7 +1009,7 @@ export function TramitesEditorial({
       t1="Trámites con"
       t2="potencial de mejora"
       infoKey="tra"
-      intro="Explora la cantidad, características y cargas asociadas a los trámites identificados, incluyendo dónde se concentran, qué tipo de usuarios afectan, qué cargas generan y cuáles presentan mayores oportunidades de simplificación."
+      intro="Explora los trámites publicados en el catálogo de trámites del país, sus principales características y las cargas que enfrentan los usuarios para completarlos, identificando dónde se concentran las mayores oportunidades de simplificación."
       stats={D.stats}
       country={country}
       paises={paises}
