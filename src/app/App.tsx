@@ -48,6 +48,7 @@ import {
 // que theme.ts evita de raíz).
 import { C, HDR_BTN_PRIMARY, HDR_BTN_SECONDARY, HDR_BTN_PILL } from "./theme";
 import { SidebarEditorial } from "./SidebarEditorial";
+import { PanoramaEditorial, BarrerasEditorial, TramitesEditorial } from "./editorial";
 // PanelRegional importa { Header, KpiCard, ... } de vuelta desde este archivo
 // (mismo ciclo App.tsx <-> otros módulos documentado arriba), pero nunca los
 // usa en el top-level de su módulo -- solo dentro del cuerpo de la función
@@ -11426,14 +11427,17 @@ function AppInner() {
     }
   };
 
+  // Pantallas rediseñadas (Panorama / Barreras / Trámites): el país activo viene de la ruta.
+  const cambiarPaisPanorama = (c: string) => navigate(c === "Todos" ? { screen: "panel-regional" } : { screen: "country-dashboard", country: c });
+
   const renderView = () => {
     switch (view.screen) {
-      case "panel-regional": return <PanelRegional onNavigate={navigate} />;
+      case "panel-regional": return <PanoramaEditorial country="Todos" onCountryChange={cambiarPaisPanorama} />;
       case "impacto-economico": return <ImpactoEconomico country={activeCountry} onCountryChange={c => setActiveCountry(c)} onNavigate={navigate} />;
-      case "country-dashboard": return <CountryDashboard country={view.country} onCountryChange={c => { setActiveCountry(c); navigate({ screen: "country-dashboard", country: c === "Todos" ? "Bolivia" : c }); }} onNavigate={navigate} />;
-      case "barreras": return <BarrerasScreen initialSector={view.sector} country={activeCountry} onCountryChange={c => { setActiveCountry(c); window.history.replaceState(null, "", BASE + viewToUrl(view, c)); }} onNavigate={navigate} />;
+      case "country-dashboard": return <PanoramaEditorial country={view.country} onCountryChange={cambiarPaisPanorama} />;
+      case "barreras": return <BarrerasEditorial country={activeCountry} onCountryChange={c => { setActiveCountry(c as Country); window.history.replaceState(null, "", BASE + viewToUrl(view, c as Country)); }} onOpenBarrera={id => id && navigate({ screen: "barrera-detail", id })} />;
       case "barrera-detail": return <BarreraDetail id={view.id} onNavigate={navigate} userRole={userRole} retroGobiernoOverrides={retroGobiernoOverrides} onGuardarRetroGobierno={guardarRetroGobierno} />;
-      case "tramites": return <TramitesScreen country={activeCountry} onCountryChange={c => { setActiveCountry(c); window.history.replaceState(null, "", BASE + viewToUrl(view, c)); }} onNavigate={navigate} />;
+      case "tramites": return <TramitesEditorial country={activeCountry} onCountryChange={c => { setActiveCountry(c as Country); window.history.replaceState(null, "", BASE + viewToUrl(view, c as Country)); }} onOpenTramite={id => id && navigate({ screen: "tramite-detail", id })} />;
       case "tramite-detail": return <TramiteDetail id={view.id} onNavigate={navigate} userRole={userRole} retroGobiernoOverrides={retroGobiernoOverrides} onGuardarRetroGobierno={guardarRetroGobierno} />;
       case "distorsion-detail": return <DistorsionDetail id={view.id} onNavigate={navigate} />;
       case "indice": return <IndiceIDR country={activeCountry} onCountryChange={c => setActiveCountry(c)} onNavigate={navigate} />;

@@ -1,0 +1,166 @@
+// ─── Contrato de datos de las pantallas rediseñadas ──────────────────────────
+// Cada pantalla es PRESENTACIONAL: recibe por props los datos del alcance que
+// está viendo (regional o un país) y avisa con callbacks cuando el usuario
+// cambia de país o abre un detalle. No hace consultas ni conoce el backend.
+//
+// Convención: `country === "Todos"` es la vista regional; cualquier otro valor
+// es el nombre de un país. Los datos de `data` corresponden a ESE alcance.
+//
+// Si `data` no se pasa, cada pantalla usa datos de ejemplo (fixtures.ts), así
+// que se puede integrar primero y conectar después.
+import type { Sev } from "./theme";
+
+export type { Sev };
+export type Par = [nombre: string, valor: number];
+
+export interface PaisRef {
+  id: string;
+  name: string;
+}
+
+/** Cifras del encabezado (a la derecha del título). */
+export type HeroStat = [valor: string, etiqueta: string];
+
+/** Selector extra del encabezado (Sector, Subsector…). */
+export interface HeroFilter {
+  label: string;
+  value: string;
+  options: [valor: string, texto: string][];
+  onChange: (v: string) => void;
+}
+
+export interface ScreenProps<D> {
+  /** "Todos" = vista regional. */
+  country: string;
+  /** Países disponibles (selector del encabezado y orden de las tarjetas). */
+  paises?: PaisRef[];
+  /** Datos del alcance actual. Si falta, se usan datos de ejemplo. */
+  data?: D;
+  onCountryChange: (country: string) => void;
+  /** Selectores extra del encabezado (opcional). */
+  filtros?: HeroFilter[];
+  userInitials?: string;
+  /** Pie de página: "15 de septiembre de 2026". Si falta, usa el de ejemplo. */
+  ultimaActualizacion?: string;
+  /** Pie de página: "2015–2024". Si falta, usa el de ejemplo. */
+  anios?: string;
+}
+
+// ── Panorama ────────────────────────────────────────────────────────────────
+export interface IndicadorAcervo {
+  label: string;
+  unit: string;
+  /** Decimales al mostrar el valor (0 = entero). */
+  decimals: number;
+  /** Un valor por país, en el orden de `PanoramaData.paises`. */
+  valores: number[];
+}
+export interface PanoramaData {
+  stats: HeroStat[];
+  years: number[];
+  /** Todos los países, con su acervo vigente actual. */
+  paises: { id: string; name: string; now: number }[];
+  /** Acervo vigente por año: [país][año], en el orden de `paises`. */
+  seriePais: number[][];
+  /** Alcance actual: [sector, serie por año]. */
+  sectores: [sector: string, serie: number[]][];
+  /** Alcance actual: [tipo de regulación, serie por año]. */
+  tipos: [tipo: string, serie: number[]][];
+  /** Por clave de indicador (cantidad, edad, palabras, longitud, lectura…). */
+  indicadores: Record<string, IndicadorAcervo>;
+  /** Solo vista por país: serie anual de cada indicador (por clave). */
+  serieIndicador?: Record<string, number[]>;
+}
+
+// ── Barreras ────────────────────────────────────────────────────────────────
+export interface BarreraFila {
+  id?: string;
+  barrera: string;
+  sector: string;
+  tipo: "Entrada" | "Operación";
+  ambito: string;
+  regulacion: string;
+  entidad: string;
+  severidad: Sev;
+  accion: string;
+}
+/** Fila de un gráfico de barreras (ámbito, jerarquía, sector o entidad), con TODOS
+ *  sus desgloses. La pantalla elige qué mostrar; no calcula ni reparte nada. */
+export interface DesgloseBarrera {
+  k: string;
+  entrada: number;
+  operacion: number;
+  alta: number;
+  media: number;
+  baja: number;
+  /** Opcional: cruce tipo × severidad (para el filtro de severidad desglosado por
+   *  tipo). Si falta, se reparte en proporción a entrada/operación. */
+  cruce?: Partial<Record<Sev, { entrada: number; operacion: number }>>;
+}
+export interface BarrerasData {
+  stats: HeroStat[];
+  total: number;
+  entrada: number;
+  operacion: number;
+  /** Alta, Media, Baja (ese orden). */
+  sev: [Sev, number][];
+  ambito: DesgloseBarrera[];
+  /** Del nivel normativo más alto al más bajo (el color sigue a la posición original). */
+  jerarquia: DesgloseBarrera[];
+  sector: DesgloseBarrera[];
+  /** Instrumentos normativos por sector (misma posición que `sector`). */
+  instrumentos: number[];
+  entidad: DesgloseBarrera[];
+  /** Solo vista regional: [id, país, entrada, operación]. */
+  paises?: [string, string, number, number][];
+  /** Solo vista por país. */
+  acciones?: Par[];
+  tabla?: BarreraFila[];
+}
+
+// ── Trámites ────────────────────────────────────────────────────────────────
+export interface TramiteFila {
+  id?: string;
+  tramite: string;
+  sector: string;
+  entidad: string;
+  etapa: string;
+  usuario: string;
+  severidad: Sev;
+  oportunidad: string;
+  costo: string;
+  accion: string;
+}
+/** Fila de un gráfico de trámites con su severidad real. */
+export interface DesgloseTramite {
+  k: string;
+  alta: number;
+  media: number;
+  baja: number;
+}
+export interface TramitesData {
+  stats: HeroStat[];
+  tot: number;
+  ent: number;
+  sec: number;
+  /** Costo administrativo estimado, millones de USD. */
+  cost: number;
+  /** Trámites por severidad: [alta, media, baja]. */
+  sev: [number, number, number];
+  sector: DesgloseTramite[];
+  entidad: DesgloseTramite[];
+  etapa: DesgloseTramite[];
+  usuario: DesgloseTramite[];
+  opo: Par[];
+  acc: Par[];
+  /** Solo vista regional. */
+  paises?: { id: string; name: string; tot: number; sev: [number, number, number] }[];
+  /** Solo vista por país. */
+  afe?: Par[];
+  mip?: Par[];
+  /** [actividad, parte del costo (0-1), parte del número de trámites (0-1)] */
+  cAct?: [string, number, number][];
+  /** [tipo de usuario, parte del costo (0-1)] */
+  cUsu?: Par[];
+  tabla?: TramiteFila[];
+}
