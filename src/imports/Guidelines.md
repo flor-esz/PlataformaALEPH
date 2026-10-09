@@ -5,53 +5,44 @@ Estas son reglas de diseño y producto que debes respetar en **toda** generació
 ## Producto
 ALEPH es una plataforma de inteligencia regulatoria con identidad propia (no es un sub-brand). Audita el stock regulatorio de un país e identifica barreras regulatorias y trámites con fricciones, cada uno anclado a su fuente legal. Esencia: **"Evidencia desde el origen"**. Principio: **"Nada escapa, nada se inventa"**. La vista actual es la del usuario del BID (analista regional multi-país). El usuario ve resultados de análisis ya procesados, nunca estado de agentes en tiempo real.
 
+## Dos sistemas de estilo conviven (oct 2026) — LEER ANTES DE GENERAR
+Hay un rediseño visual aprobado ("Editorial luminosa"). Se aplica por etapas:
+
+1. **Sistema vigente, ya homologado** — `src/app/theme.ts` (objeto `C`) + `src/styles/theme.css`. Mismos nombres de siempre, valores del rediseño. Lo usan TODAS las pantallas existentes, incluido el panel de **Administración** (Usuarios, Catálogos, Fuentes, Bitácora). No se renombra ninguna llave de `C`.
+2. **Sistema nuevo** — `src/app/themeEditorial.ts` (objeto `E`). Lo usan SOLO las pantallas rediseñadas que entregue el diseñador. No mezclar `C` y `E` dentro de una misma pantalla.
+
+Cuando ya no quede ninguna pantalla que lea `C`, se elimina `C`.
+
 ## Color (no negociable)
-- Canvas / fondo de contenido: `#EDF1F5` (off-white frío).
-- Superficie de tarjetas y paneles: `#FAFBFC`.
-- Sidebar de navegación: `#14161A` (grafito casi negro), con texto e íconos claros.
-- Rango azul acero (estructura, interacción, enlaces, charts, jerarquía): `#7FA8D4` → `#5E8FC2` → `#3E6E9E` → `#26456B`.
-- Bordes y divisores: gris sutil `#DCE3EB` aprox.
-- Texto principal: `#14161A`; texto secundario en gris medio.
+- Fondo de contenido: `#F5F4F1` (`C.canvas`). Tarjetas y paneles: `#FFFFFF` (`C.card`).
+- Menú lateral: degradado azul `C.sidebarGradient` (`#0A5A80 → #004E70 → #003A55`), con texto claro. Se aplica con `background`, no con `backgroundColor`.
+- Azul de marca BID: primario `#004E70`; cian `#009ADE` solo como acento (indicador activo, foco). Rampa azul de estructura/gráficas: `#94B4C4 → #5E90A8 → #196E8C → #004E70`.
+- Bordes: `#E7E4DE`. Texto principal `#1E1E1E`; secundario `#6F6C66`.
+- Verde (`#266736`, fondo `#E8F1D7`) = éxito / mejora / oportunidad. No se usa en severidad.
+- Errores y acciones destructivas que NO son severidad (Inactivo, Deshabilitar, formularios): `C.error` / `C.errorBg`.
 
 ## Severidad (no negociable)
-El rojo `#C75450` se usa **exclusivamente** para severidad CRÍTICA (badges, segmentos de chart, números críticos). Nunca decorativo ni categórico.
-Escala completa, consistente en toda la app:
-- Crítico → nivel 4 → `#C75450` (rojo)
-- Alto → nivel 3 → `#26456B` (azul acero oscuro)
-- Mediano → nivel 2 → `#3E6E9E` (azul acero medio)
-- Bajo → nivel 1 → `#7FA8D4` (azul acero claro)
-
-Dirección fija: mayor número = mayor severidad. El nivel numérico se
-muestra como prefijo de la etiqueta (ej. "4 · Crítico"), nunca solo.
+Escala visual de 3 niveles: **Alta** vino `#9C1F45`, **Media** ámbar `#E0892A`, **Baja** gris `#A9B6BF`. Nunca solo color: siempre con marcador de barras o etiqueta.
+- En `theme.ts` se conservan las llaves `critico`, `alto`, `mediano`, `bajo` para no tocar código: `critico` y `alto` → vino; `mediano` → ámbar; `bajo` → gris.
+- Los datos y las etiquetas ("Crítico", "Alto"…) NO se modifican en el trabajo de estilos. Si el backend o el BID cambian la escala a 3 niveles, eso es un cambio aparte.
+- El vino de severidad no se usa como color decorativo ni categórico.
 
 ## Rampa categórica (rankings y series)
-Para ordenar categorías sin significado de severidad: rankings por país,
-series comparativas, segmentos de composición. Comparte valores con la
-escala de severidad por consistencia visual, pero se declara por separado:
-son funciones semánticas distintas y el rojo nunca entra aquí.
-
-- Paso 1 → `#26456B`
-- Paso 2 → `#3E6E9E`
-- Paso 3 → `#5E8FC2`
-- Paso 4 → `#7FA8D4`
-- Paso 5 → `#A0C1E0`
-
-El paso 5 (`#A0C1E0`) existe solo en esta rampa. No tiene equivalente en
-la escala de severidad.
+Para pantallas viejas se conserva la rampa `C.steel1…steel4`. En las rediseñadas: color fijo por país (`E.paises`) y rampas tonales (`E.rampas`) solo cuando el dato tiene orden. El color sigue a la entidad, no a la posición en el ranking.
 
 ## Tipografía (no negociable)
-- **Space Grotesk** (weight 500): marca/logo, todos los títulos, etiquetas, navegación, números y referencias de datos (KPIs, conteos, badges, headers de tabla).
-- **IBM Plex Sans**: todo el texto de lectura corrida (diagnósticos, descripciones, propuestas de reforma, párrafos).
+- **Inter** en toda la plataforma (pesos 300–800). Títulos de página con mezcla de pesos (300 + 750). Cifras con numeración tabular y formato es-CO (`1.250`, `0,42`).
+- Los nombres "Space Grotesk" e "IBM Plex Sans" siguen apareciendo en el código heredado, pero son **alias que cargan Inter** (`src/styles/fonts.css`). En código nuevo escribir `Inter`.
 - No usar fuentes monoespaciadas.
 
 ## Marca
-Logo denominativo "ALEPH" en Space Grotesk 500, letras finas, con la "A" tratada como chevron (trazo delgado, elegante). Isotipo abstracto opcional: anillos de onda concéntricos / híbrido tipo gráfico radial, geométrico y simple, en azul acero. Nunca figurativo.
+Logotipo del rediseño: iniciales "RL" (peso 800) sobre cuadrado redondeado azul; nombre "Reg" (800) + "LAC" (300) en Inter. Menú contraído: solo las iniciales. Propuesta sujeta a decisión del equipo del BID.
 
 ## Estilo general
-Minimalista, sobrio, institucional pero moderno. Mucho espacio en blanco. NO es dark mode completo: contenido claro, sidebar grafito. Densidad de datos alta pero ordenada, tipo herramienta analítica profesional. Tarjetas con esquinas suavemente redondeadas (~8px), sombras muy sutiles, charts planos sin 3D.
+Minimalista, sobrio, institucional pero moderno. Mucho espacio en blanco. NO es dark mode completo: contenido claro, menú lateral azul de marca. Densidad de datos alta pero ordenada, tipo herramienta analítica profesional. Tarjetas con esquinas redondeadas (16 px), sombra suave, controles tipo píldora, charts planos sin 3D.
 
 ## Navegación (estructura fija)
-- Sidebar grafito persistente en todas las pantallas. De arriba a abajo: logo ALEPH; **switcher de país** (Todos · Honduras · Paraguay · Ecuador · El Salvador · Guatemala); menú con **Regulaciones** como ítem padre y submenú **Dashboard · Barreras · Trámites**; luego **Comparativa** y **Repositorio**; un **selector de idioma ES/EN**; y **Salir**. El ítem activo se resalta con un indicador sutil.
+- Menú lateral azul persistente en todas las pantallas. De arriba a abajo: logo ALEPH; **switcher de país** (Todos · Honduras · Paraguay · Ecuador · El Salvador · Guatemala); menú con **Regulaciones** como ítem padre y submenú **Dashboard · Barreras · Trámites**; luego **Comparativa** y **Repositorio**; un **selector de idioma ES/EN**; y **Salir**. El ítem activo se resalta con un indicador sutil.
 - **El switcher gobierna el contexto de datos, no la estructura**: las mismas pantallas sirven para "Todos" (Panel Regional agregado) y para un país (solo ese país). Cambian título, números y alcance; no la estructura, gráficas ni tablas.
 - En este alcance se desarrollan a fondo el Dashboard, Barreras y Trámites. Comparativa y Repositorio quedan enunciados (placeholder "En construcción").
 - El selector de sector NO es ítem del sidebar: es un dropdown junto al título en Barreras y Trámites.

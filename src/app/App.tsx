@@ -47,6 +47,7 @@ import {
 // en runtime con "Cannot access 'C' before initialization" -- justo el bug
 // que theme.ts evita de raíz).
 import { C, HDR_BTN_PRIMARY, HDR_BTN_SECONDARY, HDR_BTN_PILL } from "./theme";
+import { SidebarEditorial } from "./SidebarEditorial";
 // PanelRegional importa { Header, KpiCard, ... } de vuelta desde este archivo
 // (mismo ciclo App.tsx <-> otros módulos documentado arriba), pero nunca los
 // usa en el top-level de su módulo -- solo dentro del cuerpo de la función
@@ -8422,12 +8423,12 @@ function AdminUsuariosScreen() {
                 <td className="px-5 py-3 text-[13px] font-medium" style={{ fontFamily: "Space Grotesk, sans-serif", color: C.text }}>{u.nombre}</td>
                 <td className="px-5 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{u.correo}</td>
                 <td className="px-5 py-3"><span className="text-[11px] px-2.5 py-1 rounded-full" style={{ backgroundColor: C.steel3 + "22", color: C.steel3, fontFamily: "IBM Plex Sans, sans-serif" }}>{u.rol}</span></td>
-                <td className="px-5 py-3"><span className="text-[11px] px-2.5 py-1 rounded-full font-medium" style={{ backgroundColor: u.activo ? "#E6F4EA" : "#F5E6E6", color: u.activo ? "#2D7A3A" : C.critico, fontFamily: "IBM Plex Sans, sans-serif" }}>{u.activo ? "Activo" : "Inactivo"}</span></td>
+                <td className="px-5 py-3"><span className="text-[11px] px-2.5 py-1 rounded-full font-medium" style={{ backgroundColor: u.activo ? C.exitoBg : C.errorBg, color: u.activo ? C.exito : C.error, fontFamily: "IBM Plex Sans, sans-serif" }}>{u.activo ? "Activo" : "Inactivo"}</span></td>
                 <td className="px-5 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{u.acceso}</td>
                 <td className="px-5 py-3">
                   <div className="flex items-center gap-3">
                     <button className="text-[12px]" style={{ color: C.steel3, fontFamily: "IBM Plex Sans, sans-serif", background: "none", border: "none" }} onClick={() => openEdit(u)}>Editar</button>
-                    <button className="text-[12px]" style={{ color: u.activo ? C.critico : "#2D7A3A", fontFamily: "IBM Plex Sans, sans-serif", background: "none", border: "none" }} onClick={() => toggleActive(u.correo)}>
+                    <button className="text-[12px]" style={{ color: u.activo ? C.error : C.exito, fontFamily: "IBM Plex Sans, sans-serif", background: "none", border: "none" }} onClick={() => toggleActive(u.correo)}>
                       {u.activo ? "Deshabilitar" : "Habilitar"}
                     </button>
                   </div>
@@ -8657,7 +8658,7 @@ function AdminCatalogosScreen() {
                       <td className="px-5 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{e.pais}</td>
                       <td className="px-5 py-3">
                         <span className="text-[11px] px-2.5 py-1 rounded-full font-medium"
-                          style={{ backgroundColor: active ? "#E6F4EA" : "#F5E6E6", color: active ? "#2D7A3A" : C.critico, fontFamily: "IBM Plex Sans, sans-serif" }}>
+                          style={{ backgroundColor: active ? C.exitoBg : C.errorBg, color: active ? C.exito : C.error, fontFamily: "IBM Plex Sans, sans-serif" }}>
                           {active ? "Activo" : "Inactivo"}
                         </span>
                       </td>
@@ -8665,7 +8666,7 @@ function AdminCatalogosScreen() {
                         <div className="flex items-center gap-3">
                           <button className="text-[12px]" style={{ color: C.steel3, fontFamily: "IBM Plex Sans, sans-serif", background: "none", border: "none" }}
                             onClick={() => setEditingItem({ index: realIndex, value: e.nombre, pais: e.pais })}>Editar</button>
-                          <button className="text-[12px]" style={{ color: active ? C.critico : "#2D7A3A", fontFamily: "IBM Plex Sans, sans-serif", background: "none", border: "none" }}
+                          <button className="text-[12px]" style={{ color: active ? C.error : C.exito, fontFamily: "IBM Plex Sans, sans-serif", background: "none", border: "none" }}
                             onClick={() => toggleEntidadActive(e)}>
                             {active ? "Desactivar" : "Activar"}
                           </button>
@@ -8681,7 +8682,7 @@ function AdminCatalogosScreen() {
                       <td className="px-5 py-3 text-[13px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: active ? C.text : C.textMuted, textDecoration: active ? "none" : "line-through" }}>{item}</td>
                       <td className="px-5 py-3">
                         <span className="text-[11px] px-2.5 py-1 rounded-full font-medium"
-                          style={{ backgroundColor: active ? "#E6F4EA" : "#F5E6E6", color: active ? "#2D7A3A" : C.critico, fontFamily: "IBM Plex Sans, sans-serif" }}>
+                          style={{ backgroundColor: active ? C.exitoBg : C.errorBg, color: active ? C.exito : C.error, fontFamily: "IBM Plex Sans, sans-serif" }}>
                           {active ? "Activo" : "Inactivo"}
                         </span>
                       </td>
@@ -8691,7 +8692,7 @@ function AdminCatalogosScreen() {
                             onClick={() => setEditingItem(isPaisesCat
                               ? { index: i, value: item, periodoDesde: periodosAnalisis[item as Exclude<Country, "Todos">]?.desde ?? "", periodoHasta: periodosAnalisis[item as Exclude<Country, "Todos">]?.hasta ?? "" }
                               : { index: i, value: item })}>Editar</button>
-                          <button className="text-[12px]" style={{ color: active ? C.critico : "#2D7A3A", fontFamily: "IBM Plex Sans, sans-serif", background: "none", border: "none" }}
+                          <button className="text-[12px]" style={{ color: active ? C.error : C.exito, fontFamily: "IBM Plex Sans, sans-serif", background: "none", border: "none" }}
                             onClick={() => toggleActive(selectedCat, item)}>
                             {active ? "Desactivar" : "Activar"}
                           </button>
@@ -8843,7 +8844,7 @@ function AdminCatalogosScreen() {
                 <td className="px-5 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{rol.descripcion}</td>
                 <td className="px-5 py-3">
                   <span className="text-[11px] px-2.5 py-1 rounded-full font-medium"
-                    style={{ backgroundColor: rol.activo ? "#E6F4EA" : "#F5E6E6", color: rol.activo ? "#2D7A3A" : C.critico, fontFamily: "IBM Plex Sans, sans-serif" }}>
+                    style={{ backgroundColor: rol.activo ? C.exitoBg : C.errorBg, color: rol.activo ? C.exito : C.error, fontFamily: "IBM Plex Sans, sans-serif" }}>
                     {rol.activo ? "Activo" : "Inactivo"}
                   </span>
                 </td>
@@ -8851,7 +8852,7 @@ function AdminCatalogosScreen() {
                   <div className="flex items-center gap-3">
                     <button className="text-[12px]" style={{ color: C.steel3, fontFamily: "IBM Plex Sans, sans-serif", background: "none", border: "none" }}
                       onClick={() => setEditingRole({ index: i, nombre: rol.nombre, descripcion: rol.descripcion })}>Editar</button>
-                    <button className="text-[12px]" style={{ color: rol.activo ? C.critico : "#2D7A3A", fontFamily: "IBM Plex Sans, sans-serif", background: "none", border: "none" }}
+                    <button className="text-[12px]" style={{ color: rol.activo ? C.error : C.exito, fontFamily: "IBM Plex Sans, sans-serif", background: "none", border: "none" }}
                       onClick={() => setRoles(rs => rs.map((r, j) => j === i ? { ...r, activo: !r.activo } : r))}>
                       {rol.activo ? "Desactivar" : "Activar"}
                     </button>
@@ -8991,9 +8992,9 @@ type FuenteAdminRow = {
 };
 
 const ESTADO_FUENTE_META: Record<"Completo" | "Parcial" | "Pendiente", { bg: string; color: string }> = {
-  Completo: { bg: "#E7F1DC", color: "#3B6D11" },
-  Parcial: { bg: "#F6EBD6", color: "#8A5A12" },
-  Pendiente: { bg: "#DCE3EB", color: "#6B7A8D" },
+  Completo: { bg: C.verde2, color: C.verde1 },
+  Parcial: { bg: C.ambar2, color: C.ambarTexto },
+  Pendiente: { bg: C.border, color: C.textMuted },
 };
 
 const FRECUENCIA_POR_INDICE: ("Diaria" | "Semanal" | "Mensual")[] = ["Diaria", "Semanal", "Semanal", "Mensual"];
@@ -9114,13 +9115,13 @@ function AdminFuentesScreen({ paisInicial, userRole }: { paisInicial?: string; u
                   <td className="px-5 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text }}>{f.fuenteObjetivo}</td>
                   <td className="px-5 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{f.frecuenciaActualizacion}</td>
                   <td className="px-5 py-3"><span className="text-[11px] px-2.5 py-1 rounded-full font-medium" style={{ backgroundColor: meta.bg, color: meta.color, fontFamily: "IBM Plex Sans, sans-serif" }}>{f.estado}</span></td>
-                  <td className="px-5 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: f.errores ? C.critico : C.textMuted }}>{f.errores ?? "—"}</td>
+                  <td className="px-5 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: f.errores ? C.error : C.textMuted }}>{f.errores ?? "—"}</td>
                   <td className="px-5 py-3 text-[12px]" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{f.responsable}</td>
                   {isAdmin && (
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-3">
                         <button className="text-[12px]" style={{ color: C.steel3, fontFamily: "IBM Plex Sans, sans-serif", background: "none", border: "none" }} onClick={() => openEdit(f)}>Editar</button>
-                        <button className="text-[12px]" style={{ color: f.activo ? C.critico : "#2D7A3A", fontFamily: "IBM Plex Sans, sans-serif", background: "none", border: "none" }} onClick={() => toggleActivo(f)}>
+                        <button className="text-[12px]" style={{ color: f.activo ? C.error : C.exito, fontFamily: "IBM Plex Sans, sans-serif", background: "none", border: "none" }} onClick={() => toggleActivo(f)}>
                           {f.activo ? "Desactivar" : "Activar"}
                         </button>
                       </div>
@@ -9193,9 +9194,9 @@ type BitacoraTipo = "Cambio de catálogo" | "Validación" | "Exportación" | "Er
 const BITACORA_TIPOS: BitacoraTipo[] = ["Cambio de catálogo", "Validación", "Exportación", "Error", "Actualización"];
 const BITACORA_COLOR: Record<BitacoraTipo, string> = {
   "Cambio de catálogo": C.steel3,
-  "Validación": "#2D7A3A",
+  "Validación": C.exito,
   "Exportación": C.steel4,
-  "Error": C.critico,
+  "Error": C.error,
   // C.alto === C.steel4 en theme.ts (mismo hex) -- se usa C.ambar1 para que
   // "Actualización" no comparta color de badge con "Exportación".
   "Actualización": C.ambar1,
@@ -11706,6 +11707,8 @@ function AppInner() {
     activeSection, setActiveSection,
     activeView: view, userRole, setUserRole, onNavigate: navigate,
     onLogout: handleLogout,
+    roleLabel: ROLE_LABEL[userRole],
+    features: FEATURES,
   };
 
   return (
@@ -11714,7 +11717,7 @@ function AppInner() {
     <div className="flex flex-col h-screen overflow-hidden" style={{ backgroundColor: C.canvas, fontFamily: "IBM Plex Sans, sans-serif" }}>
       {/* Mobile sticky header */}
       {isMobile && (
-        <header className="flex items-center justify-between px-4 h-14 flex-shrink-0 z-30" style={{ backgroundColor: C.sidebar }}>
+        <header className="flex items-center justify-between px-4 h-14 flex-shrink-0 z-30" style={{ background: C.sidebarGradient }}>
           <div className="flex items-center gap-2">
             <span className="text-white text-[18px] tracking-widest" style={{ fontFamily: "Space Grotesk, sans-serif", fontWeight: 500, letterSpacing: 3 }}>RegLAC</span>
           </div>
@@ -11727,11 +11730,11 @@ function AppInner() {
       <div className="flex flex-1 overflow-hidden">
         {/* Desktop sidebar */}
         {!isMobile && (
-          <Sidebar {...sidebarProps} />
+          <SidebarEditorial {...sidebarProps} />
         )}
         {/* Mobile drawer */}
         {isMobile && (
-          <Sidebar {...sidebarProps} isDrawerOpen={drawerOpen} onDrawerClose={() => setDrawerOpen(false)} />
+          <SidebarEditorial {...sidebarProps} isDrawerOpen={drawerOpen} onDrawerClose={() => setDrawerOpen(false)} />
         )}
         <div className="flex-1 overflow-hidden">
           {renderView()}

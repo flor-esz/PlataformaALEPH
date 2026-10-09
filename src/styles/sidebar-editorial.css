@@ -1,0 +1,113 @@
+/* ─── Menú lateral · rediseño "Editorial luminosa" ───────────────────────────
+   Portado de reglac-prototipo (bloque "Menú lateral v3" + "Editorial luminosa").
+   TODAS las clases llevan prefijo `edsb-`: no chocan con Tailwind, shadcn ni
+   con las clases existentes. Lo importa SidebarEditorial.tsx. */
+
+.edsb {
+  --edsb-fg: #C9DDE8;
+  --edsb-fg-strong: #FFFFFF;
+  --edsb-mute: #93B9CD;
+  --edsb-rule: rgba(255,255,255,.14);
+  --edsb-tile: rgba(255,255,255,.09);
+  --edsb-tile-on: #009ADE;
+  --edsb-row-on: rgba(255,255,255,.14);
+  --edsb-row-hover: rgba(255,255,255,.08);
+  --edsb-signature: #009ADE;
+  position: relative;
+  z-index: 30;
+  flex: none;
+  width: 264px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, #0A5A80 0%, #004E70 38%, #003A55 100%);
+  color: var(--edsb-fg);
+  font-family: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  transition: width .22s ease;
+}
+.edsb-collapsed { width: 84px; }
+.edsb-drawer { position: fixed; top: 0; left: 0; bottom: 0; z-index: 50; width: min(300px, 85vw); height: auto; }
+.edsb-scrim { position: fixed; inset: 0; z-index: 40; background: rgba(0,0,0,.5); }
+
+.edsb-in { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 22px 14px 14px; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.25) transparent; }
+
+/* Marca */
+.edsb-brand { display: flex; align-items: center; gap: 11px; padding: 2px 6px 18px; min-height: 56px; }
+.edsb-brand-btn { cursor: pointer; }
+.edsb-mark { width: 42px; height: 42px; border-radius: 11px; display: inline-flex; align-items: center; justify-content: center; flex: none; background: linear-gradient(135deg, #009ADE, #0A5D8F); color: #fff; font-size: 25px; line-height: 1; letter-spacing: -0.04em; box-shadow: inset 0 0 0 1px rgba(255,255,255,.18); }
+.edsb-mark b { font-weight: 800; }
+.edsb-mark i { font-style: normal; font-weight: 800; margin-left: -1px; }
+.edsb-word { min-width: 0; white-space: nowrap; flex: 1; }
+.edsb-name { font-size: 22px; color: var(--edsb-fg-strong); line-height: 1; letter-spacing: -0.02em; }
+.edsb-name b { font-weight: 800; }
+.edsb-name span { font-weight: 300; letter-spacing: .01em; }
+.edsb-word small { display: block; font-size: 10px; letter-spacing: .07em; text-transform: uppercase; color: var(--edsb-mute); margin-top: 5px; }
+.edsb-close { background: none; border: 0; color: var(--edsb-fg); cursor: pointer; padding: 6px; }
+
+/* Botón de replegar */
+.edsb-toggle { position: absolute; right: -14px; top: 30px; width: 28px; height: 28px; border-radius: 50%; border: 0; background: #fff; color: #4a5a63; display: grid; place-items: center; cursor: pointer; z-index: 5; box-shadow: 0 2px 6px rgba(0,30,45,.18); padding: 0; }
+.edsb-toggle svg { transition: transform .22s; }
+.edsb-toggle:hover { background: #004E70; color: #fff; }
+.edsb-collapsed .edsb-toggle svg { transform: rotate(180deg); }
+.edsb-toggle:focus-visible, .edsb-sn:focus-visible { outline: 2px solid var(--edsb-signature); outline-offset: 2px; }
+
+/* Etiquetas de sección */
+.edsb-label { font-size: 10.5px; letter-spacing: .09em; text-transform: uppercase; color: var(--edsb-mute); padding: 16px 10px 6px; white-space: nowrap; }
+
+/* Filas */
+.edsb-sn { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 44px; padding: 5px 8px 5px 6px; border: 0; border-radius: 12px; background: none; color: var(--edsb-fg); font: inherit; font-size: 13.5px; font-weight: 400; text-align: left; cursor: pointer; position: relative; white-space: nowrap; }
+.edsb-sn:hover { background: var(--edsb-row-hover); color: var(--edsb-fg-strong); }
+.edsb-ico { width: 32px; height: 32px; border-radius: 10px; background: var(--edsb-tile); display: grid; place-items: center; flex: none; transition: background .15s, color .15s; }
+.edsb-txt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.edsb-chev { flex: none; opacity: .6; transition: transform .2s; }
+.edsb-parent { font-weight: 600; color: var(--edsb-fg-strong); }
+.edsb-parent[aria-expanded="false"] .edsb-chev { transform: rotate(-90deg); }
+.edsb-parent.has-active .edsb-ico { background: var(--edsb-tile-on); color: #fff; }
+.edsb-sn[aria-current="page"] { background: var(--edsb-row-on); color: #fff; font-weight: 600; }
+.edsb-sn[aria-current="page"] .edsb-ico { background: var(--edsb-tile-on); color: #fff; }
+
+/* Submenú plegable */
+.edsb-collapse { display: grid; grid-template-rows: 1fr; transition: grid-template-rows .22s ease; }
+.edsb-collapse[data-open="false"] { grid-template-rows: 0fr; visibility: hidden; transition: grid-template-rows .22s ease, visibility 0s .22s; }
+.edsb-collapse > div { min-height: 0; overflow: hidden; }
+.edsb-sub { position: relative; display: flex; flex-direction: column; gap: 2px; margin: 2px 0 6px 21px; padding-left: 12px; }
+.edsb-sub::before { content: ""; position: absolute; left: 0; top: 4px; bottom: 4px; width: 1.5px; border-radius: 2px; background: var(--edsb-rule); }
+.edsb-sub .edsb-sn { min-height: 40px; font-size: 13px; }
+.edsb-sub .edsb-ico { width: 28px; height: 28px; border-radius: 9px; }
+.edsb-sub .edsb-sn[aria-current="page"]::before { content: ""; position: absolute; left: -13px; top: 9px; bottom: 9px; width: 3px; border-radius: 3px; background: var(--edsb-signature); }
+
+/* Pie */
+.edsb-foot { margin-top: auto; padding-top: 12px; display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--edsb-rule); }
+.edsb-bid { font-size: 10.5px; line-height: 1.4; color: var(--edsb-mute); padding: 0 8px 4px; }
+.edsb-user { display: flex; align-items: center; gap: 10px; padding: 6px; border-radius: 12px; background: var(--edsb-tile); }
+.edsb-avatar { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font-size: 11.5px; font-weight: 600; flex: none; background: #009ADE; color: #fff; }
+.edsb-user-meta { min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.edsb-user-meta b { font-size: 13px; font-weight: 600; color: var(--edsb-fg-strong); white-space: nowrap; }
+.edsb-user-meta small { font-size: 11px; color: var(--edsb-mute); }
+
+/* Tooltip del modo compacto */
+.edsb-tip { position: fixed; transform: translateY(-50%); background: #12232C; color: #fff; font-size: 12px; font-weight: 500; padding: 6px 10px; border-radius: 8px; white-space: nowrap; z-index: 200; pointer-events: none; box-shadow: 0 6px 18px rgba(0,0,0,.28); }
+.edsb-tip::before { content: ""; position: absolute; left: -4px; top: 50%; width: 8px; height: 8px; background: #12232C; transform: translateY(-50%) rotate(45deg); }
+
+/* Modo compacto (solo iconos) */
+.edsb-collapsed .edsb-word,
+.edsb-collapsed .edsb-txt,
+.edsb-collapsed .edsb-chev,
+.edsb-collapsed .edsb-user-meta,
+.edsb-collapsed .edsb-bid { display: none; }
+.edsb-collapsed .edsb-in { padding: 22px 16px 14px; align-items: center; }
+.edsb-collapsed .edsb-brand { padding: 2px 0 14px; justify-content: center; }
+.edsb-collapsed .edsb-group { width: 100%; }
+.edsb-collapsed .edsb-sn { width: 52px; justify-content: center; padding: 4px; margin: 0 auto; }
+.edsb-collapsed .edsb-parent { margin-bottom: 2px; }
+.edsb-collapsed .edsb-collapse,
+.edsb-collapsed .edsb-collapse[data-open="false"] { grid-template-rows: 1fr; visibility: visible; }
+.edsb-collapsed .edsb-sub { margin: 0 auto 6px; padding: 4px 0; width: 52px; align-items: center; background: var(--edsb-tile); border-radius: 14px; }
+.edsb-collapsed .edsb-sub::before { display: none; }
+.edsb-collapsed .edsb-sub .edsb-sn { width: 44px; min-height: 38px; }
+.edsb-collapsed .edsb-sub .edsb-sn[aria-current="page"]::before { left: -4px; top: 10px; bottom: 10px; }
+.edsb-collapsed .edsb-label { font-size: 0; padding: 0; width: 28px; height: 1px; margin: 10px auto; background: var(--edsb-rule); }
+.edsb-collapsed .edsb-foot { align-items: center; width: 100%; }
+.edsb-collapsed .edsb-user { padding: 4px; background: none; }
+
+@media (prefers-reduced-motion: reduce) { .edsb, .edsb-collapse, .edsb-toggle svg { transition: none !important; } }

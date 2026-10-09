@@ -1,45 +1,47 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
+  /* ═══ Homologación al rediseño "Editorial luminosa" (oct 2026) ═══
+     Solo cambian VALORES; ningún nombre de variable cambia. */
   --font-size: 16px;
-  --background: #EDF1F5;
-  --foreground: #14161A;
-  --card: #FAFBFC;
-  --card-foreground: #14161A;
-  --popover: #FAFBFC;
-  --popover-foreground: #14161A;
-  --primary: #26456B;
-  --primary-foreground: #FAFBFC;
-  --secondary: #DCE3EB;
-  --secondary-foreground: #14161A;
-  --muted: #DCE3EB;
-  --muted-foreground: #6B7A8D;
-  --accent: #3E6E9E;
-  --accent-foreground: #FAFBFC;
-  --destructive: #C75450;
+  --background: #F5F4F1;
+  --foreground: #1E1E1E;
+  --card: #FFFFFF;
+  --card-foreground: #1E1E1E;
+  --popover: #FFFFFF;
+  --popover-foreground: #1E1E1E;
+  --primary: #004E70;
+  --primary-foreground: #FFFFFF;
+  --secondary: #EFEDE8;
+  --secondary-foreground: #1E1E1E;
+  --muted: #EFEDE8;
+  --muted-foreground: #6F6C66;
+  --accent: #E6EFF3;
+  --accent-foreground: #004E70;
+  --destructive: #9C1F45;
   --destructive-foreground: #ffffff;
-  --form-error: #C75450;
-  --border: #DCE3EB;
+  --form-error: #C75450; /* se mantiene separado del token de severidad a propósito */
+  --border: #E7E4DE;
   --input: transparent;
-  --input-background: #ffffff;
-  --switch-background: #cbced4;
+  --input-background: #FFFFFF;
+  --switch-background: #CFCBC3;
   --font-weight-medium: 500;
   --font-weight-normal: 400;
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: #030213;
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --ring: #009ADE;
+  --chart-1: #004E70;
+  --chart-2: #44A68C;
+  --chart-3: #2FB0E8;
+  --chart-4: #308144;
+  --chart-5: #8DBA38;
+  --radius: 1rem;
+  --sidebar: #004E70;
+  --sidebar-foreground: #C9DDE8;
+  --sidebar-primary: #009ADE;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: rgba(255,255,255,.12);
+  --sidebar-accent-foreground: #FFFFFF;
+  --sidebar-border: rgba(255,255,255,.14);
+  --sidebar-ring: #009ADE;
 }
 
 .dark {
