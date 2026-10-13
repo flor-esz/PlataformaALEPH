@@ -9914,7 +9914,7 @@ function ReportesScreen({ prefill, onNavigate }: { prefill?: ReportesPrefill; on
                   return (
                     <div key={sev} className="flex items-center gap-2">
                       <span className="text-[11px] w-[60px] flex-shrink-0" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.textMuted }}>{sev}</span>
-                      <div className="flex-1 rounded-full overflow-hidden h-[7px]" style={{ backgroundColor: "#E6ECF3" }}>
+                      <div className="flex-1 rounded-full overflow-hidden h-[7px]" style={{ backgroundColor: C.border }}>
                         <div className="h-full rounded-full" style={{ width: `${(count / max) * 100}%`, backgroundColor: color }} />
                       </div>
                       <span className="text-[11px] font-semibold w-[20px] text-right flex-shrink-0" style={{ fontFamily: "Space Grotesk, sans-serif", color }}>{count}</span>
@@ -10530,7 +10530,7 @@ function ReporteEstrategicoPaper({ data }: { data: ReporteEstrategicoData }) {
                   {h.entidad ? `${h.categoria} · ${h.entidad}` : h.categoria}
                 </span>
                 {h.severidad ? (
-                  <SevBadge nivel={h.severidad} />
+                  <span className="rounded" style={{ backgroundColor: "#FFFFFF" }}><SevBadge nivel={h.severidad} /></span>
                 ) : h.etiqueta ? (
                   <span className="text-[10px] px-2 py-0.5 rounded font-semibold uppercase flex-shrink-0"
                     style={{ backgroundColor: "rgba(255,255,255,0.2)", color: "white", fontFamily: "Space Grotesk, sans-serif" }}>
@@ -10730,7 +10730,7 @@ function ReportePDFScreen({ context, onNavigate }: { context?: string; onNavigat
     const parts = text.split(pasaje);
     return (
       <div className="rounded-lg p-4 italic text-[12px] leading-relaxed"
-        style={{ backgroundColor: "#F4F7FA", border: `1px solid ${C.border}`, fontFamily: "IBM Plex Sans, sans-serif", color: C.text }}>
+        style={{ backgroundColor: C.surface2, border: `1px solid ${C.border}`, fontFamily: "IBM Plex Sans, sans-serif", color: C.text }}>
         <div className="flex gap-3">
           <div className="w-1 flex-shrink-0 rounded-full self-stretch" style={{ backgroundColor: C.steel3 }} />
           <p>
@@ -10805,7 +10805,7 @@ function ReportePDFScreen({ context, onNavigate }: { context?: string; onNavigat
         {/* Top stripe */}
         <div className="px-5 py-3 flex items-center justify-between gap-3" style={{ backgroundColor: C.steel4 }}>
           <span className="text-[11px] font-medium text-white flex-shrink-0" style={{ fontFamily: "Space Grotesk, sans-serif" }}>Distorsión regulatoria</span>
-          <SevBadge nivel={h.severidad} />
+          <span className="rounded" style={{ backgroundColor: "#FFFFFF" }}><SevBadge nivel={h.severidad} /></span>
           <span className="text-[11px] flex-shrink-0 text-right" style={{ fontFamily: "IBM Plex Sans, sans-serif", color: "rgba(255,255,255,0.65)" }}>{h.entidad}</span>
         </div>
         <div className="p-5 md:p-6 flex flex-col gap-5" style={{ backgroundColor: "white" }}>
