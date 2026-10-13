@@ -57,11 +57,25 @@ export const AX_TOP = 30,
 
 export const AX_STYLE = {
   fill: "var(--ink-2)",
-  fontSize: 11.5,
+  fontSize: 11,
   fontWeight: 600,
   fontFamily: "Inter, system-ui, sans-serif",
 };
 
+/* Ancho real del nombre de un eje (11 px, seminegrita) para reservar el espacio de las etiquetas del eje vertical */
+let _mc: CanvasRenderingContext2D | null | undefined;
+export const titleW = (t: string) => {
+  try {
+    _mc = _mc || document.createElement("canvas").getContext("2d");
+    _mc.font = "600 11px Inter, system-ui, sans-serif";
+    return Math.ceil(_mc.measureText(t).width);
+  } catch (e) {
+    return t.length * 6.4;
+  }
+};
+export const NARROW = () => window.innerWidth < 640;
+export const yW = (w: number, t: string) =>
+  NARROW() ? w : Math.max(w, titleW(t) + 12);
 export const axT = (text: any, side?: any) => ({
   value: text,
   content: ({ viewBox: v }) =>
@@ -69,6 +83,16 @@ export const axT = (text: any, side?: any) => ({
       <text x={v.x} y={v.y - 16} textAnchor="start" {...AX_STYLE}>
         {text}
       </text>
+    ) : side === "yr" ? (
+      titleW(text) + 8 <= v.width ? (
+        <text x={v.x + v.width - 8} y={v.y - 16} textAnchor="end" {...AX_STYLE}>
+          {text}
+        </text>
+      ) : (
+        <text x={v.x} y={v.y - 16} textAnchor="start" {...AX_STYLE}>
+          {text}
+        </text>
+      )
     ) : (
       <text
         x={v.x + v.width / 2}
@@ -197,10 +221,8 @@ export const ZoomHint = (z: any) =>
    El contenido de cada nota NO está en la documentación: queda marcado «Pendiente · Por definir por el BID» hasta que se cargue la información real
    cada categoría (se completa con los datos reales). No se escriben contenidos supuestos. */
 export const OTROS: Record<string, (u?: any) => string> = {
-  Otro: () => "Por definir por el BID.",
   "Otras entidades": () => "Por definir por el BID.",
   "Otras actividades": () => "Por definir por el BID.",
-  "Otros sectores": () => "Por definir por el BID.",
 };
 
 export const star = (n: any) => (OTROS[n] ? n + "*" : n);

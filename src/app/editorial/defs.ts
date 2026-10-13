@@ -3,8 +3,29 @@ export interface Def {
   t: string;
   d: string;
   how?: string;
+  /** Lista «Nombre: descripción» dentro del popover (tipos de regulación, canales…). */
+  items?: [string, string][];
 }
 /* ===== Icono de definición (ⓘ): definiciones y popover ===== */
+/* ===== Icono de definición (ⓘ): definiciones y popover ===== */
+export const TIPO_ITEMS = [
+  [
+    "Ley",
+    "Incluye leyes ordinarias, orgánicas, códigos y, cuando corresponda, decretos con fuerza de ley.",
+  ],
+  [
+    "Decreto",
+    "Incluye decretos presidenciales, supremos o ejecutivos y otros instrumentos equivalentes para desarrollar, reglamentar o ejecutar las leyes por su función.",
+  ],
+  [
+    "Resolución",
+    "Normas técnicas o sectoriales emitidas por ministerios, superintendencias, comisiones y agencias reguladoras, que desarrollan y aplican reglas específicas de cumplimiento obligatorio.",
+  ],
+  [
+    "Reglamento",
+    "Disposiciones que detallan procedimientos, criterios técnicos o instrucciones para aplicar normas superiores. Incluyen reglamentos operativos, directivas, instrucciones y circulares.",
+  ],
+];
 export const DEFS: Record<string, Def> = {
   pan: {
     t: "Panorama regulatorio",
@@ -13,7 +34,7 @@ export const DEFS: Record<string, Def> = {
   },
   bar: {
     t: "Barreras regulatorias",
-    d: "Disposiciones normativas vigentes que dificultan la entrada de nuevos actores al mercado o que encarecen y limitan su operación. Se identifican dentro de las regulaciones y se clasifican por tipo, severidad, ámbito de impacto, país, sector y entidad emisora.",
+    d: "Disposiciones normativas vigentes que dificultan la entrada de nuevos actores al mercado o que encarecen y limitan su operación. Se identifican dentro de las regulaciones y se clasifican por tipo, severidad, canal de transmisión, país, sector y entidad emisora.",
     how: "Una regulación puede contener más de una barrera.",
   },
   tot: {
@@ -34,21 +55,39 @@ export const DEFS: Record<string, Def> = {
   sev: {
     t: "Nivel de severidad",
     d: "Qué tan fuerte es el efecto de la barrera para quien debe cumplirla. Se clasifica en Alta, Media y Baja.",
-    how: "Más barras llenas en el marcador, mayor severidad.",
   },
   amb: {
-    t: "Ámbito de impacto",
-    d: "Área de política pública sobre la que actúa la barrera: Competencia, Comercio, Inversión o Innovación.",
-    how: "Cada porción es un ámbito; el centro muestra el total. Se ordenan de mayor a menor.",
+    t: "Canal de transmisión",
+    d: "Principal mecanismo a través del cual la barrera regulatoria genera sus efectos. Si bien una barrera puede operar a través de múltiples canales, la metodología identifica y clasifica aquel en el que se espera su mayor incidencia.",
+    items: [
+      [
+        "Inversión",
+        "Restricciones que afectan la capacidad de adquirir activos, participar en empresas o expandir operaciones.",
+      ],
+      [
+        "Competencia",
+        "Restricciones que reducen la rivalidad entre empresas, favorecen a ciertos operadores o limitan el ingreso y participación en el mercado.",
+      ],
+      [
+        "Innovación",
+        "Restricciones que limitan la adopción de nuevas tecnologías, procesos, canales o modelos de negocio.",
+      ],
+      [
+        "Comercio",
+        "Restricciones que dificultan importar, exportar o comercializar bienes y servicios.",
+      ],
+    ],
+    how: "Cada porción es un canal; el centro muestra el total. Se ordenan de mayor a menor.",
   },
   jer: {
     t: "Jerarquía normativa",
-    d: "Tipo de norma donde está la barrera: ley, decreto, resolución, circular, reglamento u otro. Son las mismas categorías de Panorama regulatorio.",
+    d: "Tipo de regulación donde se identifica la barrera.",
+    items: TIPO_ITEMS,
     how: "Se ordenan de mayor a menor número de barreras; cada tipo conserva su color en toda la plataforma.",
   },
   sec: {
     t: "Sector económico",
-    d: "Sector de la economía al que afecta la barrera.",
+    d: "Sector o sectores económicos afectados por la barrera. Una misma barrera puede impactar uno o varios sectores al mismo tiempo.",
     how: "Se muestran los sectores con más barreras.",
   },
   eni: {
@@ -58,7 +97,7 @@ export const DEFS: Record<string, Def> = {
   },
   sec1: {
     t: "Dónde se concentran las barreras",
-    d: "Compara cómo se reparten las barreras según ámbito de impacto, jerarquía normativa, sector económico y entidad emisora.",
+    d: "Compara cómo se reparten las barreras según canal de transmisión, jerarquía normativa, sector económico y entidad emisora.",
     how: "Cada gráfica tiene sus propios filtros.",
   },
   sec2: {
@@ -67,7 +106,7 @@ export const DEFS: Record<string, Def> = {
   },
   sec3: {
     t: "Principales barreras de un país",
-    d: "Muestra de las barreras identificadas en un país, con su tipo, ámbito, regulación de origen, entidad emisora, severidad y la acción sugerida.",
+    d: "Muestra de las barreras identificadas en un país, con su tipo, canal de transmisión, regulación de origen, entidad emisora, severidad y la acción sugerida.",
   },
   tipo: {
     t: "Tipo de barrera",
@@ -85,12 +124,13 @@ export const DEFS: Record<string, Def> = {
   vigsec: {
     t: "Regulaciones por sector",
     d: "Evolución de las regulaciones vigentes en cada sector económico.",
-    how: "Un sector resaltado, los demás en gris. Cambia el Top con «Mostrar».",
+    how: "Cada línea es un sector; haz clic en una para resaltarla. Cambia el Top con «Mostrar».",
   },
   vigtipo: {
     t: "Tipo de regulación",
-    d: "Clase de norma: ley, decreto, resolución, circular, reglamento y otras.",
-    how: "Evolución de las regulaciones vigentes por clase.",
+    d: "Tipo de regulación de las normas vigentes.",
+    items: TIPO_ITEMS,
+    how: "Cada línea es un tipo de regulación y muestra cuántas regulaciones vigentes hay de ese tipo cada año.",
   },
   car: {
     t: "Características del acervo",
@@ -128,11 +168,10 @@ export const DEFS: Record<string, Def> = {
   tsev: {
     t: "Nivel de severidad",
     d: "Qué tan pesado es el trámite para quien debe cumplirlo. Se clasifica en Alta, Media y Baja.",
-    how: "Más barras llenas en el marcador, mayor severidad.",
   },
   tsect: {
     t: "Trámites por sector económico",
-    d: "Sector de la economía al que pertenece el trámite.",
+    d: "Sector o sectores económicos afectados por la carga que genera el trámite. Un trámite puede afectar a varios sectores económicos de manera transversal.",
     how: "Ordenados de mayor a menor. Elige cuántos mostrar con «Mostrar».",
   },
   tent: {
@@ -142,7 +181,7 @@ export const DEFS: Record<string, Def> = {
   },
   teta: {
     t: "Etapa del ciclo empresarial",
-    d: "Momento de la vida de la empresa en que se realiza el trámite: apertura, operación, expansión o cierre.",
+    d: "Momento de la vida de la empresa en que se realiza el trámite: apertura, operación o cierre.",
     how: "Se respeta el orden del ciclo, no el de tamaño.",
   },
   tusu: {
@@ -150,33 +189,32 @@ export const DEFS: Record<string, Def> = {
     d: "Quién realiza el trámite: una empresa, un ciudadano o ambos (mixto).",
     how: "Ordenados de mayor a menor número de trámites.",
   },
-  topo: {
-    t: "Oportunidad de mejora",
-    d: "Tipo de mejora que podría aplicarse al trámite. Un mismo trámite puede presentar más de una.",
-    how: "Los porcentajes no suman 100 % porque un trámite puede tener varias oportunidades.",
-  },
   tacc: {
     t: "Acción de mejora sugerida",
-    d: "Recomendación para reducir la carga del trámite: simplificar, digitalizar, interoperar, clarificar o proporcionalizar.",
+    d: "Recomendación para reducir la carga del trámite: simplificar, digitalizar e interoperar, reducir costos y tiempos, mejorar acceso y canales o mejorar información.",
     how: "Un trámite puede tener más de una acción sugerida.",
   },
   tcact: {
     t: "Costo por actividad estándar",
-    d: "Costo estimado de las actividades estándar que componen los trámites.",
-    how: "Cambia entre costo y número de trámites con «Indicador».",
+    d: "Estima cuánto cuesta completar un trámite según el tiempo requerido para entender requisitos, preparar documentos, llenar formularios, realizar gestiones, pagos y desplazamientos.",
   },
   tcusu: {
     t: "Costos administrativos por usuario",
-    d: "Costo estimado que los trámites generan según el tipo de usuario que los realiza.",
+    d: "Estima cuánto cuesta completar un trámite según el tiempo requerido para entender requisitos, preparar documentos, llenar formularios, realizar gestiones, pagos y desplazamientos.",
   },
   tafe: {
     t: "Tipo de carga que genera",
     d: "Principales problemas que los trámites generan a los usuarios, como costos, demoras o duplicidad.",
     how: "Un trámite puede generar más de un tipo de carga.",
   },
+  bmip: {
+    t: "Afectación a la MIPYME",
+    d: "Mide la proporción de barreras que tienen una afectación desproporcionada sobre las Mipymes.",
+    how: "Más barras llenas en el marcador, mayor afectación.",
+  },
   tmip: {
     t: "Afectación a la MIPYME",
-    d: "Qué tanto afectan los trámites a las micro, pequeñas y medianas empresas. Se clasifica en Alta, Media y Baja.",
+    d: "Mide la proporción de trámites que tienen una afectación desproporcionada sobre las Mipymes.",
     how: "Más barras llenas en el marcador, mayor afectación.",
   },
   thall: {
@@ -190,11 +228,11 @@ export const DEFS: Record<string, Def> = {
   },
   tcar: {
     t: "Cargas para los usuarios",
-    d: "Estimación de costos y principales afectaciones que generan los trámites.",
+    d: "Estimación de costos y principales tipos de carga que generan los trámites.",
   },
   tact: {
     t: "Dónde actuar para simplificar",
-    d: "Oportunidades de mejora y acciones sugeridas para reducir la carga de los trámites.",
+    d: "Acciones sugeridas para reducir la carga de los trámites.",
   },
   tpais: {
     t: "Trámites por país",
@@ -202,7 +240,12 @@ export const DEFS: Record<string, Def> = {
   },
   ttab: {
     t: "Principales trámites",
-    d: "Muestra de los trámites identificados en un país, con su sector, entidad, etapa, usuario, severidad, oportunidad de mejora, costo y acción sugerida.",
+    d: "Muestra de los trámites identificados en un país, con su sector, entidad, etapa, usuario, severidad, costo y acción sugerida.",
+  },
+  tdacc: {
+    t: "Desagregación de la acción sugerida",
+    d: "El filtro permite ver qué entidades emisoras se relacionan con cada acción sugerida.",
+    how: "Elige una acción en el filtro «Acción».",
   },
   dacc: {
     t: "Desagregación de la acción sugerida",
@@ -224,14 +267,13 @@ export const DEF_RULES: [RegExp, string][] = [
   [/^Trámites por entidad/i, "tent"],
   [/^Trámites por etapa/i, "teta"],
   [/^Trámites por tipo de usuario/i, "tusu"],
-  [/^Trámites por oportunidad/i, "topo"],
   [/^Trámites por acción/i, "tacc"],
   [/^Costo estimado por actividad/i, "tcact"],
   [/^Costos administrativos por usuario/i, "tcusu"],
   [/^Tipo de carga que genera/i, "tafe"],
   [/^Afectación a la MIPYME/i, "tmip"],
   [/^Hallazgos/i, "thall"],
-  [/ámbito de impacto/i, "amb"],
+  [/canal de transmisión|ámbito de impacto/i, "amb"],
   [/jerarquía normativa/i, "jer"],
   [/sector económico/i, "sec"],
   [/entidad emisora/i, "eni"],

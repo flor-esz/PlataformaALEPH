@@ -9,6 +9,7 @@ export function CardHead({
   tall,
   ctlLeft,
   noInfo,
+  def,
 }: {
   title: string;
   sub?: string;
@@ -16,6 +17,7 @@ export function CardHead({
   tall?: boolean;
   ctlLeft?: boolean;
   noInfo?: boolean;
+  def?: any;
 }) {
   return (
     <div
@@ -25,7 +27,9 @@ export function CardHead({
         <span className="t" title={title}>
           {title}
         </span>
-        {!noInfo && defFor(title) ? <InfoBtn def={defFor(title)} /> : null}
+        {!noInfo && (def || defFor(title)) ? (
+          <InfoBtn def={def || defFor(title)} />
+        ) : null}
       </h3>
       {sub || tall ? (
         <div className="crow2">

@@ -264,6 +264,8 @@ export function Ctl({ f, setF, d, setD, vlabel, vpre }: any) {
     </div>
   );
 }
+/* Definiciones de los niveles de severidad: texto literal del BID (comentarios del 6 oct). Aplican a barreras y trámites. */
+
 export function DonutList({
   data,
   totalLabel,
@@ -275,6 +277,7 @@ export function DonutList({
   unit,
   sel,
   onSel,
+  compact,
 }: any) {
   const [hs, setHs] = useState(null);
   const tot = data.reduce((a, d) => a + d.value, 0);
@@ -296,7 +299,9 @@ export function DonutList({
   const act = hs != null ? hs : si >= 0 ? si : -1;
   return (
     <div
-      className={"sevbody" + (onSel ? " selectable" : "")}
+      className={
+        "sevbody" + (onSel ? " selectable" : "") + (compact ? " compact" : "")
+      }
       style={{ "--ds": (size || 244) + "px" }}
     >
       <div className="donut" aria-hidden="true">
@@ -566,31 +571,26 @@ export const SEV_DEFS: Record<string, string> = {
   Baja: "Existe una carga o restricción menor concreta y observable que implica costo, tiempo o incertidumbre marginal.",
 };
 /* B4: severidad en un solo recuadro; las definiciones van en un panel interno diferenciado */
+
 /* B4: severidad en un solo recuadro. El panel conserva «Cómo leer la severidad»; las definiciones de nivel se abren
    con un botón (panel flotante fijo en escritorio, despliegue dentro de la tarjeta en celular) para mantener la altura original. */
-export function SevPanel({ T, title, data, totalLabel, unit, aria, def }: any) {
-  const [open, setOpen] = useState(false);
-  const wrap = React.useRef(null),
-    btn = React.useRef(null);
-  const id = React.useId();
-  React.useEffect(() => {
-    if (!open) return;
-    const down = (e) => {
-      if (wrap.current && !wrap.current.contains(e.target)) setOpen(false);
-    };
-    const key = (e) => {
-      if (e.key === "Escape") {
-        setOpen(false);
-        btn.current && btn.current.focus();
-      }
-    };
-    document.addEventListener("mousedown", down);
-    document.addEventListener("keydown", key);
-    return () => {
-      document.removeEventListener("mousedown", down);
-      document.removeEventListener("keydown", key);
-    };
-  }, [open]);
+/* Definiciones de severidad vigentes (Word BID 8 oct); se muestran en las tarjetas de Barreras y de Trámites */
+export const SEV_DEFS_TR: Record<string, string> = {
+  Alta: "El trámite impone costos, tiempos, gestiones o esfuerzos elevados o desproporcionados que obstaculizan sustancialmente su cumplimiento, pudiendo desalentar su realización, provocar su abandono o impedir que se complete.",
+  Media:
+    "El trámite impone costos, tiempos, gestiones o esfuerzos considerables que generan dificultades importantes para su cumplimiento, requieren recursos o acciones adicionales significativas y pueden demorar o desalentar su realización.",
+  Baja: "El trámite impone costos, tiempos, gestiones o esfuerzos adicionales que generan dificultades concretas para su cumplimiento, aunque estas son relativamente acotadas y pueden superarse sin mayores obstáculos.",
+};
+export function SevPanel({
+  T,
+  title,
+  data,
+  totalLabel,
+  unit,
+  aria,
+  def,
+  defs,
+}: any) {
   return (
     <section className="card sevone">
       <CardHead title={title} noInfo={true} />
@@ -603,76 +603,27 @@ export function SevPanel({ T, title, data, totalLabel, unit, aria, def }: any) {
             heads={["Nivel"]}
             aria={aria}
             marker="pips"
+            compact={true}
           />
         </div>
-        <div className="sevone-defs" ref={wrap}>
+        <div className="sevone-defs">
           <span className="sd-top">
             <span className="ico" aria-hidden="true">
               <Icon d={I.info} />
             </span>
             Cómo leer la severidad
           </span>
-          <p className="sd-lead">{def.d.split(". ")[0]}.</p>
-          <button
-            type="button"
-            ref={btn}
-            className={"sd-btn" + (open ? " is-open" : "")}
-            aria-expanded={open}
-            aria-controls={id}
-            onClick={() => setOpen((o) => !o)}
-          >
-            <span className="sd-pips" aria-hidden="true">
-              {["Alta", "Media", "Baja"].map((s, i) => (
-                <Pips key={s} n={3 - i} color={T.sev[s]} />
-              ))}
-            </span>
-            <span>Qué significa cada nivel</span>
-            <Icon d={I.chev} cls="dd-chev" />
-          </button>
-          <p className="sd-how">{def.how}</p>
-          {open ? (
-            <div
-              className="sd-pop"
-              id={id}
-              role="region"
-              aria-label="Qué significa cada nivel"
-            >
-              <div className="sd-pop-h">
-                <span>Qué significa cada nivel</span>
-                <button
-                  type="button"
-                  className="ipop-x"
-                  aria-label="Cerrar"
-                  onClick={() => {
-                    setOpen(false);
-                    btn.current && btn.current.focus();
-                  }}
-                >
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    aria-hidden="true"
-                  >
-                    <path d="M6 6l12 12M18 6L6 18" />
-                  </svg>
-                </button>
-              </div>
-              <ul className="sd-list">
-                {["Alta", "Media", "Baja"].map((s, i) => (
-                  <li key={s}>
-                    <span className="sd-k">
-                      <Pips n={3 - i} color={T.sev[s]} />
-                      <b>{s}</b>
-                    </span>
-                    <p>{SEV_DEFS[s]}</p>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
+          <ul className="sd-list">
+            {["Alta", "Media", "Baja"].map((s, i) => (
+              <li key={s}>
+                <span className="sd-k">
+                  <Pips n={3 - i} color={T.sev[s]} />
+                  <b>{s}</b>
+                </span>
+                <p>{(defs || SEV_DEFS_TR)[s]}</p>
+              </li>
+            ))}
+          </ul>
         </div>
       </div>
     </section>

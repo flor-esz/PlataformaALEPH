@@ -70,9 +70,7 @@ const TIPOS: [string, number][] = [
   ["Ley", 2210],
   ["Decreto", 1620],
   ["Resolución", 780],
-  ["Circular", 420],
-  ["Reglamento", 310],
-  ["Otro", 260],
+  ["Reglamento", 990],
 ];
 const tipoSeries = TIPOS.map((s, i) =>
   growth(s[1], [0.5, 0.55, 0.45, 0.6, 0.65, 0.7][i], 1 + i * 0.9),
@@ -206,12 +204,15 @@ const B = {
     ["Innovación", 150, 110],
   ] as [string, number, number][],
   jerarquia: [
-    ["Ley", 280],
-    ["Decreto", 360],
-    ["Resolución", 330],
-    ["Circular", 120],
-    ["Reglamento", 100],
-    ["Otro", 60],
+    ["Ley", 290],
+    ["Decreto", 375],
+    ["Resolución", 345],
+    ["Reglamento", 240],
+  ] as [string, number][],
+  mip: [
+    ["Alta", 380],
+    ["Media", 520],
+    ["Baja", 350],
   ] as [string, number][],
   sector: [
     ["Servicios financieros", 110, 70],
@@ -389,6 +390,14 @@ export function barrerasFixture(country: string): BarrerasData {
         0.55 + 0.12 * Math.sin(i * 2.1),
       ),
     ),
+    mip: ((m) => {
+      m[m.length - 1][1] += total - m.reduce((a, x) => a + x[1], 0);
+      return m;
+    })(
+      B.mip.map(
+        ([k, v]) => [k, nat ? Math.round(v * f) : v] as [string, number],
+      ),
+    ),
     sector: B.sector.map(([k, x, y], i) =>
       filaBarrera(
         k,
@@ -463,8 +472,7 @@ const TR_REG = {
   ] as [string, number][],
   etapa: [
     ["Apertura", 520],
-    ["Operación", 610],
-    ["Expansión", 450],
+    ["Operación", 1060],
     ["Cierre", 262],
   ] as [string, number][],
   usuario: [
@@ -472,18 +480,12 @@ const TR_REG = {
     ["Ciudadano", 620],
     ["Mixto", 242],
   ] as [string, number][],
-  opo: [
-    ["Trámites, requisitos y costos de cumplimiento", 1120],
-    ["Duplicidad, interoperabilidad y accesibilidad", 780],
-    ["Certidumbre, discrecionalidad y debido proceso", 580],
-    ["Proporcionalidad, riesgo e inspección", 430],
-  ] as [string, number][],
   acc: [
     ["Simplificar", 660],
-    ["Digitalizar", 550],
-    ["Interoperar", 420],
-    ["Clarificar", 300],
-    ["Proporcionalizar", 230],
+    ["Digitalizar e interoperar", 550],
+    ["Reducir costos y tiempos", 420],
+    ["Mejorar acceso y canales", 300],
+    ["Mejorar información", 230],
   ] as [string, number][],
 };
 const TR_CO = {
@@ -518,8 +520,7 @@ const TR_CO = {
   ] as [string, number][],
   etapa: [
     ["Apertura", 85],
-    ["Operación", 115],
-    ["Expansión", 52],
+    ["Operación", 167],
     ["Cierre", 23],
   ] as [string, number][],
   usuario: [
@@ -527,18 +528,12 @@ const TR_CO = {
     ["Ciudadano", 60],
     ["Mixto", 25],
   ] as [string, number][],
-  opo: [
-    ["Trámites, requisitos y costos de cumplimiento", 180],
-    ["Duplicidad, interoperabilidad y accesibilidad", 120],
-    ["Certidumbre, discrecionalidad y debido proceso", 95],
-    ["Proporcionalidad, riesgo e inspección", 70],
-  ] as [string, number][],
   acc: [
     ["Simplificar", 100],
-    ["Digitalizar", 82],
-    ["Interoperar", 63],
-    ["Clarificar", 45],
-    ["Proporcionalizar", 34],
+    ["Digitalizar e interoperar", 82],
+    ["Reducir costos y tiempos", 63],
+    ["Mejorar acceso y canales", 45],
+    ["Mejorar información", 34],
   ] as [string, number][],
   afe: [
     ["Costos administrativos", 120],
@@ -561,7 +556,6 @@ const TR_TABLA: TramitesData["tabla"] = [
     etapa: "Apertura",
     usuario: "Empresarial",
     severidad: "Alta",
-    oportunidad: "Requisitos y costos",
     costo: "1.250.000",
     accion: "Simplificar",
   },
@@ -572,9 +566,8 @@ const TR_TABLA: TramitesData["tabla"] = [
     etapa: "Operación",
     usuario: "Empresarial",
     severidad: "Alta",
-    oportunidad: "Discrecionalidad",
     costo: "980.000",
-    accion: "Clarificar",
+    accion: "Mejorar información",
   },
   {
     tramite: "Permiso de transporte de carga",
@@ -583,9 +576,8 @@ const TR_TABLA: TramitesData["tabla"] = [
     etapa: "Operación",
     usuario: "Empresarial",
     severidad: "Media",
-    oportunidad: "Interoperabilidad",
     costo: "620.000",
-    accion: "Digitalizar",
+    accion: "Digitalizar e interoperar",
   },
   {
     tramite: "Registro sanitario",
@@ -594,7 +586,6 @@ const TR_TABLA: TramitesData["tabla"] = [
     etapa: "Apertura",
     usuario: "Mixto",
     severidad: "Media",
-    oportunidad: "Requisitos y costos",
     costo: "510.000",
     accion: "Simplificar",
   },
@@ -602,12 +593,11 @@ const TR_TABLA: TramitesData["tabla"] = [
     tramite: "Autorización de construcción",
     sector: "Construcción / Edificaciones",
     entidad: "Municipalidad",
-    etapa: "Expansión",
+    etapa: "Operación",
     usuario: "Empresarial",
     severidad: "Baja",
-    oportunidad: "Proporcionalidad",
     costo: "320.000",
-    accion: "Proporcionalizar",
+    accion: "Reducir costos y tiempos",
   },
 ];
 
@@ -666,7 +656,6 @@ export function tramitesFixture(country: string): TramitesData {
     entidad: filasSev(sc(TR_CO.entidad), sev, tot),
     etapa: filasSev(sc(TR_CO.etapa), sev, tot),
     usuario: filasSev(sc(TR_CO.usuario), sev, tot),
-    opo: sc(TR_CO.opo),
     acc: sc(TR_CO.acc),
     afe: sc(TR_CO.afe),
     mip: sc(TR_CO.mip),

@@ -3,7 +3,17 @@ import { createPortal } from "react-dom";
 import { DEFS, type Def } from "./defs";
 import { I } from "./icons";
 
-export function InfoBtn({ k, def, tone, size }: { k?: string; def?: Def | null; tone?: "dark"; size?: "lg" }) {
+export function InfoBtn({
+  k,
+  def,
+  tone,
+  size,
+}: {
+  k?: string;
+  def?: Def | null;
+  tone?: "dark";
+  size?: "lg";
+}) {
   const d = def || DEFS[k];
   const [open, setOpen] = useState(false);
   const [pin, setPin] = useState(false);
@@ -36,7 +46,10 @@ export function InfoBtn({ k, def, tone, size }: { k?: string; def?: Def | null; 
       H = pRef.current.offsetHeight;
     const vw = window.innerWidth,
       vh = window.innerHeight;
-    const left = Math.min(Math.max(b.left + b.width / 2 - W / 2, 12), vw - W - 12);
+    const left = Math.min(
+      Math.max(b.left + b.width / 2 - W / 2, 12),
+      vw - W - 12,
+    );
     const above = b.bottom + 12 + H > vh - 12 && b.top - 12 - H > 12;
     setPos({
       left,
@@ -72,7 +85,8 @@ export function InfoBtn({ k, def, tone, size }: { k?: string; def?: Def | null; 
   }, [open]);
   React.useEffect(() => () => clearTimeout(tm.current), []);
   if (!d) return null;
-  const host = open && bRef.current ? bRef.current.closest(".ed") || document.body : null;
+  const host =
+    open && bRef.current ? bRef.current.closest(".ed") || document.body : null;
   const pop = host
     ? createPortal(
         <div
@@ -80,14 +94,32 @@ export function InfoBtn({ k, def, tone, size }: { k?: string; def?: Def | null; 
           id={id}
           role="tooltip"
           ref={pRef}
-          style={pos ? { left: pos.left, top: pos.top } : { left: 0, top: 0, visibility: "hidden" }}
+          style={
+            pos
+              ? { left: pos.left, top: pos.top }
+              : { left: 0, top: 0, visibility: "hidden" }
+          }
           onMouseEnter={clear}
           onMouseLeave={closeSoon}
         >
-          {pos ? <span className="ipop-arrow" style={{ left: pos.ax }}></span> : null}
+          {pos ? (
+            <span className="ipop-arrow" style={{ left: pos.ax }}></span>
+          ) : null}
           {pin ? (
-            <button type="button" className="ipop-x" aria-label="Cerrar definición" onClick={closeNow}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+            <button
+              type="button"
+              className="ipop-x"
+              aria-label="Cerrar definición"
+              onClick={closeNow}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                aria-hidden="true"
+              >
                 <path d="M6 6l12 12M18 6L6 18" />
               </svg>
             </button>
@@ -95,6 +127,15 @@ export function InfoBtn({ k, def, tone, size }: { k?: string; def?: Def | null; 
           <div className="ipop-eye">Definición</div>
           <h4>{d.t}</h4>
           <p>{d.d}</p>
+          {d.items ? (
+            <ul className="ipop-list">
+              {d.items.map(([n, t]) => (
+                <li key={n}>
+                  <b>{n}:</b> {t}
+                </li>
+              ))}
+            </ul>
+          ) : null}
           {d.how ? (
             <div className="ipop-how">
               <b>Cómo se lee. </b>
@@ -110,7 +151,11 @@ export function InfoBtn({ k, def, tone, size }: { k?: string; def?: Def | null; 
       <button
         type="button"
         ref={bRef}
-        className={"ibtn" + (size === "lg" ? " lg" : "") + (tone === "dark" ? " on-dark" : "")}
+        className={
+          "ibtn" +
+          (size === "lg" ? " lg" : "") +
+          (tone === "dark" ? " on-dark" : "")
+        }
         aria-label={"Definición: " + d.t}
         aria-expanded={open}
         aria-describedby={open ? id : undefined}

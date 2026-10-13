@@ -18,6 +18,7 @@ import {
   otrosNote,
   star,
   valAxis,
+  yW,
 } from "./charts";
 import { CardHead } from "./cardhead";
 import { DEFS } from "./defs";
@@ -121,7 +122,7 @@ function BarrerasBody({
   const ambDon = BB.ambito
     .map((a, i) => {
       const o = mk("total", a.k, a, f1);
-      return { name: a.k, value: o.total, color: AMB_C[i], desc: true };
+      return { name: a.k, value: o.total, color: AMB_C[i] };
     })
     .sort((x, y) => y.value - x.value);
   const jer = BB.jerarquia
@@ -289,6 +290,7 @@ function BarrerasBody({
       </div>
     );
 
+  const MIPB = [RAMPS.azul.steps[3], RAMPS.azul.steps[1], RAMPS.azul.steps[0]];
   const pE = pct(BB.entrada, BB.total),
     pO = 100 - pE;
   const ACC_C = ["#266736", "#8dba38", "#4b894a", "#83b38f", "#557022"];
@@ -358,16 +360,7 @@ function BarrerasBody({
       ),
     }))
     .sort((a, b) => b.total - a.total);
-  const xBySec =
-    xSecAll.length > 7
-      ? [
-          ...xSecAll.slice(0, 6),
-          {
-            k: "Otros sectores",
-            total: xSecAll.slice(6).reduce((a, r) => a + r.total, 0),
-          },
-        ]
-      : xSecAll;
+  const xBySec = xSecAll; // el BID pide quitar «Otros» en los gráficos por sector: se muestran todos
   const xTotT = xByTipo.reduce((a, r) => a + r.total, 0),
     xTotS = xBySec.reduce((a, r) => a + r.total, 0);
   const xTip = ({ active, payload, label }: any) =>
@@ -413,16 +406,15 @@ function BarrerasBody({
         [pct(BB.sev[0][1], BB.total) + " %", "tiene severidad alta"],
         [
           pct(ambTot[0][1], BB.total) + " %",
-          "corresponde al ámbito " + ambTot[0][0] + ", el de mayor impacto",
+          "corresponde al canal de transmisión " +
+            ambTot[0][0] +
+            ", el de mayor impacto",
         ],
         [
           pct(jerTot[0][1], BB.total) + " %",
           "está en la jerarquía normativa " + jerTot[0][0],
         ],
-        [
-          pct(accDon[0].value, BB.total) + " %",
-          "tiene como acción sugerida " + accDon[0].name,
-        ],
+        BB.diagnostico ?? ["18 %", "Diagnóstico"], // pendiente: el BID define el hallazgo «Diagnóstico»
       ];
   return (
     <React.Fragment>
@@ -481,7 +473,10 @@ function BarrerasBody({
               <div className="kdef">
                 <div className="kd-t">Definición</div>
                 <p>
-                  <span className="tbd">Pendiente</span> Por definir por el BID.
+                  Licencias, cupos, requisitos financieros o societarios,
+                  restricciones territoriales, derechos exclusivos y otras
+                  condiciones que pueden limitar el ingreso de nuevos
+                  participantes a mercados competitivos.
                 </p>
               </div>
             </div>
@@ -512,7 +507,9 @@ function BarrerasBody({
               <div className="kdef">
                 <div className="kd-t">Definición</div>
                 <p>
-                  <span className="tbd">Pendiente</span> Por definir por el BID.
+                  Límites a precios, capacidad, horarios, integración,
+                  tecnología, modelos digitales y otras condiciones que pueden
+                  restringir la forma de operar, competir, crecer o innovar.
                 </p>
               </div>
             </div>
@@ -538,7 +535,7 @@ function BarrerasBody({
                 <InfoBtn k="sec1" />
               </h2>
               <p>
-                Distribución según ámbito de impacto, jerarquía normativa,
+                Distribución según canal de transmisión, jerarquía normativa,
                 sector económico y entidad emisora
               </p>
             </div>
@@ -546,14 +543,14 @@ function BarrerasBody({
 
           <div className="grid2">
             <section className="card">
-              <CardHead title="Barreras por ámbito de impacto" />
+              <CardHead title="Barreras por canal de transmisión" />
               <CtlSev f={f1} setF={setF1} />
               <DonutList
                 data={ambDon}
                 totalLabel="Total de barreras"
                 size={208}
-                heads={["Ámbito"]}
-                aria="Barreras por ámbito de impacto"
+                heads={["Canal de transmisión"]}
+                aria="Barreras por canal de transmisión"
                 marker="dot"
               />
             </section>
@@ -577,14 +574,14 @@ function BarrerasBody({
                       type="category"
                       dataKey="k"
                       {...axisProps(T)}
-                      width={110}
+                      width={yW(110, "Tipo")}
                       tick={{
                         fill: T.axis,
                         fontSize: 12,
                         fontFamily: "Inter, system-ui, sans-serif",
                       }}
                       tickFormatter={star}
-                      label={axT("Tipo de norma", "y")}
+                      label={axT("Tipo", "yr")}
                     />
                     <Tooltip
                       cursor={{ fill: T.grid, opacity: 0.5 }}
@@ -673,13 +670,13 @@ function BarrerasBody({
                       type="category"
                       dataKey="k"
                       {...axisProps(T)}
-                      width={136}
+                      width={yW(136, "Sector económico")}
                       tick={{
                         fill: T.axis,
                         fontSize: 12,
                         fontFamily: "Inter, system-ui, sans-serif",
                       }}
-                      label={axT("Sector económico", "y")}
+                      label={axT("Sector económico", "yr")}
                     />
                     <Tooltip
                       cursor={{ fill: T.grid, opacity: 0.5 }}
@@ -730,14 +727,14 @@ function BarrerasBody({
                       type="category"
                       dataKey="k"
                       {...axisProps(T)}
-                      width={190}
+                      width={yW(190, "Entidad emisora")}
                       tick={{
                         fill: T.axis,
                         fontSize: 12,
                         fontFamily: "Inter, system-ui, sans-serif",
                       }}
                       tickFormatter={star}
-                      label={axT("Entidad emisora", "y")}
+                      label={axT("Entidad emisora", "yr")}
                     />
                     <Tooltip
                       cursor={{ fill: T.grid, opacity: 0.5 }}
@@ -752,6 +749,42 @@ function BarrerasBody({
                 ent.map((r) => r.k),
                 "barreras",
               )}
+            </section>
+
+            <section className="card g-wide">
+              <CardHead title="Afectación a la MIPYME" def={DEFS.bmip} />
+              <div className="mip">
+                <div
+                  className="split"
+                  style={{ height: 12 }}
+                  role="img"
+                  aria-label={
+                    "Afectación alta " +
+                    pct(BB.mip[0][1], BB.total) +
+                    " %, media " +
+                    pct(BB.mip[1][1], BB.total) +
+                    " %, baja " +
+                    pct(BB.mip[2][1], BB.total) +
+                    " %"
+                  }
+                >
+                  {BB.mip.map(([k, v], i) => (
+                    <i key={k} style={{ flex: v, background: MIPB[i] }}></i>
+                  ))}
+                </div>
+                <ul className="miplist">
+                  {BB.mip.map(([k, v], i) => (
+                    <li key={k}>
+                      <span className="ml">
+                        <Pips n={3 - i} color={MIPB[i]} />
+                        {k}
+                      </span>
+                      <b>{fmtInt(v)}</b>
+                      <span className="mp">{pct(v, BB.total)} %</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </section>
           </div>
         </div>
@@ -887,14 +920,14 @@ function BarrerasBody({
                               type="category"
                               dataKey="k"
                               {...axisProps(T)}
-                              width={92}
+                              width={yW(92, "Tipo de regulación")}
                               tick={{
                                 fill: T.axis,
                                 fontSize: 12,
                                 fontFamily: "Inter, system-ui, sans-serif",
                               }}
                               tickFormatter={star}
-                              label={axT("Tipo de regulación", "y")}
+                              label={axT("Tipo de regulación", "yr")}
                             />
                             <Tooltip
                               cursor={{ fill: T.grid, opacity: 0.5 }}
@@ -954,14 +987,14 @@ function BarrerasBody({
                               type="category"
                               dataKey="k"
                               {...axisProps(T)}
-                              width={140}
+                              width={yW(140, "Sector económico")}
                               tick={{
                                 fill: T.axis,
                                 fontSize: 12,
                                 fontFamily: "Inter, system-ui, sans-serif",
                               }}
                               tickFormatter={star}
-                              label={axT("Sector económico", "y")}
+                              label={axT("Sector económico", "yr")}
                             />
                             <Tooltip
                               cursor={{ fill: T.grid, opacity: 0.5 }}
@@ -980,12 +1013,7 @@ function BarrerasBody({
                                   key={d.k}
                                   fill={acc.color}
                                   fillOpacity={
-                                    xSec === "Todos" ||
-                                    xSec === d.k ||
-                                    (d.k === "Otros sectores" &&
-                                      !xBySec.some((r) => r.k === xSec))
-                                      ? 1
-                                      : 0.3
+                                    xSec === "Todos" || xSec === d.k ? 1 : 0.3
                                   }
                                 />
                               ))}
@@ -1036,7 +1064,7 @@ function BarrerasBody({
                           <InfoBtn k="tipo" />
                         </th>
                         <th>
-                          Ámbito
+                          Canal de transmisión
                           <InfoBtn k="amb" />
                         </th>
                         <th>Regulación</th>
@@ -1221,7 +1249,7 @@ export function BarrerasEditorial({
       t1="Barreras"
       t2="regulatorias"
       infoKey="bar"
-      intro="Explora la cantidad, composición y características de las barreras regulatorias identificadas, según su tipo, nivel de severidad, ámbito de impacto, país, sector, marco normativo y entidad emisora."
+      intro="Explora la cantidad, composición y características de las barreras regulatorias identificadas."
       stats={D.stats}
       country={country}
       paises={paises}

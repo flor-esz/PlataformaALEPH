@@ -243,6 +243,160 @@ function PanoramaBody({ D, country }: { D: PanoramaData; country: string }) {
     <div className="grid2">
       <section className="card">
         <CardHead
+          title={
+            one
+              ? "Regulaciones vigentes por año"
+              : "Regulaciones vigentes por año y país"
+          }
+        />
+        <div className="cbody">
+          <div className="chart" ref={rC}>
+            {one ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart
+                  data={oneData}
+                  margin={{
+                    top: AX_TOP,
+                    right: 18,
+                    left: 0,
+                    bottom: zC ? 10 : 0,
+                  }}
+                  {...yearHover(setYC)}
+                >
+                  <defs>
+                    <linearGradient id="ga-pan" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0" stopColor={cCol} stopOpacity=".18" />
+                      <stop offset="1" stopColor={cCol} stopOpacity="0" />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid vertical={false} stroke={T.grid} />
+                  <XAxis {...yearAxis(T)} />
+                  {zoomBrush(zC)}
+                  <YAxis
+                    {...axisProps(T)}
+                    width={48}
+                    tickFormatter={(v) => fmtInt(v)}
+                    label={axT("Regulaciones vigentes", "y")}
+                  />
+                  <Tooltip {...sideTip(T)} />
+                  <Area
+                    type="monotone"
+                    dataKey={country}
+                    name={country}
+                    stroke={cCol}
+                    strokeWidth={2}
+                    fill="url(#ga-pan)"
+                    isAnimationActive={false}
+                    activeDot={{ r: 5, stroke: T.surface, strokeWidth: 2 }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey={ALC}
+                    name={ALC}
+                    stroke={ALC_COLOR}
+                    strokeWidth={1.75}
+                    strokeDasharray={ALC_DASH}
+                    fill="none"
+                    isAnimationActive={false}
+                    activeDot={{ r: 4, stroke: T.surface, strokeWidth: 2 }}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <MultiLine
+                zoom={zC}
+                T={T}
+                data={panoramaCountry}
+                series={D.paises.map((c) => c.name)}
+                colors={colores}
+                hl={hlC}
+                yT="Regulaciones vigentes"
+                refKey={ALC}
+                setYear={setYC}
+                onPin={(n: any) => setHlC((p) => (p === n ? null : n))}
+              />
+            )}
+          </div>
+          {one ? (
+            <StatBox
+              years={years}
+              ultimo={y1}
+              series={D.seriePais[ci]}
+              color={cCol}
+              label={NOW_T}
+              fmtV={fmtInt(D.paises[ci].now)}
+              unit="regulaciones vigentes"
+              alc={fmtInt(panoramaCountry[panoramaCountry.length - 1][ALC])}
+              year={yC}
+              onBack={() => setYC(null)}
+              alcSeries={panoramaCountry.map((r) => r[ALC])}
+            />
+          ) : (
+            <NowBox
+              ultimo={y1}
+              title={NOW_T}
+              year={yC}
+              onBack={() => setYC(null)}
+              hl={hlC}
+              onPick={(n: any) => setHlC((p) => (p === n ? null : n))}
+              onClear={() => setHlC(null)}
+              rows={((r) => [
+                ...D.paises.map((c, i) => ({
+                  name: c.name,
+                  value: r[c.name],
+                  color: hlC && hlC !== c.name ? neutral : colores[i],
+                })),
+                { name: ALC, value: r[ALC], color: ALC_COLOR, ref: true },
+              ])(at(panoramaCountry, yC))}
+            />
+          )}
+        </div>
+        {ZoomHint(zC)}
+      </section>
+
+      <section className="card">
+        <CardHead title="Regulaciones vigentes por año y tipo" />
+        <div className="cbody">
+          <div className="chart" ref={rT}>
+            <MultiLine
+              zoom={zT}
+              T={T}
+              data={typeData}
+              series={D.tipos.map((t) => t[0])}
+              colors={COLORES_SERIE}
+              hl={hlT}
+              yT="Regulaciones vigentes"
+              setYear={setYT}
+              onPin={(n: any) => setHlT((p) => (p === n ? null : n))}
+            />
+          </div>
+          <NowBox
+            ultimo={y1}
+            title={NOW_T}
+            year={yT}
+            onBack={() => setYT(null)}
+            hl={hlT}
+            onPick={(n: any) => setHlT((p) => (p === n ? null : n))}
+            onClear={() => setHlT(null)}
+            rows={D.tipos.map((t, i) => ({
+              name: t[0],
+              label: star(t[0]),
+              value: (yT != null
+                ? at(typeData, yT)
+                : typeData[typeData.length - 1])[t[0]],
+              color:
+                hlT && hlT !== t[0]
+                  ? neutral
+                  : COLORES_SERIE[i % COLORES_SERIE.length],
+            }))}
+          />
+        </div>
+        {otrosNote(D.tipos.map((t) => t[0]))}
+        {ZoomHint(zT)}
+      </section>
+
+      <section className="card">
+        <CardHead
           tall={true}
           ctlLeft={true}
           title="Regulaciones vigentes por año y sector"
@@ -479,160 +633,6 @@ function PanoramaBody({ D, country }: { D: PanoramaData; country: string }) {
           ) : null}
         </div>
         {one ? ZoomHint(zI) : null}
-      </section>
-
-      <section className="card">
-        <CardHead
-          title={
-            one
-              ? "Regulaciones vigentes por año"
-              : "Regulaciones vigentes por año y país"
-          }
-        />
-        <div className="cbody">
-          <div className="chart" ref={rC}>
-            {one ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart
-                  data={oneData}
-                  margin={{
-                    top: AX_TOP,
-                    right: 18,
-                    left: 0,
-                    bottom: zC ? 10 : 0,
-                  }}
-                  {...yearHover(setYC)}
-                >
-                  <defs>
-                    <linearGradient id="ga-pan" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0" stopColor={cCol} stopOpacity=".18" />
-                      <stop offset="1" stopColor={cCol} stopOpacity="0" />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid vertical={false} stroke={T.grid} />
-                  <XAxis {...yearAxis(T)} />
-                  {zoomBrush(zC)}
-                  <YAxis
-                    {...axisProps(T)}
-                    width={48}
-                    tickFormatter={(v) => fmtInt(v)}
-                    label={axT("Regulaciones vigentes", "y")}
-                  />
-                  <Tooltip {...sideTip(T)} />
-                  <Area
-                    type="monotone"
-                    dataKey={country}
-                    name={country}
-                    stroke={cCol}
-                    strokeWidth={2}
-                    fill="url(#ga-pan)"
-                    isAnimationActive={false}
-                    activeDot={{ r: 5, stroke: T.surface, strokeWidth: 2 }}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey={ALC}
-                    name={ALC}
-                    stroke={ALC_COLOR}
-                    strokeWidth={1.75}
-                    strokeDasharray={ALC_DASH}
-                    fill="none"
-                    isAnimationActive={false}
-                    activeDot={{ r: 4, stroke: T.surface, strokeWidth: 2 }}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            ) : (
-              <MultiLine
-                zoom={zC}
-                T={T}
-                data={panoramaCountry}
-                series={D.paises.map((c) => c.name)}
-                colors={colores}
-                hl={hlC}
-                yT="Regulaciones vigentes"
-                refKey={ALC}
-                setYear={setYC}
-                onPin={(n: any) => setHlC((p) => (p === n ? null : n))}
-              />
-            )}
-          </div>
-          {one ? (
-            <StatBox
-              years={years}
-              ultimo={y1}
-              series={D.seriePais[ci]}
-              color={cCol}
-              label={NOW_T}
-              fmtV={fmtInt(D.paises[ci].now)}
-              unit="regulaciones vigentes"
-              alc={fmtInt(panoramaCountry[panoramaCountry.length - 1][ALC])}
-              year={yC}
-              onBack={() => setYC(null)}
-              alcSeries={panoramaCountry.map((r) => r[ALC])}
-            />
-          ) : (
-            <NowBox
-              ultimo={y1}
-              title={NOW_T}
-              year={yC}
-              onBack={() => setYC(null)}
-              hl={hlC}
-              onPick={(n: any) => setHlC((p) => (p === n ? null : n))}
-              onClear={() => setHlC(null)}
-              rows={((r) => [
-                ...D.paises.map((c, i) => ({
-                  name: c.name,
-                  value: r[c.name],
-                  color: hlC && hlC !== c.name ? neutral : colores[i],
-                })),
-                { name: ALC, value: r[ALC], color: ALC_COLOR, ref: true },
-              ])(at(panoramaCountry, yC))}
-            />
-          )}
-        </div>
-        {ZoomHint(zC)}
-      </section>
-
-      <section className="card">
-        <CardHead title="Regulaciones vigentes por año y tipo" />
-        <div className="cbody">
-          <div className="chart" ref={rT}>
-            <MultiLine
-              zoom={zT}
-              T={T}
-              data={typeData}
-              series={D.tipos.map((t) => t[0])}
-              colors={COLORES_SERIE}
-              hl={hlT}
-              yT="Regulaciones vigentes"
-              setYear={setYT}
-              onPin={(n: any) => setHlT((p) => (p === n ? null : n))}
-            />
-          </div>
-          <NowBox
-            ultimo={y1}
-            title={NOW_T}
-            year={yT}
-            onBack={() => setYT(null)}
-            hl={hlT}
-            onPick={(n: any) => setHlT((p) => (p === n ? null : n))}
-            onClear={() => setHlT(null)}
-            rows={D.tipos.map((t, i) => ({
-              name: t[0],
-              label: star(t[0]),
-              value: (yT != null
-                ? at(typeData, yT)
-                : typeData[typeData.length - 1])[t[0]],
-              color:
-                hlT && hlT !== t[0]
-                  ? neutral
-                  : COLORES_SERIE[i % COLORES_SERIE.length],
-            }))}
-          />
-        </div>
-        {otrosNote(D.tipos.map((t) => t[0]))}
-        {ZoomHint(zT)}
       </section>
     </div>
   );

@@ -20,6 +20,7 @@
 .ed .finds .fv{font-size:30px;font-weight:600;letter-spacing:-0.03em;line-height:1;font-variant-numeric:tabular-nums;color:var(--primary)}
 .ed .finds .ft{font-size:13.5px;line-height:1.4;color:var(--ink-2)}
 .ed .grid2.g-act .g-wide{grid-column:1 / -1}
+.ed .grid2>.card.g-wide{grid-column:1 / -1}
 .ed p.prov{font-size:11px;color:var(--ink-4)}
 
 .ed th.num,.ed td.num{text-align:right;font-variant-numeric:tabular-nums}
@@ -474,6 +475,8 @@
 .ed .ipop p{margin:0;color:var(--ink-2)}
 .ed .ipop-how{margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:12px;color:var(--ink-3)}
 .ed .ipop-how b{color:var(--ink-2);font-weight:600}
+.ed .ipop-list{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:6px;font-size:12.5px;line-height:1.4;color:var(--ink-2)}
+.ed .ipop-list b{color:var(--ink);font-weight:600}
 .ed .ipop-x{position:absolute;top:8px;right:8px;width:24px;height:24px;border:0;background:transparent;border-radius:50%;color:var(--ink-3);display:grid;place-items:center;cursor:pointer;padding:0}
 .ed .ipop-x:hover{background:var(--surface-2);color:var(--ink)}
 .ed .ipop-x svg{width:14px;height:14px}
@@ -481,7 +484,7 @@
 .ed .kpi .ksub{display:block;font-size:12px;font-weight:400;color:var(--ink-3);margin-top:2px}
 .ed .sevrow{display:grid;grid-template-columns:minmax(0,620px) minmax(0,1fr);gap:24px;align-items:stretch}
 .ed .sevone{container-type:inline-size}
-.ed .sevone-in{display:grid;grid-template-columns:minmax(0,600px) minmax(0,1fr);gap:28px;align-items:stretch}
+.ed .sevone-in{display:grid;grid-template-columns:auto minmax(0,1fr);gap:28px;align-items:stretch}
 .ed .sevone-chart{min-width:0;display:flex;align-items:center}
 .ed .sevone-defs{min-width:0;border-radius:calc(var(--r-card) - 4px);padding:26px 28px;display:flex;flex-direction:column;gap:14px;border:1px solid rgba(0,78,112,.14);background:linear-gradient(135deg,rgba(0,154,222,.12) 0%,rgba(0,78,112,.06) 55%,rgba(255,255,255,.35) 100%)}
 .ed .sd-top{display:flex;align-items:center;gap:12px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:#0078ad}
@@ -507,12 +510,12 @@
   .ed .sd-btn .dd-chev{margin-left:auto;flex:none}
   .ed .sd-pips{gap:3px}}
 .ed .sd-how{margin:2px 0 0;font-size:12.5px;color:var(--ink-3)}
-.ed .sd-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:14px}
-.ed .sd-list li{display:grid;grid-template-columns:86px minmax(0,1fr);gap:14px;align-items:start;padding-top:14px;border-top:1px dashed rgba(0,78,112,.16)}
+.ed .sd-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
+.ed .sd-list li{display:grid;grid-template-columns:86px minmax(0,1fr);gap:14px;align-items:start;padding-top:12px;border-top:1px dashed rgba(0,78,112,.16)}
 .ed .sd-list li:first-child{padding-top:0;border-top:0}
-.ed .sd-k{display:inline-flex;align-items:center;gap:8px;font-size:14px;color:var(--ink);padding-top:1px}
+.ed .sd-k{display:inline-flex;align-items:center;gap:8px;font-size:13.5px;color:var(--ink);padding-top:1px}
 .ed .sd-k b{font-weight:600}
-.ed .sd-list p{margin:0;font-size:13.5px;line-height:1.55;color:var(--ink-2)}
+.ed .sd-list p{margin:0;font-size:12.5px;line-height:1.5;color:var(--ink-2)}
 @container (max-width:860px){.ed .sevone-in{grid-template-columns:minmax(0,1fr)}.ed .sevone-chart{justify-content:center}}
 @container (max-width:420px){.ed .sd-list li{grid-template-columns:minmax(0,1fr);gap:6px}.ed .sevone-defs{padding:18px}}
 .ed .sevcard,.ed .dcard{container-type:inline-size}
@@ -537,6 +540,7 @@
 .ed .sevlist li.sel{background:var(--surface-2)}.ed .sevlist li.sel::before{opacity:1}
 .ed .actgrid{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:24px;align-items:stretch}
 .ed .actgrid>.card{display:flex;flex-direction:column}
+.ed .actgrid.act-tr{grid-template-columns:minmax(0,7fr) minmax(0,5fr)}
 .ed .dxp{container-type:inline-size}
 .ed .dxp .ctlrow{flex-wrap:wrap}
 .ed .dxcharts{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;margin-top:4px}
@@ -545,7 +549,7 @@
 .ed .dxc h4{margin:0 0 2px;font-size:14px;font-weight:600;color:var(--ink)}
 .ed .dxnotes{display:flex;flex-direction:column;gap:6px}.ed .dxnotes:empty{display:none}.ed .dxp .fnote{margin:0}
 .ed .dxhint{margin:auto 0 0;padding-top:12px;font-size:12.5px;color:var(--ink-3)}
-@media (max-width:1180px){.ed .actgrid{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:1180px){.ed .actgrid,.ed .actgrid.act-tr{grid-template-columns:minmax(0,1fr)}}
 .ed .sevlist li>*{line-height:20px;font-size:15px}
 .ed .sevlist .sl{display:flex;align-items:center;gap:10px;font-weight:600;color:var(--ink)}
 .ed .sevlist .sl .pips{align-self:center;margin-top:0}
@@ -568,6 +572,8 @@
 .ed .donut{width:var(--ds);height:var(--ds)}
 .ed .sevlist .dot{width:10px;height:10px;border-radius:50%;background:var(--c);flex:none}
 .ed .sevbody{gap:32px}
+.ed .sevbody.compact{gap:28px}
+.ed .sevbody.compact .sevhd,.ed .sevbody.compact .sevlist li{grid-template-columns:96px 56px 56px;column-gap:10px}
 .ed .sum .op{position:relative;display:block;width:44px;height:auto;min-height:40px;margin:0;padding:0;border:0;border-radius:0;background:none;box-shadow:none;font-size:0;line-height:0;color:transparent;align-self:stretch;justify-self:center}
 .ed .sum .op::after{content:none}
 .ed .sum .op::before{content:"";position:absolute;left:50%;top:50%;width:32px;height:32px;margin:-16px 0 0 -16px;background:var(--primary);filter:none;border-radius:0;-webkit-mask:var(--m) center/32px 32px no-repeat;mask:var(--m) center/32px 32px no-repeat}
@@ -628,8 +634,7 @@
 .ed .tleg{display:flex;flex-wrap:wrap;gap:6px 20px;font-size:12.5px;color:var(--ink-2)}
 .ed .tleg span{display:inline-flex;align-items:center;gap:8px}
 .ed .tleg i{width:10px;height:10px;border-radius:3px;display:block}
-@media (max-width:900px){.ed .kpi>.kdef,.ed .kpi>.tsplit,.ed .kpi.has-share>.d{grid-row:auto!important}.ed .kpi.kmain>.v{font-size:44px}}
-@media (max-width:900px){.ed .kpi>.kdef,.ed .kpi>.tsplit,.ed .kpi.has-share>.d{grid-row:auto!important}.ed .kpi.kmain>.v{font-size:44px}}
+@media (max-width:900px){.ed .kpi>.kdef,.ed .kpi>.tsplit,.ed .kpi.has-share>.d{grid-row:auto!important}.ed .kpi.kmain>.v{font-size:44px}}@media (max-width:900px){.ed .kpi>.kdef,.ed .kpi>.tsplit,.ed .kpi.has-share>.d{grid-row:auto!important}.ed .kpi.kmain>.v{font-size:44px}}
 /* ── Contenedor de las pantallas (reemplaza al "shell" del prototipo) ─────── */
-.ed { font-family: var(--font); font-size: 14px; line-height: 1.5; color: var(--ink); -webkit-font-smoothing: antialiased; }
+.ed { font-family: var(--font); font-size: 14px; line-height: 1.45; color: var(--ink); -webkit-font-smoothing: antialiased; }
 .ed-root { height: 100%; overflow-y: auto; overflow-x: hidden; background: var(--bg); }

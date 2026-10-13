@@ -124,6 +124,10 @@ export interface BarrerasData {
   /** Opcional, vista por país: desagregación de cada acción sugerida →
    *  `accionMatriz[acción][tipo de norma][sector] = n.º de barreras`. Los tipos y sectores deben
    *  coincidir con `jerarquia[].k` y `sector[].k`. Si falta, la pantalla reparte un ejemplo. */
+  /** Hallazgo «Diagnóstico» (pendiente de definición del BID): [cifra, texto]. */
+  diagnostico?: [string, string];
+  /** Afectación a la MIPYME: [Alta, Media, Baja] con n.º de barreras. */
+  mip?: Par[];
   accionMatriz?: Record<string, Record<string, Record<string, number>>>;
   tabla?: BarreraFila[];
 }
@@ -137,7 +141,6 @@ export interface TramiteFila {
   etapa: string;
   usuario: string;
   severidad: Sev;
-  oportunidad: string;
   costo: string;
   accion: string;
 }
@@ -161,7 +164,6 @@ export interface TramitesData {
   entidad: DesgloseTramite[];
   etapa: DesgloseTramite[];
   usuario: DesgloseTramite[];
-  opo: Par[];
   acc: Par[];
   /** Solo vista regional. */
   paises?: {
@@ -173,6 +175,10 @@ export interface TramitesData {
   /** Solo vista por país. */
   afe?: Par[];
   mip?: Par[];
+  /** Opcional: desagregación de la acción sugerida por entidad emisora →
+   *  `accionEntidad[acción][entidad] = n.º de trámites` (las entidades deben coincidir con `entidad[].k`).
+   *  Si falta, la pantalla reparte un ejemplo. */
+  accionEntidad?: Record<string, Record<string, number>>;
   /** [actividad, parte del costo (0-1), parte del número de trámites (0-1)] */
   cAct?: [string, number, number][];
   /** [tipo de usuario, parte del costo (0-1)] */

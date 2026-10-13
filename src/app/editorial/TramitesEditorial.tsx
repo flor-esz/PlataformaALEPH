@@ -16,6 +16,9 @@ import {
   otrosNote,
   star,
   valAxis,
+  yW,
+  OTROS,
+  NARROW,
 } from "./charts";
 import { CardHead } from "./cardhead";
 import { DEFS } from "./defs";
@@ -83,8 +86,8 @@ function TramitesBody({
     ["sev", "Severidad", "Nivel de severidad", "Alta, Media y Baja"],
   ];
   const [ns, setNs] = useState({ sec: "10", ent: "10" });
-  const [ind, setInd] = useState("usd");
   const [ord, setOrd] = useState("tot");
+  const [dAcc, setDAcc] = useState("Simplificar"); // desagregación de la acción por entidad emisora
   const [accSec, setAccSec] = useState("Todos"); // T6: filtro de sector en «Trámites por acción de mejora sugerida»
   const setF = (k) => (v) => setFs((s) => ({ ...s, [k]: v })),
     setN = (k) => (v) => setNs((s) => ({ ...s, [k]: v }));
@@ -185,8 +188,8 @@ function TramitesBody({
           <YAxis
             type="category"
             dataKey="k"
-            {...tickP(yw)}
-            label={axT(catT, "y")}
+            {...tickP(yW(yw, catT))}
+            label={axT(catT, "yr")}
           />
           <Tooltip cursor={{ fill: T.grid, opacity: 0.5 }} content={stackTip} />
           {dis === "sev" ? (
@@ -208,6 +211,7 @@ function TramitesBody({
                     dataKey="total"
                     position="right"
                     style={lblStyle}
+                    formatter={fmtInt}
                   />
                 ) : null}
               </Bar>
@@ -222,7 +226,12 @@ function TramitesBody({
               radius={[0, 4, 4, 0]}
               isAnimationActive={false}
             >
-              <LabelList dataKey="total" position="right" style={lblStyle} />
+              <LabelList
+                dataKey="total"
+                position="right"
+                style={lblStyle}
+                formatter={fmtInt}
+              />
             </Bar>
           )}
         </BarChart>
@@ -255,8 +264,8 @@ function TramitesBody({
           <YAxis
             type="category"
             dataKey="k"
-            {...tickP(yw)}
-            label={axT(catT, "y")}
+            {...tickP(yW(yw, catT))}
+            label={axT(catT, "yr")}
           />
           <Tooltip
             cursor={{ fill: T.grid, opacity: 0.5 }}
@@ -367,8 +376,8 @@ function TramitesBody({
     }
     return ((h >>> 0) % 1000) / 1000;
   };
-  const secRow = D.sector.find((r) => r[0] === accSec),
-    accN = secRow ? secRow[1] : D.tot;
+  const secRow = D.sector.find((r) => r.k === accSec),
+    accN = secRow ? totalSev(secRow) : D.tot;
   const accRows = secRow
     ? D.acc
         .map(([k, v]) => [
@@ -384,6 +393,34 @@ function TramitesBody({
     accRows,
     (v) => fmtInt(v) + " · " + Math.round((v / accN) * 100) + " %",
   );
+  /* Desagregación de la acción sugerida por entidad emisora (datos de ejemplo, misma lógica que en Barreras) */
+  const dAccName = D.acc.some((a) => a[0] === dAcc) ? dAcc : D.acc[0][0],
+    dAccTot = D.acc.find((a) => a[0] === dAccName)[1];
+  const dEntBase = D.entidad
+      .filter((r) => !OTROS[r.k])
+      .map((r) => [r.k, totalSev(r)] as [string, number]),
+    dW = dEntBase.map(([k, v]) => v * (0.5 + hsh(dAccName + k))),
+    dWs = dW.reduce((a, b) => a + b, 0);
+  const dReal = D.accionEntidad?.[dAccName]; // datos reales si vienen; si no, reparto de ejemplo
+  const dEntAll = dEntBase
+    .map(([k], i) => ({
+      k,
+      v: dReal
+        ? (dReal[k] ?? 0)
+        : Math.max(1, Math.round((dAccTot * dW[i]) / dWs)),
+    }))
+    .sort((a, b) => b.v - a.v);
+  const dEnt = (
+    dEntAll.length > 7
+      ? [
+          ...dEntAll.slice(0, 7),
+          {
+            k: "Otras entidades",
+            v: dEntAll.slice(7).reduce((a, r) => a + r.v, 0),
+          },
+        ]
+      : dEntAll
+  ).map((r) => ({ ...r, lab: fmtInt(r.v) }));
   const sevData = SEVS.map((name, i) => ({
     name,
     value: D.sev[i],
@@ -430,16 +467,8 @@ function TramitesBody({
     );
 
   /* Vista por país: cargas */
-  const cAct = nat
-    ? D.cAct.map(([k, s, c]) => ({
-        k,
-        v: ind === "usd" ? D.cost * s : Math.round(D.tot * c),
-      }))
-    : [];
-  const cActRows = cAct.map((r) => ({
-    ...r,
-    lab: ind === "usd" ? "USD " + fmt1(r.v) + " M" : fmtInt(r.v),
-  }));
+  const cAct = nat ? D.cAct.map(([k, s, c]) => ({ k, v: D.cost * s })) : [];
+  const cActRows = cAct.map((r) => ({ ...r, lab: "USD " + fmt1(r.v) + " M" }));
   const cUsu = nat
     ? D.cUsu.map(([k, s]) => ({
         k,
@@ -456,10 +485,6 @@ function TramitesBody({
     .slice(0, 2);
   const finds = nat
     ? [
-        [
-          pcTot(D.opo[0][1]),
-          "de los trámites presenta oportunidades de mejora en trámites, requisitos y costos de cumplimiento",
-        ],
         [
           Math.round(((top2[0][1] + top2[1][1]) / D.tot) * 100) + " %",
           "de los trámites se concentra en " +
@@ -478,12 +503,6 @@ function TramitesBody({
         [
           Math.round(D.cAct[0][1] * 100) + " %",
           "del costo administrativo estimado corresponde a la Actividad estándar 1",
-        ],
-        [
-          pcTot(D.acc[0][1]),
-          "de los trámites tiene como acción sugerida simplificar; " +
-            pcTot(D.acc[1][1]) +
-            ", digitalizar",
         ],
       ]
     : [];
@@ -624,41 +643,22 @@ function TramitesBody({
                   <InfoBtn k="tcar" />
                 </h2>
                 <p>
-                  Estimación de costos y principales afectaciones identificadas
+                  Estimación de costos y principales tipos de carga
+                  identificados
                 </p>
               </div>
             </div>
             <div className="grid2">
               <section className="card">
                 <CardHead title="Costo estimado por actividad estándar" />
-                <div
-                  className="ctlrow"
-                  role="group"
-                  aria-label="Filtros de la gráfica"
-                >
-                  <div className="cg">
-                    <span className="clbl clbl-t">Indicador</span>
-                    <Dd
-                      value={ind}
-                      onChange={setInd}
-                      options={[
-                        ["usd", "Costo estimado (USD)"],
-                        ["n", "Número de trámites"],
-                      ]}
-                      label="Indicador"
-                    />
-                  </div>
-                </div>
                 {hbarsOne(
                   cActRows,
                   150,
-                  ind === "usd" ? "Costo estimado" : "Trámites",
+                  "Costo estimado",
                   TR_G,
                   110,
                   "Actividad estándar",
-                  ind === "usd"
-                    ? "Costo estimado (millones de USD)"
-                    : "Número de trámites",
+                  "Costo estimado (millones de USD)",
                 )}
                 {otrosNote(cActRows.map((r) => r.k))}
               </section>
@@ -747,7 +747,7 @@ function TramitesBody({
               </div>
             </div>
             <section className="card">
-              <ul className="finds tri">
+              <ul className={"finds" + (finds.length === 4 ? "" : " tri")}>
                 {finds.map((f, i) => (
                   <li key={i}>
                     <span className="fv">{f[0]}</span>
@@ -768,45 +768,76 @@ function TramitesBody({
                 ¿Dónde actuar para simplificar?
                 <InfoBtn k="tact" />
               </h2>
-              <p>
-                Oportunidades de mejora identificadas y acciones sugeridas para
-                los trámites
-              </p>
+              <p>Acciones sugeridas para reducir la carga de los trámites</p>
             </div>
           </div>
-          <section className="card">
-            <CardHead title="Trámites por acción de mejora sugerida" />
-            <div
-              className="ctlrow"
-              role="group"
-              aria-label="Filtros de la gráfica"
-            >
-              <div className="cg">
-                <span className="clbl clbl-t">Sector económico</span>
-                <Dd
-                  value={accSec}
-                  onChange={setAccSec}
-                  options={[
-                    ["Todos", "Todos"],
-                    ...D.sector.map((r) => [r[0], r[0]]),
-                  ]}
-                  label="Sector económico"
-                  pre="Sector"
-                />
+          <div className="actgrid act-tr">
+            <section className="card">
+              <CardHead title="Trámites por acción de mejora sugerida" />
+              <div
+                className="ctlrow"
+                role="group"
+                aria-label="Filtros de la gráfica"
+              >
+                <div className="cg">
+                  <span className="clbl clbl-t">Sector económico</span>
+                  <Dd
+                    value={accSec}
+                    onChange={setAccSec}
+                    options={[
+                      ["Todos", "Todos"],
+                      ...D.sector.map((r) => [r.k, r.k]),
+                    ]}
+                    label="Sector económico"
+                    pre="Sector"
+                  />
+                </div>
               </div>
-            </div>
-            {hbarsOne(
-              acc,
-              130,
-              "Trámites",
-              TR_G,
-              100,
-              "Acción de mejora sugerida",
-            )}
-            <p className="csub" style={{ margin: 0 }}>
-              Un trámite puede tener más de una acción sugerida.
-            </p>
-          </section>
+              {hbarsOne(
+                acc,
+                NARROW() ? 130 : 165,
+                "Trámites",
+                TR_G,
+                100,
+                "Acción de mejora sugerida",
+              )}
+              <p className="csub" style={{ margin: 0 }}>
+                Un trámite puede tener más de una acción sugerida.
+              </p>
+            </section>
+            <section
+              className="card dxp"
+              aria-label="Desagregación de la acción sugerida"
+            >
+              <CardHead
+                title="Desagregación de la acción sugerida"
+                def={DEFS.tdacc}
+              />
+              <div
+                className="ctlrow"
+                role="group"
+                aria-label="Filtros de la desagregación"
+              >
+                <div className="cg">
+                  <span className="clbl clbl-t">Acción</span>
+                  <Dd
+                    value={dAccName}
+                    onChange={setDAcc}
+                    options={D.acc.map((a) => [a[0], a[0]])}
+                    label="Acción sugerida"
+                    pre="Acción"
+                  />
+                </div>
+              </div>
+              {hbarsOne(dEnt, 190, "Trámites", TR_G, 48, "Entidad emisora")}
+              <div className="dxnotes">
+                {otrosNote(
+                  dEnt.map((r) => r.k),
+                  "trámites",
+                )}
+              </div>
+            </section>
+          </div>
         </div>
       </section>
 
@@ -840,7 +871,6 @@ function TramitesBody({
                         Severidad
                         <InfoBtn k="sev" />
                       </th>
-                      <th>Oportunidad de mejora</th>
                       <th className="num">Costo estimado (USD)</th>
                       <th>
                         Acción sugerida
@@ -871,7 +901,6 @@ function TramitesBody({
                         <td>
                           <SevPill s={r.severidad} />
                         </td>
-                        <td>{r.oportunidad}</td>
                         <td className="num">{r.costo}</td>
                         <td>
                           <Mejora t={r.accion} />
@@ -1009,7 +1038,7 @@ export function TramitesEditorial({
       t1="Trámites con"
       t2="potencial de mejora"
       infoKey="tra"
-      intro="Explora los trámites publicados en el catálogo de trámites del país, sus principales características y las cargas que enfrentan los usuarios para completarlos, identificando dónde se concentran las mayores oportunidades de simplificación."
+      intro="Evalúa los trámites publicados en el catálogo o portal de trámites del país, sus principales características y las cargas que enfrentan los usuarios para completarlos, identificando dónde se concentran las mayores oportunidades de mejora."
       stats={D.stats}
       country={country}
       paises={paises}
