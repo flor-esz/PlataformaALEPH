@@ -49,6 +49,8 @@ import {
 import { C, HDR_BTN_PRIMARY, HDR_BTN_SECONDARY, HDR_BTN_PILL } from "./theme";
 import { SidebarEditorial } from "./SidebarEditorial";
 import { PanoramaEditorial, BarrerasEditorial, TramitesEditorial } from "./editorial";
+import { barrerasFixture, tramitesFixture } from "./editorial/fixtures";
+import type { BarrerasData, TramitesData } from "./editorial";
 // PanelRegional importa { Header, KpiCard, ... } de vuelta desde este archivo
 // (mismo ciclo App.tsx <-> otros módulos documentado arriba), pero nunca los
 // usa en el top-level de su módulo -- solo dentro del cuerpo de la función
@@ -2162,6 +2164,51 @@ function attachRetroalimentacionGobierno<T extends { retroalimentacionGobierno?:
 }
 
 export const ALL_BARRERAS = attachRetroalimentacionGobierno(attachImpactoEstimado([...BARRERAS_CAFE, ...BARRERAS_TEXTIL, ...BARRERAS_MUESTRA]));
+
+// ─── Tablas de Barreras / Trámites (pantallas rediseñadas) con detalle ───────────
+// Las tablas de BarrerasEditorial / TramitesEditorial solo abren el detalle
+// (barrera-detail / tramite-detail) si la fila trae `id`, y la muestra interna
+// de las pantallas (editorial/fixtures.ts) no lo trae. BarreraDetail() y
+// TramiteDetail() resuelven el id contra ALL_BARRERAS / ALL_TRAMITES, así que
+// con un país seleccionado se arma la tabla con los registros reales de ese
+// país; si el país no tiene catálogo real, queda la muestra (sin clic, igual
+// que antes: un id inexistente dejaría el detalle en blanco).
+const SEV_EDITORIAL = (s: string): "Alta" | "Media" | "Baja" =>
+  s === "Bajo" || s === "Baja" ? "Baja" : s === "Mediano" || s === "Media" ? "Media" : "Alta";
+
+function barrerasEditorialData(country: string): BarrerasData {
+  const base = barrerasFixture(country);
+  if (country === "Todos") return base;
+  const filas = ALL_BARRERAS.filter(b => b.pais === country).map(b => ({
+    id: b.id,
+    barrera: b.titulo,
+    sector: b.sector,
+    tipo: (b.clasificacion === "Entrada" ? "Entrada" : "Operación") as "Entrada" | "Operación",
+    ambito: b.canalTransmision,
+    regulacion: b.instrumento,
+    entidad: b.entidad,
+    severidad: SEV_EDITORIAL(b.severidad),
+    accion: b.accionCategoria,
+  }));
+  return filas.length ? { ...base, tabla: filas } : base;
+}
+
+function tramitesEditorialData(country: string): TramitesData {
+  const base = tramitesFixture(country);
+  if (country === "Todos") return base;
+  const filas = ALL_TRAMITES.filter(t => t.pais === country).map(t => ({
+    id: t.id,
+    tramite: t.nombre,
+    sector: t.sector,
+    entidad: t.entidad,
+    etapa: t.etapa,
+    usuario: t.tipo,
+    severidad: SEV_EDITORIAL(t.severidad),
+    costo: t.costo.monetario,
+    accion: t.accionCategoria,
+  }));
+  return filas.length ? { ...base, tabla: filas } : base;
+}
 
 // ─── N real para notaCalculo de "Hallazgos filtrados" ──────────────────────────
 // Los KPI de Barreras/Trámites (Regional y País) muestran un N de MUESTRA
@@ -11435,9 +11482,9 @@ function AppInner() {
       case "panel-regional": return <PanoramaEditorial country="Todos" onCountryChange={cambiarPaisPanorama} />;
       case "impacto-economico": return <ImpactoEconomico country={activeCountry} onCountryChange={c => setActiveCountry(c)} onNavigate={navigate} />;
       case "country-dashboard": return <PanoramaEditorial country={view.country} onCountryChange={cambiarPaisPanorama} />;
-      case "barreras": return <BarrerasEditorial country={activeCountry} onCountryChange={c => { setActiveCountry(c as Country); window.history.replaceState(null, "", BASE + viewToUrl(view, c as Country)); }} onOpenBarrera={id => id && navigate({ screen: "barrera-detail", id })} />;
+      case "barreras": return <BarrerasEditorial country={activeCountry} data={barrerasEditorialData(activeCountry)} onCountryChange={c => { setActiveCountry(c as Country); window.history.replaceState(null, "", BASE + viewToUrl(view, c as Country)); }} onOpenBarrera={id => id && navigate({ screen: "barrera-detail", id })} />;
       case "barrera-detail": return <BarreraDetail id={view.id} onNavigate={navigate} userRole={userRole} retroGobiernoOverrides={retroGobiernoOverrides} onGuardarRetroGobierno={guardarRetroGobierno} />;
-      case "tramites": return <TramitesEditorial country={activeCountry} onCountryChange={c => { setActiveCountry(c as Country); window.history.replaceState(null, "", BASE + viewToUrl(view, c as Country)); }} onOpenTramite={id => id && navigate({ screen: "tramite-detail", id })} />;
+      case "tramites": return <TramitesEditorial country={activeCountry} data={tramitesEditorialData(activeCountry)} onCountryChange={c => { setActiveCountry(c as Country); window.history.replaceState(null, "", BASE + viewToUrl(view, c as Country)); }} onOpenTramite={id => id && navigate({ screen: "tramite-detail", id })} />;
       case "tramite-detail": return <TramiteDetail id={view.id} onNavigate={navigate} userRole={userRole} retroGobiernoOverrides={retroGobiernoOverrides} onGuardarRetroGobierno={guardarRetroGobierno} />;
       case "distorsion-detail": return <DistorsionDetail id={view.id} onNavigate={navigate} />;
       case "indice": return <IndiceIDR country={activeCountry} onCountryChange={c => setActiveCountry(c)} onNavigate={navigate} />;
