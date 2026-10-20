@@ -124,8 +124,6 @@ export interface BarrerasData {
   /** Opcional, vista por país: desagregación de cada acción sugerida →
    *  `accionMatriz[acción][tipo de norma][sector] = n.º de barreras`. Los tipos y sectores deben
    *  coincidir con `jerarquia[].k` y `sector[].k`. Si falta, la pantalla reparte un ejemplo. */
-  /** Hallazgo «Diagnóstico» (pendiente de definición del BID): [cifra, texto]. */
-  diagnostico?: [string, string];
   /** Afectación a la MIPYME: [Alta, Media, Baja] con n.º de barreras. */
   mip?: Par[];
   accionMatriz?: Record<string, Record<string, Record<string, number>>>;
@@ -284,9 +282,10 @@ export interface ReporteFiltros {
   ent: string;
   tipo: string;
   hitl: string;
-  per: string;
+  /** Año inicial y final del periodo (desde ≤ hasta). */
+  desde: string;
+  hasta: string;
   sev: string;
-  eje: string;
   usu: string;
 }
 /** Lo que el usuario eligió al pulsar «Generar» / «Descargar». */

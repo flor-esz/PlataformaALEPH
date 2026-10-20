@@ -174,6 +174,11 @@ export const DEFS: Record<string, Def> = {
     d: "Sector o sectores económicos afectados por la carga que genera el trámite. Un trámite puede afectar a varios sectores económicos de manera transversal.",
     how: "Ordenados de mayor a menor. Elige cuántos mostrar con «Mostrar».",
   },
+  tsecA: {
+    t: "Trámites por sector administrativo",
+    d: "Sector administrativo del Estado al que pertenece la entidad que gestiona el trámite. Agrupa las entidades responsables.",
+    how: "Ordenados de mayor a menor. Elige cuántos mostrar con «Mostrar».",
+  },
   tent: {
     t: "Trámites por entidad responsable",
     d: "Entidad pública que gestiona el trámite.",
@@ -223,7 +228,7 @@ export const DEFS: Record<string, Def> = {
   },
   tsec1: {
     t: "Dónde se concentran los trámites",
-    d: "Compara cómo se reparten los trámites según sector, entidad, etapa del ciclo empresarial y tipo de usuario.",
+    d: "Compara cómo se reparten los trámites según sector, entidad (en la vista por país), etapa del ciclo empresarial y tipo de usuario.",
     how: "Cada gráfica tiene sus propios filtros.",
   },
   tcar: {
@@ -264,6 +269,7 @@ export const DEF_RULES: [RegExp, string][] = [
   [/^Barreras por acción sugerida/i, "bacc"],
   [/^Desagregación de la acción/i, "dacc"],
   [/^Trámites por nivel de severidad/i, "tsev"],
+  [/^Trámites por sector administrativo/i, "tsecA"],
   [/^Trámites por sector/i, "tsect"],
   [/^Trámites por entidad/i, "tent"],
   [/^Trámites por etapa/i, "teta"],
@@ -433,4 +439,40 @@ DEFS.rep = {
   t: "Reportes",
   d: "Genera reportes estratégicos y operativos y bases en Excel con los filtros que elijas.",
   how: "Elige el tipo de salida, define el alcance y el formato, revisa el resumen y genera el archivo.",
+};
+
+/* Ficha del trámite (entrega 4) */
+DEFS.fxt = {
+  t: "Tiempo promedio",
+  d: "Tiempo activo que el usuario dedica a completar el trámite una vez: es la suma del tiempo de las ocho actividades estándar.",
+};
+DEFS.fxp = {
+  t: "Plazo de resolución",
+  d: "Días hábiles que la autoridad tarda en resolver el trámite una vez presentado. Es el tiempo pasivo de espera (COP).",
+};
+DEFS.fxf = {
+  t: "Frecuencia anual",
+  d: "Número de veces al año que el usuario debe realizar el trámite.",
+};
+DEFS.fxc = {
+  t: "Carga total",
+  d: "Costo anual que el trámite genera a un usuario: costo de realizarlo una vez por su frecuencia anual. Valor simulado con el Costeo Estándar.",
+};
+DEFS.fxm = {
+  t: "Costo monetario",
+  d: "Costo estimado de realizar el trámite una vez (CET = CA + COP). Valor simulado con el Costeo Estándar.",
+};
+DEFS.fxact = {
+  t: "Actividades estándar",
+  d: "Las ocho actividades del Costeo Estándar en las que se descompone el tiempo activo (CA) del trámite, con su tiempo y costo estimados. Las marcadas con fricción son donde se identificó una oportunidad de simplificación.",
+};
+DEFS.fxcar = {
+  t: "Distorsiones de carga asociadas",
+  d: "Cargas que el trámite genera al usuario, organizadas en cuatro ejes. El número indica qué tan fuerte es la distorsión (de 2 a 4).",
+  items: [
+    ["Cumplimiento", "¿Cuál es el costo directo de cumplir?"],
+    ["Accesibilidad", "¿Se repite información o canal?"],
+    ["Certidumbre", "¿Hay incertidumbre o discrecionalidad?"],
+    ["Proporcionalidad", "¿El control está calibrado al riesgo?"],
+  ],
 };

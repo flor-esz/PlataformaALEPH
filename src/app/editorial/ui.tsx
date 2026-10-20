@@ -295,6 +295,7 @@ export function DonutList({
   sel,
   onSel,
   compact,
+  ctr,
 }: any) {
   const [hs, setHs] = useState(null);
   const tot = data.reduce((a, d) => a + d.value, 0);
@@ -377,6 +378,11 @@ export function DonutList({
               <span className="cs">
                 {fmtInt(hsel.value)} {unit || "barreras"}
               </span>
+            </>
+          ) : ctr ? (
+            <>
+              <b className="cv">{fmtInt(tot)}</b>
+              <span className="cs cs-b">{ctr}</span>
             </>
           ) : (
             <>
@@ -607,6 +613,8 @@ export function SevPanel({
   aria,
   def,
   defs,
+  ctr,
+  note,
 }: any) {
   return (
     <section className="card sevone">
@@ -621,6 +629,7 @@ export function SevPanel({
             aria={aria}
             marker="pips"
             compact={true}
+            ctr={ctr}
           />
         </div>
         <div className="sevone-defs">
@@ -643,6 +652,16 @@ export function SevPanel({
           </ul>
         </div>
       </div>
+      {note ? (
+        <div className="sev-note">
+          <span className="ico" aria-hidden="true">
+            <Icon d={I.info} />
+          </span>
+          <p>
+            <b>Nota metodológica:</b> {note}
+          </p>
+        </div>
+      ) : null}
     </section>
   );
 }

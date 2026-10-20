@@ -15,7 +15,9 @@ import type {
 } from "./types";
 import { fmtInt } from "./format";
 
-export const YEARS = [2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024];
+export const YEARS = [
+  2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024,
+];
 export const PAISES_BASE = [
   { id: "AR", name: "Argentina", now: 6432 },
   { id: "BO", name: "Bolivia", now: 2981 },
@@ -203,15 +205,15 @@ const B = {
     ["Innovación", 150, 110],
   ] as [string, number, number][],
   jerarquia: [
-    ["Ley", 290],
-    ["Decreto", 375],
-    ["Resolución", 345],
-    ["Reglamento", 240],
+    ["Ley", 250],
+    ["Decreto", 450],
+    ["Resolución", 330],
+    ["Reglamento", 220],
   ] as [string, number][],
   mip: [
-    ["Alta", 380],
+    ["Alta", 388],
     ["Media", 520],
-    ["Baja", 350],
+    ["Baja", 342],
   ] as [string, number][],
   sector: [
     ["Servicios financieros", 110, 70],

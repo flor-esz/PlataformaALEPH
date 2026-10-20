@@ -20,9 +20,12 @@
 //   country-dashboard {country}                   → /panorama/pais/:country
 //   impacto-economico                             → /impacto-economico
 //   barreras {sector?}                             → /barreras[/pais/:country][?sector=]
-//   barrera-detail {id}                            → /barreras/detalle/:id
+//   barrera-detail {id, origen?}                   → /barreras/detalle/:id[?origen=listado]
+//   barreras-listado                               → /barreras/listado[/pais/:country]
 //   tramites {sector?}                             → /tramites[/pais/:country][?sector=]
-//   tramite-detail {id}                            → /tramites/detalle/:id
+//   tramite-detail {id, origen?}                   → /tramites/detalle/:id[?origen=listado|costeo|costeo-listado]
+//   tramites-listado {costeo?}                     → /tramites/listado[/pais/:country]
+//                                                    | /impacto-economico/listado?pais=&sec=&ent=&usu= (con costeo)
 //   distorsion-detail {id}                         → /distorsiones/detalle/:id
 //   placeholder {label}                            → /placeholder?label=
 //   administracion {tab?, paisInicial?}             → /administracion/:tab (default "usuarios")[?pais=]
@@ -111,9 +114,13 @@ export function viewToUrl(view: View, activeCountry?: string): string {
     case "country-dashboard": return `/panorama/pais/${COUNTRY_TO_SLUG[view.country] ?? encodeURIComponent(view.country.toLowerCase())}`;
     case "impacto-economico": return "/impacto-economico";
     case "barreras": return withQuery(`/barreras${paisSegment}`, { sector: view.sector });
-    case "barrera-detail": return `/barreras/detalle/${encodeURIComponent(view.id)}`;
+    case "barrera-detail": return withQuery(`/barreras/detalle/${encodeURIComponent(view.id)}`, { origen: view.origen });
+    case "barreras-listado": return `/barreras/listado${paisSegment}`;
     case "tramites": return withQuery(`/tramites${paisSegment}`, { sector: view.sector });
-    case "tramite-detail": return `/tramites/detalle/${encodeURIComponent(view.id)}`;
+    case "tramite-detail": return withQuery(`/tramites/detalle/${encodeURIComponent(view.id)}`, { origen: view.origen });
+    case "tramites-listado": return view.costeo
+      ? withQuery("/impacto-economico/listado", { pais: view.costeo.pais, sec: view.costeo.sec, ent: view.costeo.ent, usu: view.costeo.usu })
+      : `/tramites/listado${paisSegment}`;
     case "distorsion-detail": return `/distorsiones/detalle/${encodeURIComponent(view.id)}`;
     case "placeholder": return withQuery("/placeholder", { label: view.label });
     // paisInicial (solo relevante para tab "fuentes", ver AdminFuentesScreen)
@@ -153,7 +160,7 @@ export type UrlToViewResult = { view: View; country?: string };
 export function urlToView(pathname: string, search: string): UrlToViewResult | null {
   const params = new URLSearchParams(search);
   const parts = pathname.split("/").filter(Boolean);
-  const [seg0, seg1, seg2] = parts;
+  const [seg0, seg1, seg2, seg3] = parts;
   if (!seg0) return null;
   const V = (view: View, country?: string): UrlToViewResult => ({ view, country });
 
@@ -167,12 +174,31 @@ export function urlToView(pathname: string, search: string): UrlToViewResult | n
       return null;
 
     case "impacto-economico":
+      if (seg1 === "listado") {
+        return V({
+          screen: "tramites-listado",
+          costeo: {
+            pais: params.get("pais") ?? "Todos",
+            sec: params.get("sec") ?? "Todos",
+            ent: params.get("ent") ?? "Todos",
+            usu: params.get("usu") ?? "Todos",
+          },
+        });
+      }
       return V({ screen: "impacto-economico" });
 
     case "barreras": {
       const sector = params.get("sector") ?? undefined;
       if (!seg1) return V({ screen: "barreras", sector });
-      if (seg1 === "detalle" && seg2) return V({ screen: "barrera-detail", id: decodeURIComponent(seg2) });
+      if (seg1 === "detalle" && seg2) {
+        const origen = params.get("origen");
+        return V({ screen: "barrera-detail", id: decodeURIComponent(seg2), origen: origen === "listado" ? "listado" : undefined });
+      }
+      if (seg1 === "listado") {
+        if (!seg2) return V({ screen: "barreras-listado" });
+        const country = seg2 === "pais" && seg3 ? SLUG_TO_COUNTRY[seg3.toLowerCase()] : undefined;
+        return country ? V({ screen: "barreras-listado" }, country) : null;
+      }
       if (seg1 === "pais" && seg2) {
         const country = SLUG_TO_COUNTRY[seg2.toLowerCase()];
         return country ? V({ screen: "barreras", sector }, country) : null;
@@ -183,7 +209,19 @@ export function urlToView(pathname: string, search: string): UrlToViewResult | n
     case "tramites": {
       const sector = params.get("sector") ?? undefined;
       if (!seg1) return V({ screen: "tramites", sector });
-      if (seg1 === "detalle" && seg2) return V({ screen: "tramite-detail", id: decodeURIComponent(seg2) });
+      if (seg1 === "detalle" && seg2) {
+        const origen = params.get("origen");
+        return V({
+          screen: "tramite-detail",
+          id: decodeURIComponent(seg2),
+          origen: origen === "listado" || origen === "costeo" || origen === "costeo-listado" ? origen : undefined,
+        });
+      }
+      if (seg1 === "listado") {
+        if (!seg2) return V({ screen: "tramites-listado" });
+        const country = seg2 === "pais" && seg3 ? SLUG_TO_COUNTRY[seg3.toLowerCase()] : undefined;
+        return country ? V({ screen: "tramites-listado" }, country) : null;
+      }
       if (seg1 === "pais" && seg2) {
         const country = SLUG_TO_COUNTRY[seg2.toLowerCase()];
         return country ? V({ screen: "tramites", sector }, country) : null;

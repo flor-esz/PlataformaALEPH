@@ -24,8 +24,12 @@ export interface PageShellProps {
   sinNivel?: boolean;
   /** Controles propios del encabezado (reemplazan «Nivel de visualización» y país). `null` = sin controles. */
   controls?: React.ReactNode | null;
-  /** Ruta antes del título (por defecto «Tableros»). */
-  rastro?: string[];
+  /** Ruta antes del título (por defecto «Tableros»). Un elemento con `onClick` es un enlace
+   *  (pantallas internas: «Barreras regulatorias › Listado de barreras › Detalle…»). */
+  rastro?: (string | { label: string; onClick: () => void })[];
+  /** Encabezado propio (pantallas internas: ficha y listado). Reemplaza al encabezado estándar
+   *  (el pie se define con `pie`). */
+  hero?: React.ReactNode;
   /** Contenido del pie (por defecto: última actualización y años incluidos). */
   pie?: React.ReactNode;
   /** Filtros de sector del encabezado cuando no se pasa `filtros` (el prototipo los muestra
@@ -74,8 +78,14 @@ export function PageShell(props: PageShellProps) {
         <header className="top">
           <nav className="crumbs" aria-label="Ruta">
             {(p.rastro ?? ["Tableros"]).map((r) => (
-              <React.Fragment key={r}>
-                <span>{r}</span>
+              <React.Fragment key={typeof r === "string" ? r : r.label}>
+                {typeof r === "string" ? (
+                  <span>{r}</span>
+                ) : (
+                  <button type="button" className="crumb-l" onClick={r.onClick}>
+                    {r.label}
+                  </button>
+                )}
                 <span>/</span>
               </React.Fragment>
             ))}
@@ -104,93 +114,95 @@ export function PageShell(props: PageShellProps) {
         </header>
 
         <main className="page zoned">
-          <div className="phead v-b">
-            <div className="phead-row">
-              <div
-                style={{
-                  minWidth: 0,
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 18,
-                }}
-              >
-                <div>
-                  <div className="eyebrow">
-                    {p.eyebrow}
-                    {conNivel &&
-                      ` · Vista ${regional ? "regional" : "por país"}`}
-                  </div>
-                  <h1>
-                    <span className="lite">{p.t1} </span>
-                    {p.t2}
-                    <InfoBtn k={p.infoKey} tone="dark" size="lg" />
-                  </h1>
-                  <p className="intro">{p.intro}</p>
-                </div>
-                {p.controls === null ? null : p.controls !== undefined ? (
-                  <div className="controls">{p.controls}</div>
-                ) : (
-                  <div className="controls">
-                    <div
-                      className="ctlrow on-dark"
-                      role="group"
-                      aria-label="Filtros de la vista"
-                    >
-                      <div className="cg">
-                        <span className="clbl">Nivel de visualización</span>
-                        <Fseg
-                          tone="dark"
-                          v={regional ? "Regional" : "Por país"}
-                          items={["Regional", "Por país"]}
-                          label="Nivel de visualización"
-                          set={(k) =>
-                            k === "Regional"
-                              ? p.onCountryChange("Todos")
-                              : pickPais(ultimoPais ?? p.paises[0]?.name)
-                          }
-                        />
-                      </div>
-                      {!regional && (
-                        <div className="cg">
-                          <span className="clbl">País</span>
-                          <Dd
-                            tone="dark"
-                            value={p.country}
-                            onChange={pickPais}
-                            options={p.paises.map((c) => [c.name, c.name])}
-                            label="Selecciona un país"
-                          />
-                        </div>
-                      )}
-                      {filtrosHero.map((f) => (
-                        <div className="cg" key={f.label}>
-                          <span className="clbl">{f.label}</span>
-                          <Dd
-                            tone="dark"
-                            value={f.value}
-                            onChange={f.onChange}
-                            options={f.options}
-                            label={f.label}
-                          />
-                        </div>
-                      ))}
+          {p.hero ?? (
+            <div className="phead v-b">
+              <div className="phead-row">
+                <div
+                  style={{
+                    minWidth: 0,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 18,
+                  }}
+                >
+                  <div>
+                    <div className="eyebrow">
+                      {p.eyebrow}
+                      {conNivel &&
+                        ` · Vista ${regional ? "regional" : "por país"}`}
                     </div>
+                    <h1>
+                      <span className="lite">{p.t1} </span>
+                      {p.t2}
+                      <InfoBtn k={p.infoKey} tone="dark" size="lg" />
+                    </h1>
+                    <p className="intro">{p.intro}</p>
                   </div>
-                )}
+                  {p.controls === null ? null : p.controls !== undefined ? (
+                    <div className="controls">{p.controls}</div>
+                  ) : (
+                    <div className="controls">
+                      <div
+                        className="ctlrow on-dark"
+                        role="group"
+                        aria-label="Filtros de la vista"
+                      >
+                        <div className="cg">
+                          <span className="clbl">Nivel de visualización</span>
+                          <Fseg
+                            tone="dark"
+                            v={regional ? "Regional" : "Por país"}
+                            items={["Regional", "Por país"]}
+                            label="Nivel de visualización"
+                            set={(k) =>
+                              k === "Regional"
+                                ? p.onCountryChange("Todos")
+                                : pickPais(ultimoPais ?? p.paises[0]?.name)
+                            }
+                          />
+                        </div>
+                        {!regional && (
+                          <div className="cg">
+                            <span className="clbl">País</span>
+                            <Dd
+                              tone="dark"
+                              value={p.country}
+                              onChange={pickPais}
+                              options={p.paises.map((c) => [c.name, c.name])}
+                              label="Selecciona un país"
+                            />
+                          </div>
+                        )}
+                        {filtrosHero.map((f) => (
+                          <div className="cg" key={f.label}>
+                            <span className="clbl">{f.label}</span>
+                            <Dd
+                              tone="dark"
+                              value={f.value}
+                              onChange={f.onChange}
+                              options={f.options}
+                              label={f.label}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <dl className="klist">
+                  {p.stats.map((s) => (
+                    <div key={s[1]}>
+                      <dt>
+                        {s[1]}
+                        {s[2] ? <InfoBtn k={s[2]} tone="dark" /> : null}
+                      </dt>
+                      <dd>{s[0]}</dd>
+                    </div>
+                  ))}
+                </dl>
               </div>
-              <dl className="klist">
-                {p.stats.map((s) => (
-                  <div key={s[1]}>
-                    <dt>
-                      {s[1]}
-                      {s[2] ? <InfoBtn k={s[2]} tone="dark" /> : null}
-                    </dt>
-                    <dd>{s[0]}</dd>
-                  </div>
-                ))}
-              </dl>
             </div>
-          </div>
+          )}
 
           {p.children}
 

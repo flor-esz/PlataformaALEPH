@@ -39,8 +39,14 @@ import {
 } from "./ui";
 import { PageShell } from "./PageShell";
 import { PAISES_FIXTURE, tramitesFixture } from "./fixtures";
+import { IMP_ADM } from "./costeo-data";
 import { RAMPS, SEVS, TR_G, T, colorPais } from "./theme";
-import type { DesgloseTramite, TramitesData, ScreenProps } from "./types";
+import type {
+  DesgloseTramite,
+  TramiteFila,
+  TramitesData,
+  ScreenProps,
+} from "./types";
 
 const SEV_CLAVE = { Alta: "alta", Media: "media", Baja: "baja" } as const;
 const totalSev = (r: DesgloseTramite) => r.alta + r.media + r.baja;
@@ -66,7 +72,7 @@ function TramitesBody({
   D: TramitesData;
   country: string;
   onSelectPais: (n: string) => void;
-  onOpenTramite?: (id?: string) => void;
+  onOpenTramite?: (fila: TramiteFila) => void;
   onVerTodos?: () => void;
   onCosteo?: () => void;
 }) {
@@ -303,7 +309,7 @@ function TramitesBody({
       ))}
     </div>
   );
-  const ctl = (key: any, topKey?: any, allLabel?: any) => (
+  const ctl = (key: any, topKey?: any, allLabel?: any, one?: any) => (
     <>
       <div className="ctlrow" role="group" aria-label="Filtros de la gráfica">
         <div className="cg">
@@ -332,8 +338,19 @@ function TramitesBody({
             pre="Filtros:"
           />
         </div>
+        {one && topKey ? (
+          <div className="cg">
+            <span className="clbl clbl-t">Mostrar</span>
+            <Dd
+              value={ns[topKey]}
+              onChange={setN(topKey)}
+              options={TOP_OPTS(allLabel)}
+              label="Cantidad de elementos a mostrar"
+            />
+          </div>
+        ) : null}
       </div>
-      {topKey ? (
+      {topKey && !one ? (
         <div
           className="ctlrow"
           role="group"
@@ -356,7 +373,24 @@ function TramitesBody({
   const withLab = (rows: any, fn: any, c?: any) =>
     rows.map(([k, v]) => ({ k, v, lab: fn(v), c }));
 
-  const sector = rank(D.sector, fs.sec, ns.sec),
+  /* Vista regional: el sector económico se sustituye por el sector administrativo (agrupa las entidades) */
+  const secAdm = (() => {
+    const g: Record<string, DesgloseTramite> = {};
+    D.entidad.forEach((r) => {
+      const a = IMP_ADM[r.k] || "Otros sectores administrativos";
+      const o = (g[a] ??= { k: a, alta: 0, media: 0, baja: 0 });
+      o.alta += r.alta;
+      o.media += r.media;
+      o.baja += r.baja;
+    });
+    return Object.values(g);
+  })();
+  const sector = rank(
+      nat ? D.sector : secAdm,
+      fs.sec,
+      ns.sec,
+      nat ? undefined : "Otros sectores administrativos",
+    ),
     entidad = rank(D.entidad, fs.ent, ns.ent, "Otras entidades");
   const etapa = natural(D.etapa, fs.eta),
     usuario = rank(D.usuario, fs.usu);
@@ -478,27 +512,36 @@ function TramitesBody({
     .slice(0, 2);
   const finds = nat
     ? [
+        ["62 %", "de los trámites tienen oportunidad de mejora"], // dato de ejemplo: aún no hay total del catálogo
         [
-          Math.round(((top2[0][1] + top2[1][1]) / D.tot) * 100) + " %",
-          "de los trámites se concentra en " +
-            top2[0][0].toLowerCase() +
-            " y " +
-            top2[1][0].toLowerCase(),
+          Math.round((D.sev[0] / D.tot) * 100) + " %",
+          "presentan severidad alta",
         ],
-        [
-          Math.round((totalSev(D.etapa[1]) / D.tot) * 100) + " %",
-          "de los trámites con potencial de mejora corresponde a la etapa de operación",
-        ],
+        (() => {
+          const adm: Record<string, string> = {
+              ...IMP_ADM,
+              DIAN: "Hacienda y finanzas",
+              ICA: "Agricultura y desarrollo rural",
+              Invima: "Salud",
+            },
+            g: Record<string, number> = {},
+            sum = D.entidad.reduce((t, r) => t + totalSev(r), 0) || 1;
+          D.entidad.forEach((r) => {
+            const a = adm[r.k] || "Otros sectores administrativos";
+            g[a] = (g[a] || 0) + totalSev(r);
+          });
+          const m = Object.entries(g)
+            .filter(([k]) => k !== "Otros sectores administrativos")
+            .sort((x, y) => y[1] - x[1])[0] || ["—", 0];
+          return [
+            Math.round((m[1] / sum) * 100) + " %",
+            "se concentran en " + String(m[0]).toLowerCase(),
+          ];
+        })(),
         [
           Math.round((D.mip[0][1] / mipTot) * 100) + " %",
-          "de los trámites tiene una afectación alta a las MIPYMEs",
+          "presentan una afectación alta a las MIPYMES",
         ],
-        ((m) => [
-          Math.round(m[1] * 100) + " %",
-          "del costo administrativo estimado corresponde a la actividad «" +
-            m[0].toLowerCase() +
-            "»",
-        ])(D.cAct.reduce((a, x) => (x[1] > a[1] ? x : a))),
       ]
     : [];
 
@@ -561,42 +604,57 @@ function TramitesBody({
                 <InfoBtn k="tsec1" />
               </h2>
               <p>
-                Distribución según sector económico, entidad responsable, etapa
-                del ciclo empresarial y tipo de usuario
+                {nat
+                  ? "Distribución según sector económico, entidad responsable, etapa del ciclo empresarial y tipo de usuario"
+                  : "Distribución según sector administrativo, etapa del ciclo empresarial y tipo de usuario"}
               </p>
             </div>
           </div>
           <div className="grid2">
-            <section className="card">
-              <CardHead title="Trámites por sector económico" />
-              {ctl("sec", "sec", "Todos")}
+            <section className={"card" + (nat ? "" : " g-wide")}>
+              <CardHead
+                title={
+                  nat
+                    ? "Trámites por sector económico"
+                    : "Trámites por sector administrativo"
+                }
+              />
+              {ctl("sec", "sec", "Todos", !nat)}
               {hbarsStack(
                 sector,
-                150,
+                nat ? 150 : 210,
                 "s",
-                "Sector económico",
+                nat ? "Sector económico" : "Sector administrativo",
                 undefined,
                 ds.sec,
               )}
               {ds.sec === "sev" ? Leg : null}
+              {nat
+                ? null
+                : otrosNote(
+                    sector.map((r) => r.k),
+                    "trámites",
+                  )}
             </section>
-            <section className="card">
-              <CardHead title="Trámites por entidad responsable" />
-              {ctl("ent", "ent", "Todas")}
-              {hbarsStack(
-                entidad,
-                190,
-                "e",
-                "Entidad responsable",
-                undefined,
-                ds.ent,
-              )}
-              {ds.ent === "sev" ? Leg : null}
-              {otrosNote(
-                entidad.map((r) => r.k),
-                "trámites",
-              )}
-            </section>
+            {nat ? (
+              <section className="card">
+                <CardHead title="Trámites por entidad responsable" />
+                {ctl("ent", "ent", "Todas")}
+                {hbarsStack(
+                  entidad,
+                  190,
+                  "e",
+                  "Entidad responsable",
+                  undefined,
+                  ds.ent,
+                )}
+                {ds.ent === "sev" ? Leg : null}
+                {otrosNote(
+                  entidad.map((r) => r.k),
+                  "trámites",
+                )}
+              </section>
+            ) : null}
             <section className="card">
               <CardHead title="Trámites por etapa del ciclo empresarial" />
               {ctl("eta")}
@@ -656,7 +714,11 @@ function TramitesBody({
                   "Costo estimado (millones de USD)",
                 )}
                 <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                  <button className="btn" onClick={onCosteo} disabled={!onCosteo}>
+                  <button
+                    className="btn"
+                    onClick={onCosteo}
+                    disabled={!onCosteo}
+                  >
                     Ver más <Icon d={I.arrow} />
                   </button>
                 </div>
@@ -760,87 +822,89 @@ function TramitesBody({
           </div>
         </section>
       ) : null}
-      <section className="zone z-base" aria-labelledby="t3">
-        <div className="zi">
-          <div className="sechead">
-            <span className="num">{nat ? 4 : 2}</span>
-            <div>
-              <h2 id="t3">
-                ¿Dónde actuar para simplificar?
-                <InfoBtn k="tact" />
-              </h2>
-              <p>Acciones sugeridas para reducir la carga de los trámites</p>
+      {nat ? (
+        <section className="zone z-base" aria-labelledby="t3">
+          <div className="zi">
+            <div className="sechead">
+              <span className="num">4</span>
+              <div>
+                <h2 id="t3">
+                  ¿Dónde actuar para simplificar?
+                  <InfoBtn k="tact" />
+                </h2>
+                <p>Acciones sugeridas para reducir la carga de los trámites</p>
+              </div>
+            </div>
+            <div className="actgrid act-tr">
+              <section className="card">
+                <CardHead title="Trámites por acción de mejora sugerida" />
+                <div
+                  className="ctlrow"
+                  role="group"
+                  aria-label="Filtros de la gráfica"
+                >
+                  <div className="cg">
+                    <span className="clbl clbl-t">Sector económico</span>
+                    <Dd
+                      value={accSec}
+                      onChange={setAccSec}
+                      options={[
+                        ["Todos", "Todos"],
+                        ...D.sector.map((r) => [r.k, r.k]),
+                      ]}
+                      label="Sector económico"
+                      pre="Sector"
+                    />
+                  </div>
+                </div>
+                {hbarsOne(
+                  acc,
+                  NARROW() ? 130 : 165,
+                  "Trámites",
+                  TR_G,
+                  100,
+                  "Acción de mejora sugerida",
+                )}
+                <p className="csub" style={{ margin: 0 }}>
+                  Un trámite puede tener más de una acción sugerida.
+                </p>
+              </section>
+              <section
+                className="card dxp"
+                aria-label="Desagregación de la acción sugerida"
+              >
+                <CardHead
+                  title="Desagregación de la acción sugerida"
+                  def={DEFS.tdacc}
+                />
+                <div
+                  className="ctlrow"
+                  role="group"
+                  aria-label="Filtros de la desagregación"
+                >
+                  <div className="cg">
+                    <span className="clbl clbl-t">Acción</span>
+                    <Dd
+                      value={dAccName}
+                      onChange={setDAcc}
+                      options={D.acc.map((a) => [a[0], a[0]])}
+                      label="Acción sugerida"
+                      pre="Acción"
+                    />
+                  </div>
+                </div>
+                {hbarsOne(dEnt, 190, "Trámites", TR_G, 48, "Entidad emisora")}
+                <div className="dxnotes">
+                  {otrosNote(
+                    dEnt.map((r) => r.k),
+                    "trámites",
+                  )}
+                </div>
+              </section>
             </div>
           </div>
-          <div className="actgrid act-tr">
-            <section className="card">
-              <CardHead title="Trámites por acción de mejora sugerida" />
-              <div
-                className="ctlrow"
-                role="group"
-                aria-label="Filtros de la gráfica"
-              >
-                <div className="cg">
-                  <span className="clbl clbl-t">Sector económico</span>
-                  <Dd
-                    value={accSec}
-                    onChange={setAccSec}
-                    options={[
-                      ["Todos", "Todos"],
-                      ...D.sector.map((r) => [r.k, r.k]),
-                    ]}
-                    label="Sector económico"
-                    pre="Sector"
-                  />
-                </div>
-              </div>
-              {hbarsOne(
-                acc,
-                NARROW() ? 130 : 165,
-                "Trámites",
-                TR_G,
-                100,
-                "Acción de mejora sugerida",
-              )}
-              <p className="csub" style={{ margin: 0 }}>
-                Un trámite puede tener más de una acción sugerida.
-              </p>
-            </section>
-            <section
-              className="card dxp"
-              aria-label="Desagregación de la acción sugerida"
-            >
-              <CardHead
-                title="Desagregación de la acción sugerida"
-                def={DEFS.tdacc}
-              />
-              <div
-                className="ctlrow"
-                role="group"
-                aria-label="Filtros de la desagregación"
-              >
-                <div className="cg">
-                  <span className="clbl clbl-t">Acción</span>
-                  <Dd
-                    value={dAccName}
-                    onChange={setDAcc}
-                    options={D.acc.map((a) => [a[0], a[0]])}
-                    label="Acción sugerida"
-                    pre="Acción"
-                  />
-                </div>
-              </div>
-              {hbarsOne(dEnt, 190, "Trámites", TR_G, 48, "Entidad emisora")}
-              <div className="dxnotes">
-                {otrosNote(
-                  dEnt.map((r) => r.k),
-                  "trámites",
-                )}
-              </div>
-            </section>
-          </div>
-        </div>
-      </section>
+        </section>
+      ) : null}
 
       {nat ? (
         <section className="zone z-alt" aria-labelledby="t4">
@@ -877,22 +941,29 @@ function TramitesBody({
                         Acción sugerida
                         <InfoBtn k="accion" />
                       </th>
+                      <th className="go">
+                        <span className="sr">Ver ficha</span>
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {(D.tabla ?? []).map((r, i) => (
                       <tr
                         key={r.id ?? i}
-                        onClick={
-                          onOpenTramite && r.id
-                            ? () => onOpenTramite(r.id)
-                            : undefined
-                        }
-                        style={
-                          onOpenTramite && r.id
-                            ? { cursor: "pointer" }
-                            : undefined
-                        }
+                        {...(onOpenTramite
+                          ? {
+                              className: "rowlink",
+                              tabIndex: 0,
+                              title: "Ver la ficha del trámite",
+                              onClick: () => onOpenTramite(r),
+                              onKeyDown: (e: React.KeyboardEvent) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  e.preventDefault();
+                                  onOpenTramite(r);
+                                }
+                              },
+                            }
+                          : {})}
                       >
                         <td className="main">{r.tramite}</td>
                         <td>{r.sector}</td>
@@ -905,6 +976,9 @@ function TramitesBody({
                         <td className="num">{r.costo}</td>
                         <td>
                           <Mejora t={r.accion} />
+                        </td>
+                        <td className="go" aria-hidden="true">
+                          <Icon d={I.arrow} />
                         </td>
                       </tr>
                     ))}
@@ -923,7 +997,7 @@ function TramitesBody({
         <section className="zone z-alt" aria-labelledby="t4">
           <div className="zi">
             <div className="sechead">
-              <span className="num">3</span>
+              <span className="num">2</span>
               <div>
                 <h2 id="t4">
                   Trámites por país
@@ -1017,7 +1091,7 @@ function TramitesBody({
 
 export interface TramitesEditorialProps extends ScreenProps<TramitesData> {
   /** Clic en una fila de la tabla (abre el detalle del trámite). */
-  onOpenTramite?: (id?: string) => void;
+  onOpenTramite?: (fila: TramiteFila) => void;
   /** Botón "Ver todos los trámites". */
   onVerTodos?: () => void;
   /** Botón "Ver más" de «Costo estimado por actividad estándar»: abre Costeo. */

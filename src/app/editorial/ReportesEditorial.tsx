@@ -5,13 +5,22 @@
 // si devuelve un texto, se muestra como confirmación.
 import React, { useState } from "react";
 import { CardHead } from "./cardhead";
-import { IMP_ENTS, IMP_SECS } from "./costeo-data";
+import { IMP_SECS } from "./costeo-data";
 import { DEFS } from "./defs";
 import { PAISES_BASE, YEARS } from "./fixtures";
 import { fmtInt } from "./format";
 import { Icon } from "./icons";
 import { PageShell } from "./PageShell";
-import { RP_ALL, RP_EJES, RP_FMT, RP_TYPES, rpData } from "./reportes-data";
+import {
+  RP_ALL,
+  RP_ENTS,
+  RP_FMT,
+  RP_TIPOS,
+  RP_TYPES,
+  RP_YEARS,
+  rpData,
+  rpPer,
+} from "./reportes-data";
 import { Dd, Fseg } from "./ui";
 import type {
   ReporteConteo,
@@ -33,13 +42,24 @@ function ReportesBody({
   const t0: ReporteTipo = inicial?.tipo ?? "estrategico";
   const [grp, setGrp] = useState<string>(RP_TYPES[t0].g);
   const [type, setType] = useState<ReporteTipo>(t0);
-  const [f, setF] = useState<ReporteFiltros>({ ...RP_ALL, ...inicial?.filtros });
+  const [f, setF] = useState<ReporteFiltros>({
+    ...RP_ALL,
+    ...inicial?.filtros,
+  });
   const [fmts, setFmts] = useState<ReporteFormato[]>([RP_TYPES[t0].fm[0]]);
   const [done, setDone] = useState<{ sig: string; msg: string } | null>(null);
   const R = RP_TYPES[type],
     D = getConteo(f);
   const set = (k: keyof ReporteFiltros) => (v: string) => {
-    setF((s) => ({ ...s, [k]: v, ...(k === "tipo" ? { eje: "Todos" } : {}) }));
+    setF((s) => {
+      const n = { ...s, [k]: v };
+      if (k === "pais") n.ent = "Todos";
+      if (n.desde > n.hasta) {
+        if (k === "desde") n.hasta = n.desde;
+        else n.desde = n.hasta;
+      }
+      return n;
+    });
     setDone(null);
   };
   const pickType = (k: ReporteTipo) => {
@@ -50,7 +70,9 @@ function ReportesBody({
   const pickGrp = (g: string) => {
     setGrp(g);
     pickType(
-      (Object.keys(RP_TYPES) as ReporteTipo[]).find((k) => RP_TYPES[k].g === g)!,
+      (Object.keys(RP_TYPES) as ReporteTipo[]).find(
+        (k) => RP_TYPES[k].g === g,
+      )!,
     );
   };
   const toggleFmt = (x: ReporteFormato) => {
@@ -61,7 +83,7 @@ function ReportesBody({
     setDone(null);
   };
   const isX = R.g === "Bases en Excel";
-    const alc = [
+  const alc = [
     f.pais === "Todos" ? "6 países" : f.pais,
     f.sec === "Todos" ? "todos los sectores" : f.sec,
     f.ent === "Todos" ? "todas las entidades" : f.ent,
@@ -132,7 +154,11 @@ function ReportesBody({
       </button>
     );
   };
-  const dd = (k: keyof ReporteFiltros, label: string, options: [string, string][]) => (
+  const dd = (
+    k: keyof ReporteFiltros,
+    label: string,
+    options: [string, string][],
+  ) => (
     <div className="cg">
       <span className="clbl clbl-t">{label}</span>
       <Dd value={f[k]} onChange={set(k)} options={options} label={label} />
@@ -202,8 +228,8 @@ function ReportesBody({
             <div>
               <h2 id="r2">Alcance</h2>
               <p>
-                País, sector, entidad, tipo de hallazgo, periodo, severidad y
-                eje
+                País, sector económico, entidad, tipo de hallazgo, periodo,
+                severidad
               </p>
             </div>
           </div>
@@ -214,26 +240,31 @@ function ReportesBody({
               aria-label="Filtros del alcance"
             >
               {dd("pais", "País", todos(PAISES_BASE.map((c) => c.name)))}
-              {dd("sec", "Sector", todos(IMP_SECS))}
-              {dd("ent", "Entidad", todos(IMP_ENTS, "Todas"))}
+              {dd("sec", "Sector económico", todos(IMP_SECS))}
               {dd(
-                "tipo",
-                "Tipo de hallazgo",
-                todos(["Distorsión", "Carga", "Calidad regulatoria"]),
+                "ent",
+                "Entidad",
+                todos(
+                  f.pais === "Todos" ? [] : (RP_ENTS[f.pais] ?? []),
+                  "Todas",
+                ),
               )}
-              {dd("per", "Periodo", [
-                ["2015–2024", "2015–2024"],
-                ["2020–2024", "2020–2024"],
-                ["2024", "2024"],
-              ])}
+              {dd("tipo", "Tipo de hallazgo", todos(RP_TIPOS))}
+              {dd(
+                "desde",
+                "Desde",
+                RP_YEARS.map((y) => [y, y]),
+              )}
+              {dd(
+                "hasta",
+                "Hasta",
+                RP_YEARS.map((y) => [y, y]),
+              )}
               {dd(
                 "sev",
                 "Severidad",
                 todos(["Alta", "Media", "Baja"], "Todas"),
               )}
-              {RP_EJES[f.tipo].length
-                ? dd("eje", "Eje", todos(RP_EJES[f.tipo]))
-                : null}
             </div>
           </section>
         </div>
@@ -306,11 +337,10 @@ function ReportesBody({
                   "Filtros",
                   [
                     f.tipo === "Todos" ? "todos los tipos de hallazgo" : f.tipo,
-                    "periodo " + f.per,
+                    "periodo " + rpPer(f),
                     f.sev === "Todas"
                       ? null
                       : "severidad " + f.sev.toLowerCase(),
-                    f.eje === "Todos" ? null : "eje " + f.eje.toLowerCase(),
                   ]
                     .filter(Boolean)
                     .join(" · "),
@@ -357,7 +387,6 @@ function ReportesBody({
   );
 }
 
-
 export interface ReportesInicial {
   /** Salida preseleccionada (por defecto, el reporte estratégico). */
   tipo?: ReporteTipo;
@@ -400,7 +429,11 @@ export function ReportesEditorial({
       ultimaActualizacion={ultimaActualizacion}
       anios={YEARS[0] + "–" + YEARS[YEARS.length - 1]}
     >
-      <ReportesBody inicial={inicial} getConteo={getData} onGenerar={onGenerar} />
+      <ReportesBody
+        inicial={inicial}
+        getConteo={getData}
+        onGenerar={onGenerar}
+      />
     </PageShell>
   );
 }

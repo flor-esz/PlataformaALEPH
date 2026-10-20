@@ -48,9 +48,17 @@ import {
 // que theme.ts evita de raíz).
 import { C, HDR_BTN_PRIMARY, HDR_BTN_SECONDARY, HDR_BTN_PILL } from "./theme";
 import { SidebarEditorial } from "./SidebarEditorial";
-import { PanoramaEditorial, BarrerasEditorial, TramitesEditorial, CosteoEditorial, IdrEditorial, ReportesEditorial } from "./editorial";
-import { barrerasFixture, tramitesFixture } from "./editorial/fixtures";
-import type { BarrerasData, TramitesData, ReporteSeleccion, ReportesInicial } from "./editorial";
+import {
+  PanoramaEditorial, BarrerasEditorial, TramitesEditorial, CosteoEditorial, IdrEditorial, ReportesEditorial,
+  TramiteFichaEditorial, TramitesListadoEditorial, BarreraFichaEditorial, BarrerasListadoEditorial,
+  blFind, blRows, tlFind, tlRowsCosteo, tlRowsTram, TL_BASE, BL_BASE,
+} from "./editorial";
+import { barrerasFixture, tramitesFixture, TR_PAIS, TR_REG } from "./editorial/fixtures";
+import { IMP_ALL, IMP_SUB, impData } from "./editorial/costeo-data";
+import type {
+  BarrerasData, TramitesData, ReporteSeleccion, ReportesInicial, CosteoFiltros,
+  BarRow, TramRow, BarFichaDatos, TramFichaDatos, BarListadoEstado, TramListadoEstado,
+} from "./editorial";
 // PanelRegional importa { Header, KpiCard, ... } de vuelta desde este archivo
 // (mismo ciclo App.tsx <-> otros módulos documentado arriba), pero nunca los
 // usa en el top-level de su módulo -- solo dentro del cuerpo de la función
@@ -225,9 +233,12 @@ export type View =
   | { screen: "impacto-economico" }
   | { screen: "country-dashboard"; country: string }
   | { screen: "barreras"; sector?: string }
-  | { screen: "barrera-detail"; id: string }
+  | { screen: "barrera-detail"; id: string; origen?: "listado" }
+  | { screen: "barreras-listado" }
   | { screen: "tramites"; sector?: string }
-  | { screen: "tramite-detail"; id: string }
+  | { screen: "tramite-detail"; id: string; origen?: "listado" | "costeo" | "costeo-listado" }
+  // Listado completo de trámites; con `costeo` es el que sale de Costeo (lleva sus filtros).
+  | { screen: "tramites-listado"; costeo?: CosteoFiltros }
   | { screen: "distorsion-detail"; id: string }
   | { screen: "placeholder"; label: string }
   // paisInicial precarga el filtro de país de AdminFuentesScreen (tab
@@ -2195,7 +2206,7 @@ function barrerasEditorialData(country: string): BarrerasData {
 // Puente entre la pantalla presentacional ReportesEditorial y las funciones reales de este archivo:
 // el Excel sale de exportarHallazgosExcel() y el PDF de ReportePDFScreen / ReporteEstrategicoScreen
 // (view "reporte-pdf"). Los filtros del prototipo se traducen a FiltrosHallazgos; los que dev aún
-// no tiene (entidad, periodo, estado HITL, eje, usuario) se muestran pero no filtran todavía.
+// no tiene (entidad, periodo desde/hasta, estado HITL, usuario) se muestran pero no filtran todavía.
 const SEV_REPORTE: Record<string, string[]> = { Alta: ["Crítico", "Alto"], Media: ["Mediano"], Baja: ["Bajo"] };
 
 function reporteInicial(prefill?: ReportesPrefill): ReportesInicial | undefined {
@@ -2206,7 +2217,7 @@ function reporteInicial(prefill?: ReportesPrefill): ReportesInicial | undefined 
     filtros: {
       ...(prefill.pais && prefill.pais !== "Todos" ? { pais: prefill.pais } : {}),
       ...(prefill.sectores?.[0] ? { sec: prefill.sectores[0] } : {}),
-      ...(prefill.tipoHallazgo ? { tipo: prefill.tipoHallazgo === "carga" ? "Carga" : "Distorsión" } : {}),
+      ...(prefill.tipoHallazgo ? { tipo: prefill.tipoHallazgo === "carga" ? "Trámites" : "Barreras" } : {}),
       ...(sev ? { sev: sev === "Crítico" || sev === "Alto" ? "Alta" : sev === "Mediano" ? "Media" : "Baja" } : {}),
     },
   };
@@ -2223,7 +2234,7 @@ function generarReporte(sel: ReporteSeleccion, navigate: (v: View) => void): str
   const paisLabel = f.pais === "Todos" ? "Todos los países" : f.pais;
   const hechos: string[] = [];
   const pendientes: string[] = [];
-  const tipoHallazgo: "distorsion" | "carga" = sel.tipo === "xtra" || (sel.tipo === "operativo" && f.tipo === "Carga") ? "carga" : "distorsion";
+  const tipoHallazgo: "distorsion" | "carga" = sel.tipo === "xtra" || (sel.tipo === "operativo" && f.tipo === "Trámites") ? "carga" : "distorsion";
   for (const fm of sel.formatos) {
     if (fm === "Excel") {
       const items = tipoHallazgo === "distorsion" ? filtrarBarreras(filtros) : filtrarTramites(filtros);
@@ -2241,7 +2252,7 @@ function generarReporte(sel: ReporteSeleccion, navigate: (v: View) => void): str
       : {
           tipo: tipoHallazgo, filtrosActivos: filtros, paisLabel,
           sectoresLabel: f.sec === "Todos" ? "Todos los sectores" : f.sec,
-          periodo: f.per, fecha: new Date().toLocaleString("es-BO"),
+          periodo: f.desde === f.hasta ? f.desde : `${f.desde}–${f.hasta}`, fecha: new Date().toLocaleString("es-BO"),
         };
     navigate({ screen: "reporte-pdf", context: JSON.stringify(ctx) });
   }
@@ -6035,6 +6046,330 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
         );
       })()}
     </div>
+  );
+}
+
+// ─── Pantallas internas: ficha y listado completo de barreras y de trámites ─────
+// Entrega 4. Las pantallas (editorial/*Ficha*, editorial/*Listado*) son presentacionales: reciben
+// filas (`BarRow` / `TramRow`) y, si los hay, los datos reales de la ficha (`detalle`). Acá se arman
+// desde el catálogo real (ALL_BARRERAS / ALL_TRAMITES) y, donde el catálogo no tiene el registro,
+// con los datos de ejemplo del prototipo (editorial/internas-data.ts). Los de ejemplo viajan en la
+// URL como `ej~…` para que la ficha se pueda recargar:
+//   barrera:  ej~<país>~<nombre>          trámite:  ej~t~<nombre>   |   ej~c~<país o Todos>~<nombre> (Costeo)
+// La edición de la retroalimentación de gobierno queda para la siguiente entrega: la ficha la muestra
+// en modo lectura, como el prototipo. BarreraDetail() / TramiteDetail() (abajo) ya no se usan.
+// Registros del catálogo: se tratan como objetos abiertos (el tipo inferido de ALL_BARRERAS / ALL_TRAMITES no conserva sus campos).
+type BarreraCat = Record<string, any>;
+type TramiteCat = Record<string, any>;
+
+const parseUsd = (s?: string): number | undefined => {
+  const m = /USD\s*([\d.,]+)/i.exec(s ?? "");
+  if (!m) return undefined;
+  const n = Number(m[1].replace(/,/g, ""));
+  return Number.isFinite(n) ? n : undefined;
+};
+/** "11 h" → 660, "30 min" → 30, "1 h 30 min" → 90. */
+const parseMin = (s?: string): number | undefined => {
+  if (!s) return undefined;
+  const h = /(\d+(?:[.,]\d+)?)\s*h/.exec(s);
+  const m = /(\d+)\s*min/.exec(s);
+  if (!h && !m) return undefined;
+  return Math.round((h ? parseFloat(h[1].replace(",", ".")) * 60 : 0) + (m ? Number(m[1]) : 0));
+};
+/** "Alta (36 ops/año)" → ["Alta", 36]; "Mensual (12/año)" → ["Mensual", 12]; sin número → 1. */
+const parseFrecuencia = (s?: string): [string, number] => {
+  const txt = s ?? "";
+  const n = /(\d+)\s*(?:ops|veces|\/\s*año|\/\s*mes)/i.exec(txt) ?? /\((\d+)/.exec(txt);
+  return [txt.split(" (")[0] || "Anual", n ? Number(n[1]) : 1];
+};
+
+function barreraRowReal(b: BarreraCat): BarRow {
+  return {
+    ref: b.id,
+    id: b.idHallazgo,
+    k: b.titulo,
+    sec: b.sector,
+    sub: "",
+    eje: b.clasificacion === "Entrada" ? "Entrada" : "Operación",
+    amb: b.canalTransmision,
+    reg: b.instrumento,
+    ent: b.entidad,
+    sev: SEV_EDITORIAL(b.severidad),
+    acc: b.accionCategoria,
+    anio: b.anio,
+    pais: b.pais,
+  };
+}
+function barreraDetalleReal(b: BarreraCat): Partial<BarFichaDatos> {
+  const partes = b.pasajeResaltado ? b.textNormativo.split(b.pasajeResaltado) : [];
+  return {
+    val: b.validacion.estadoHitl,
+    dx: b.diagnostico,
+    link: b.enlaceOficial,
+    jerarquia: b.jerarquia,
+    restr: b.tipoRestriccion,
+    mip: b.afectacionMipyme,
+    cambio: b.accionSugerida.tipoCambioRequerido,
+    fact: b.accionSugerida.factibilidad,
+    prior: b.accionSugerida.prioridad,
+    sevIA: b.validacion.severidadIA,
+    sevVal: b.validacion.severidadValidada,
+    cBID: b.validacion.comentarioBID || "Sin comentarios",
+    cCons: b.validacion.comentarioConsultor || "Sin comentarios",
+    cGob: b.validacion.comentarioGobierno || "Sin retroalimentación de gobierno",
+    ...(BARRERA_META[b.id]?.etapaCicloVida ? { etapa: BARRERA_META[b.id].etapaCicloVida } : {}),
+    texto: partes.length
+      ? { antes: partes[0], resaltado: b.pasajeResaltado, despues: partes.slice(1).join(b.pasajeResaltado) }
+      : { antes: b.textNormativo, resaltado: "", despues: "" },
+  };
+}
+function tramiteRowReal(t: TramiteCat): TramRow {
+  const cu = parseUsd(t.costo.monetario) ?? 0;
+  const vol = parseFrecuencia(t.costo.frecuencia)[1];
+  return {
+    id: t.id,
+    k: t.nombre,
+    sec: t.sector,
+    sub: IMP_SUB[t.sector] ?? "",
+    ent: t.entidad,
+    usu: t.tipo,
+    cu,
+    vol,
+    acc: t.accionCategoria,
+    eta: t.etapa,
+    sev: SEV_EDITORIAL(t.severidad),
+    tot: parseUsd(t.costo.cargaTotal) ?? cu * vol,
+  };
+}
+function tramiteDetalleReal(t: TramiteCat): Partial<TramFichaDatos> {
+  const acts = t.pasos.map((p) => ({
+    n: p.id,
+    k: p.nombre,
+    d: p.descripcion,
+    usd: parseUsd((p as { costo?: string }).costo) ?? 0,
+    min: parseMin((p as { tiempo?: string }).tiempo) ?? 0,
+    fr: p.friccion
+      ? { f: (p as { friccionDetalle?: string }).friccionDetalle ?? "", a: (p as { simplificacion?: string }).simplificacion ?? "" }
+      : null,
+  }));
+  const cargas = ALL_DISTORSIONES.filter((d) => d.tramiteId === t.id)
+    .map((d) => ({ id: d.id, eje: d.tipoCarga, t: d.nombre, s: d.subdimension, n: d.irr }))
+    .sort((a, b) => b.n - a.n);
+  const dist = ALL_DISTORSIONES.find((d) => d.tramiteId === t.id);
+  const cu = parseUsd(t.costo.monetario) ?? 0;
+  const plazo = (t.costo as { plazoDias?: number }).plazoDias;
+  return {
+    acts,
+    min: acts.reduce((a, x) => a + x.min, 0),
+    cop: Math.max(0, cu - acts.reduce((a, x) => a + x.usd, 0)),
+    ...(plazo !== undefined ? { plazo } : {}),
+    fq: parseFrecuencia(t.costo.frecuencia),
+    cargas,
+    prior: !!t.prioritario,
+    diag: t.diagnostico,
+    val: t.estadoHitl ?? "Preliminar",
+    ...(dist ? { norma: dist.instrumento, art: dist.articulo } : {}),
+    ...(t.fuente ? { fuente: t.fuente } : {}),
+  };
+}
+
+type FichaBarrera = { row: BarRow; detalle?: Partial<BarFichaDatos> };
+type FichaTramite = { row: TramRow; detalle?: Partial<TramFichaDatos> };
+
+/** Id de la URL → barrera (real, o de ejemplo si empieza con `ej~`). */
+function resolverBarrera(id: string): FichaBarrera | null {
+  if (id.startsWith("ej~")) {
+    const [, pais, ...resto] = id.split("~");
+    const nombre = resto.join("~");
+    return BL_BASE.some((b) => b[0] === nombre) ? { row: blFind(nombre, pais) } : null;
+  }
+  const b = (ALL_BARRERAS as BarreraCat[]).find((x) => x.id === id);
+  return b ? { row: barreraRowReal(b), detalle: barreraDetalleReal(b) } : null;
+}
+/** Fracción de los trámites de la región que corresponde a un país (escala de las filas de ejemplo en Costeo). */
+const escalaPais = (pais: string) => (pais === "Todos" || !TR_PAIS[pais] ? 1 : TR_PAIS[pais][0] / TR_REG.tot);
+/** Id de la URL → trámite (real, o de ejemplo si empieza con `ej~`). */
+function resolverTramite(id: string): FichaTramite | null {
+  if (id.startsWith("ej~")) {
+    const [, ctx, ...resto] = id.split("~");
+    const pais = ctx === "c" ? resto.shift() ?? "Todos" : "Todos";
+    const nombre = resto.join("~");
+    if (!TL_BASE.some((b) => b[0] === nombre)) return null;
+    return { row: ctx === "c" ? tlFind(nombre, escalaPais(pais), false) : tlFind(nombre, 1, true) };
+  }
+  const t = ALL_TRAMITES.find((x) => x.id === id);
+  return t ? { row: tramiteRowReal(t), detalle: tramiteDetalleReal(t) } : null;
+}
+/** Id de URL de una fila de barrera / de trámite (del catálogo, o de ejemplo). */
+const idBarreraFila = (r: BarRow) => r.ref ?? `ej~${r.pais}~${r.k}`;
+const idTramiteFila = (r: TramRow, costeoPais?: string) =>
+  r.id ?? (costeoPais !== undefined ? `ej~c~${costeoPais}~${r.k}` : `ej~t~${r.k}`);
+
+/** «Ir a Reportes» / descargas de las pantallas internas: Excel directo si hay datos reales; si son de ejemplo, lleva a Reportes con el filtro. */
+const PAIS_REP = (p: string) => (p === "Todos" ? undefined : (p as Country));
+function descargarBarreras(items: BarreraCat[], pais: string) {
+  void exportarHallazgosExcel("distorsion", items as typeof ALL_BARRERAS, pais === "Todos" ? "6 países" : pais);
+}
+function descargarTramites(items: typeof ALL_TRAMITES, pais: string) {
+  void exportarHallazgosExcel("carga", items, pais === "Todos" ? "6 países" : pais);
+}
+
+function FichaNoEncontrada({ volver, onVolver }: { volver: string; onVolver: () => void }) {
+  return (
+    <div className="p-8">
+      <p style={{ fontFamily: "IBM Plex Sans, sans-serif", color: C.text, marginBottom: 12 }}>No se encontró el registro solicitado.</p>
+      <button onClick={onVolver} style={HDR_BTN_PRIMARY}>{volver}</button>
+    </div>
+  );
+}
+
+type OrigenBarrera = "listado" | undefined;
+function BarreraFichaScreen({ id, origen, navigate }: { id: string; origen?: OrigenBarrera; navigate: (v: View) => void }) {
+  const ficha = resolverBarrera(id);
+  const irBarreras = () => navigate({ screen: "barreras" });
+  if (!ficha) return <FichaNoEncontrada volver="Volver a Barreras" onVolver={irBarreras} />;
+  const irListado = () => navigate({ screen: "barreras-listado" });
+  const realB = (ALL_BARRERAS as BarreraCat[]).find((x) => x.id === id);
+  const irReportes = () =>
+    navigate({
+      screen: "reportes",
+      prefill: { tipoHallazgo: "distorsion", ...(realB ? { pais: PAIS_REP(realB.pais), sectores: [realB.sector] } : { pais: PAIS_REP(ficha.row.pais) }) },
+    });
+  return (
+    <BarreraFichaEditorial
+      key={id}
+      row={ficha.row}
+      detalle={ficha.detalle}
+      esEjemplo={!ficha.row.ref}
+      rastro={[
+        { label: "Barreras regulatorias", onClick: irBarreras },
+        ...(origen === "listado" ? [{ label: "Listado de barreras", onClick: irListado }] : []),
+      ]}
+      backLabel={origen === "listado" ? "Volver al listado" : "Volver a Barreras"}
+      onBack={origen === "listado" ? irListado : irBarreras}
+      onDescargar={() => {
+        const real = (ALL_BARRERAS as BarreraCat[]).find((x) => x.id === id);
+        if (real) descargarBarreras([real], real.pais);
+        else irReportes();
+      }}
+      onIrReportes={irReportes}
+    />
+  );
+}
+
+type OrigenTramite = "listado" | "costeo" | "costeo-listado" | undefined;
+function TramiteFichaScreen({ id, origen, costeoSel, navigate }: { id: string; origen?: OrigenTramite; costeoSel: CosteoFiltros; navigate: (v: View) => void }) {
+  const ficha = resolverTramite(id);
+  const costeo = origen === "costeo" || origen === "costeo-listado";
+  const irTramites = () => navigate({ screen: "tramites" });
+  const irCosteo = () => navigate({ screen: "impacto-economico" });
+  const irListado = () => navigate(costeo ? { screen: "tramites-listado", costeo: costeoSel } : { screen: "tramites-listado" });
+  const volverA = origen === "listado" || origen === "costeo-listado" ? irListado : costeo ? irCosteo : irTramites;
+  if (!ficha) return <FichaNoEncontrada volver="Volver a Trámites" onVolver={irTramites} />;
+  const realT = ALL_TRAMITES.find((x) => x.id === id);
+  const irReportes = () =>
+    navigate({
+      screen: "reportes",
+      prefill: { tipoHallazgo: "carga", ...(realT ? { pais: PAIS_REP(realT.pais), sectores: [realT.sector] } : costeo && costeoSel.pais !== "Todos" ? { pais: PAIS_REP(costeoSel.pais) } : {}) },
+    });
+  return (
+    <TramiteFichaEditorial
+      key={id}
+      row={ficha.row}
+      detalle={ficha.detalle}
+      ctx={costeo ? "impacto" : "tramites"}
+      esEjemplo={!ficha.row.id}
+      rastro={[
+        { label: "Trámites con potencial de mejora", onClick: irTramites },
+        ...(costeo ? [{ label: "Costeo", onClick: irCosteo }] : []),
+        ...(origen === "listado" || origen === "costeo-listado" ? [{ label: "Listado de trámites", onClick: irListado }] : []),
+      ]}
+      backLabel={origen === "listado" || origen === "costeo-listado" ? "Volver al listado" : costeo ? "Volver a Costeo" : "Volver a Trámites"}
+      onBack={volverA}
+      onDescargar={() => {
+        const real = ALL_TRAMITES.find((x) => x.id === id);
+        if (real) descargarTramites([real], real.pais);
+        else irReportes();
+      }}
+      onIrReportes={irReportes}
+    />
+  );
+}
+
+function BarrerasListadoScreen({ country, navigate, estado, onEstado }: { country: string; navigate: (v: View) => void; estado?: BarListadoEstado; onEstado: (e: BarListadoEstado) => void }) {
+  const reales = (ALL_BARRERAS as BarreraCat[]).filter((b) => country === "Todos" || b.pais === country);
+  const rows: BarRow[] = reales.length ? reales.map(barreraRowReal) : blRows(country === "Todos" ? "Colombia" : country);
+  const irBarreras = () => navigate({ screen: "barreras" });
+  const irReportes = () => navigate({ screen: "reportes", prefill: { tipoHallazgo: "distorsion", pais: PAIS_REP(country) } });
+  return (
+    <BarrerasListadoEditorial
+      key={country}
+      rows={rows}
+      country={country === "Todos" ? "6 países" : country}
+      totalReal={barrerasEditorialData(country).total}
+      esEjemplo={!reales.length}
+      rastro={[{ label: "Barreras regulatorias", onClick: irBarreras }]}
+      backLabel="Volver a Barreras"
+      onBack={irBarreras}
+      onOpen={(r) => navigate({ screen: "barrera-detail", id: idBarreraFila(r), origen: "listado" })}
+      estado={estado}
+      onEstado={onEstado}
+      onDescargar={() => (reales.length ? descargarBarreras(reales, country) : irReportes())}
+      onIrReportes={irReportes}
+    />
+  );
+}
+
+function TramitesListadoScreen({ country, costeo, navigate, estado, onEstado }: { country: string; costeo?: CosteoFiltros; navigate: (v: View) => void; estado?: TramListadoEstado; onEstado: (e: TramListadoEstado) => void }) {
+  const irTramites = () => navigate({ screen: "tramites" });
+  const irCosteo = () => navigate({ screen: "impacto-economico" });
+  const irReportes = () => navigate({ screen: "reportes", prefill: { tipoHallazgo: "carga", pais: PAIS_REP(costeo ? costeo.pais : country) } });
+  
+  if (costeo) {
+    const rows = tlRowsCosteo(costeo);
+    const chips = [
+      "País: " + (costeo.pais === "Todos" ? "6 países" : costeo.pais),
+      ...(costeo.sec !== "Todos" ? ["Sector administrativo: " + costeo.sec] : []),
+      ...(costeo.ent !== "Todos" ? ["Entidad: " + costeo.ent] : []),
+      ...(costeo.usu !== "Todos" ? ["Usuario: " + costeo.usu] : []),
+    ];
+    return (
+      <TramitesListadoEditorial
+        key={JSON.stringify(costeo)}
+        rows={rows}
+        ctx="impacto"
+        chips={chips}
+        totalReal={impData(costeo).costeados}
+        rastro={[{ label: "Trámites con potencial de mejora", onClick: irTramites }, { label: "Costeo", onClick: irCosteo }]}
+        backLabel="Volver a Costeo"
+        onBack={irCosteo}
+        onOpen={(r) => navigate({ screen: "tramite-detail", id: idTramiteFila(r, costeo.pais), origen: "costeo-listado" })}
+        estado={estado}
+        onEstado={onEstado}
+        onDescargar={irReportes}
+        onIrReportes={irReportes}
+      />
+    );
+  }
+  const reales = ALL_TRAMITES.filter((t) => country === "Todos" || t.pais === country);
+  const rows: TramRow[] = reales.length ? reales.map(tramiteRowReal) : tlRowsTram();
+  return (
+    <TramitesListadoEditorial
+      key={country}
+      rows={rows}
+      ctx="tramites"
+      chips={["País: " + (country === "Todos" ? "6 países" : country)]}
+      totalReal={tramitesEditorialData(country).tot}
+      esEjemplo={!reales.length}
+      rastro={[{ label: "Trámites con potencial de mejora", onClick: irTramites }]}
+      backLabel="Volver a Trámites"
+      onBack={irTramites}
+      onOpen={(r) => navigate({ screen: "tramite-detail", id: idTramiteFila(r), origen: "listado" })}
+      estado={estado}
+      onEstado={onEstado}
+      onDescargar={() => (reales.length ? descargarTramites(reales, country) : irReportes())}
+      onIrReportes={irReportes}
+    />
   );
 }
 
@@ -11381,6 +11716,9 @@ function AppInner() {
     setRetroGobiernoOverrides(prev => ({ ...prev, [id]: data }));
   // TODO: shared country state is temporary — replace when the advisor-per-country flow is built
   const [activeCountry, setActiveCountry] = useState<Country>("Todos");
+  // Costeo y los listados completos conservan lo que el usuario dejó (filtros, búsqueda, página) al abrir una ficha y volver.
+  const costeoSelRef = useRef<CosteoFiltros>(IMP_ALL);
+  const listadoEstadoRef = useRef<Record<string, BarListadoEstado | TramListadoEstado>>({});
   const [activeSection, setActiveSection] = useState<Section>("dashboard");
   const [view, setView] = useState<View>(DEFAULT_VIEW);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -11427,8 +11765,9 @@ function AppInner() {
     if (v.screen === "impacto-economico") setActiveSection("impacto-economico");
     if (v.screen === "indice") setActiveSection("indice");
     if (v.screen === "country-dashboard") { setActiveSection("dashboard"); setActiveCountry(v.country as Country); }
-    if (v.screen === "barreras" || v.screen === "barrera-detail") setActiveSection("barreras");
-    if (v.screen === "tramites" || v.screen === "tramite-detail") setActiveSection("tramites");
+    if (v.screen === "barreras" || v.screen === "barrera-detail" || v.screen === "barreras-listado") setActiveSection("barreras");
+    if (v.screen === "tramites" || (v.screen === "tramite-detail" && !v.origen?.startsWith("costeo")) || (v.screen === "tramites-listado" && !v.costeo)) setActiveSection("tramites");
+    if ((v.screen === "tramite-detail" && v.origen?.startsWith("costeo")) || (v.screen === "tramites-listado" && v.costeo)) setActiveSection("impacto-economico");
     if (v.screen === "administracion") setActiveSection("administracion");
     if (v.screen === "reportes" || v.screen === "reporte-pdf") setActiveSection("reportes");
     if (v.screen === "documentacion") setActiveSection("documentacion");
@@ -11563,15 +11902,38 @@ function AppInner() {
     switch (view.screen) {
       case "panel-regional": return <PanoramaEditorial country="Todos" onCountryChange={cambiarPaisPanorama} />;
       case "impacto-economico": return <CosteoEditorial
-        tramiteId={nombre => ALL_TRAMITES.find(t => t.nombre === nombre)?.id}
-        onOpenTramite={id => navigate({ screen: "tramite-detail", id })}
-        onVerTodos={() => navigate({ screen: "tramites" })}
+        filtros={costeoSelRef.current}
+        onFiltros={f => { costeoSelRef.current = f; }}
+        onOpenTramite={(nombre, sel) => {
+          const real = ALL_TRAMITES.find(t => t.nombre === nombre);
+          navigate({ screen: "tramite-detail", id: real ? real.id : `ej~c~${sel.pais}~${nombre}`, origen: "costeo" });
+        }}
+        onVerTodos={sel => navigate({ screen: "tramites-listado", costeo: sel })}
       />;
       case "country-dashboard": return <PanoramaEditorial country={view.country} onCountryChange={cambiarPaisPanorama} />;
-      case "barreras": return <BarrerasEditorial country={activeCountry} data={barrerasEditorialData(activeCountry)} onCountryChange={c => { setActiveCountry(c as Country); window.history.replaceState(null, "", BASE + viewToUrl(view, c as Country)); }} onOpenBarrera={id => id && navigate({ screen: "barrera-detail", id })} />;
-      case "barrera-detail": return <BarreraDetail id={view.id} onNavigate={navigate} userRole={userRole} retroGobiernoOverrides={retroGobiernoOverrides} onGuardarRetroGobierno={guardarRetroGobierno} />;
-      case "tramites": return <TramitesEditorial country={activeCountry} data={tramitesEditorialData(activeCountry)} onCountryChange={c => { setActiveCountry(c as Country); window.history.replaceState(null, "", BASE + viewToUrl(view, c as Country)); }} onOpenTramite={id => id && navigate({ screen: "tramite-detail", id })} onCosteo={() => navigate({ screen: "impacto-economico" })} />;
-      case "tramite-detail": return <TramiteDetail id={view.id} onNavigate={navigate} userRole={userRole} retroGobiernoOverrides={retroGobiernoOverrides} onGuardarRetroGobierno={guardarRetroGobierno} />;
+      case "barreras": return <BarrerasEditorial country={activeCountry} data={barrerasEditorialData(activeCountry)} onCountryChange={c => { setActiveCountry(c as Country); window.history.replaceState(null, "", BASE + viewToUrl(view, c as Country)); }} onOpenBarrera={fila => {
+        const id = fila.id ?? (BL_BASE.some(b => b[0] === fila.barrera) ? `ej~${activeCountry}~${fila.barrera}` : undefined);
+        if (id) navigate({ screen: "barrera-detail", id });
+      }} onVerTodas={() => navigate({ screen: "barreras-listado" })} />;
+      case "barrera-detail": return <BarreraFichaScreen id={view.id} origen={view.origen} navigate={navigate} />;
+      case "barreras-listado": return <BarrerasListadoScreen
+        country={activeCountry} navigate={navigate}
+        estado={listadoEstadoRef.current["b:" + activeCountry] as BarListadoEstado | undefined}
+        onEstado={e => { listadoEstadoRef.current["b:" + activeCountry] = e; }}
+      />;
+      case "tramites": return <TramitesEditorial country={activeCountry} data={tramitesEditorialData(activeCountry)} onCountryChange={c => { setActiveCountry(c as Country); window.history.replaceState(null, "", BASE + viewToUrl(view, c as Country)); }} onOpenTramite={fila => {
+        const id = fila.id ?? (TL_BASE.some(b => b[0] === fila.tramite) ? `ej~t~${fila.tramite}` : undefined);
+        if (id) navigate({ screen: "tramite-detail", id });
+      }} onVerTodos={() => navigate({ screen: "tramites-listado" })} onCosteo={() => navigate({ screen: "impacto-economico" })} />;
+      case "tramite-detail": return <TramiteFichaScreen id={view.id} origen={view.origen} costeoSel={costeoSelRef.current} navigate={navigate} />;
+      case "tramites-listado": {
+        const clave = view.costeo ? "c:" + JSON.stringify(view.costeo) : "t:" + activeCountry;
+        return <TramitesListadoScreen
+          country={activeCountry} costeo={view.costeo} navigate={navigate}
+          estado={listadoEstadoRef.current[clave] as TramListadoEstado | undefined}
+          onEstado={e => { listadoEstadoRef.current[clave] = e; }}
+        />;
+      }
       case "distorsion-detail": return <DistorsionDetail id={view.id} onNavigate={navigate} />;
       case "indice": return <IdrEditorial />;
       case "hallazgos-filtrados": {

@@ -2,14 +2,16 @@
 // cumplirlos, dónde se concentra el costo y cómo se compara entre países. Sin nivel regional / por
 // país: país, sector administrativo, entidad y tipo de usuario son filtros del encabezado.
 // Pantalla presentacional: calcula con `getData(filtros)` (por defecto, datos de ejemplo).
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Bar,
   BarChart,
+  CartesianGrid,
   Cell,
   LabelList,
   ResponsiveContainer,
   Tooltip,
+  XAxis,
   YAxis,
 } from "recharts";
 import {
@@ -51,30 +53,29 @@ const TOP_OPTS = (all: string): [string, string][] => [
 
 function CosteoBody({
   D,
+  sel,
   showAct,
-  tramiteId,
   onOpenTramite,
   onVerTodos,
 }: {
   D: CosteoData;
+  sel: CosteoFiltros;
   showAct: boolean;
-  tramiteId?: (nombre: string) => string | undefined;
-  onOpenTramite?: (id: string) => void;
-  onVerTodos?: () => void;
+  onOpenTramite?: (nombre: string, sel: CosteoFiltros) => void;
+  onVerTodos?: (sel: CosteoFiltros, total: number) => void;
 }) {
-  /* La fila abre la ficha solo si el nombre del trámite se resuelve a un id del catálogo. */
+  /* La fila abre la ficha del trámite (real si está en el catálogo, de ejemplo si no: lo decide quien recibe el aviso). */
   const rowLink = (nombre: string) => {
-    const id = onOpenTramite && tramiteId ? tramiteId(nombre) : undefined;
-    return id
+    return onOpenTramite
       ? {
           className: "rowlink",
           tabIndex: 0,
           title: "Ver la ficha del trámite",
-          onClick: () => onOpenTramite!(id),
+          onClick: () => onOpenTramite!(nombre, sel),
           onKeyDown: (e: React.KeyboardEvent) => {
             if (e.key === "Enter" || e.key === " ") {
               e.preventDefault();
-              onOpenTramite!(id);
+              onOpenTramite!(nombre, sel);
             }
           },
         }
@@ -147,6 +148,45 @@ function CosteoBody({
             style={{ fontSize: 12, fontFamily: "Inter, system-ui, sans-serif" }}
           >
             {cut}
+          </text>
+        </g>
+      );
+    };
+  /* Etiquetas en dos líneas (tres en celular): se parte por palabras y el texto completo queda en el title */
+  const wrapTick =
+    (w, maxL) =>
+    ({ x, y, payload }) => {
+      const t = star(payload.value),
+        max = Math.max(10, Math.floor((w - 12) / 6.1)),
+        lines = [];
+      let cur = "";
+      t.split(" ").forEach((wd) => {
+        if (cur && (cur + " " + wd).length > max) {
+          lines.push(cur);
+          cur = wd;
+        } else cur = cur ? cur + " " + wd : wd;
+      });
+      if (cur) lines.push(cur);
+      const sh = lines.slice(0, maxL);
+      if (lines.length > maxL)
+        sh[maxL - 1] =
+          sh[maxL - 1].slice(0, Math.max(1, max - 1)).trimEnd() + "…";
+      return (
+        <g transform={"translate(" + x + "," + y + ")"}>
+          <title>{t}</title>
+          <text
+            x={-8}
+            y={0}
+            dy={4 - (sh.length - 1) * 7}
+            textAnchor="end"
+            fill={T.axis}
+            style={{ fontSize: 12, fontFamily: "Inter, system-ui, sans-serif" }}
+          >
+            {sh.map((l, i) => (
+              <tspan key={i} x={-8} dy={i ? 14 : 0}>
+                {l}
+              </tspan>
+            ))}
           </text>
         </g>
       );
@@ -311,14 +351,14 @@ function CosteoBody({
     .slice()
     .sort((a, b) => b.v - a.v)
     .map((r) => st(r, usd));
-  const paisTick = ({ x, y, payload }) => {
+  const paisTickV = ({ x, y, payload }) => {
     const r = paisRows.find((q) => q.k === payload.value);
     return (
       <g transform={"translate(" + x + "," + y + ")"}>
         <text
-          x={-8}
-          y={-2}
-          textAnchor="end"
+          x={0}
+          y={16}
+          textAnchor="middle"
           fill={T.axis}
           style={{
             fontSize: 12,
@@ -329,9 +369,9 @@ function CosteoBody({
           {payload.value}
         </text>
         <text
-          x={-8}
-          y={13}
-          textAnchor="end"
+          x={0}
+          y={32}
+          textAnchor="middle"
           fill={T.axis}
           style={{ fontSize: 11.5, fontFamily: "Inter, system-ui, sans-serif" }}
         >
@@ -340,6 +380,17 @@ function CosteoBody({
       </g>
     );
   };
+  const paisTop = ({ x, y, width, value }) => (
+    <text
+      x={x + width / 2}
+      y={y - 8}
+      textAnchor="middle"
+      style={lblStyle}
+      fill="var(--ink)"
+    >
+      {nar ? String(value).replace("USD ", "").replace(" M", "") : value}
+    </text>
+  );
   const kpi = (band, label, val, sm, desc, ico, k) => (
     <div className="kpi has-ib">
       <span className="band" style={{ background: band }}></span>
@@ -507,7 +558,15 @@ function CosteoBody({
                 )
               : null}
           </section>
-          <div className="grid2" style={{ marginTop: 20 }}>
+          <div
+            className="grid2"
+            style={{
+              marginTop: 20,
+              ...(showAct && !nar
+                ? { gridTemplateColumns: "minmax(0,5fr) minmax(0,7fr)" }
+                : {}),
+            }}
+          >
             <section className={"card" + (showAct ? "" : " g-wide")}>
               <CardHead
                 title="Costos administrativos por usuario"
@@ -559,11 +618,15 @@ function CosteoBody({
                 </div>
                 {bars(
                   actRows,
-                  190,
+                  nar ? 150 : 236,
                   "Actividad estándar",
                   "Costo estimado (millones de USD)",
                   TR_G,
-                  34,
+                  nar ? 64 : 44,
+                  wrapTick(
+                    yW(nar ? Math.min(150, 134) : 236, "Actividad estándar"),
+                    nar ? 4 : 2,
+                  ),
                 )}
               </section>
             ) : null}
@@ -589,16 +652,71 @@ function CosteoBody({
               def={DEFS.ipais}
             />
             {Leg}
-            {bars(
-              paisRows,
-              130,
-              "País",
-              "Costo administrativo estimado (millones de USD)",
-              IMP_C,
-              46,
-              paisTick,
-              true,
-            )}
+            <div style={{ overflowX: "auto" }}>
+              <div
+                className="chart"
+                style={{
+                  height: nar ? 400 : 420,
+                  flex: "none",
+                  minWidth: nar ? 560 : 0,
+                }}
+              >
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={paisRows}
+                    margin={{ top: AX_TOP + 14, right: 12, left: 0, bottom: 4 }}
+                    barCategoryGap="28%"
+                  >
+                    <CartesianGrid vertical={false} stroke={T.grid} />
+                    <XAxis
+                      dataKey="k"
+                      interval={0}
+                      tickLine={false}
+                      axisLine={{ stroke: T.grid }}
+                      height={50}
+                      tick={paisTickV}
+                    />
+                    <YAxis
+                      type="number"
+                      tickLine={false}
+                      axisLine={false}
+                      width={40}
+                      tick={{
+                        fill: T.axis,
+                        fontSize: 11.5,
+                        fontFamily: "Inter, system-ui, sans-serif",
+                      }}
+                      tickFormatter={(v) => fmtInt(v)}
+                      label={axT(
+                        "Costo administrativo estimado (millones de USD)",
+                        "y",
+                      )}
+                    />
+                    <Tooltip
+                      cursor={{ fill: T.grid, opacity: 0.5 }}
+                      content={oneTip("Costo estimado")}
+                    />
+                    <Bar
+                      dataKey="ca"
+                      stackId="s"
+                      maxBarSize={64}
+                      isAnimationActive={false}
+                      fill={CA_C}
+                    />
+                    <Bar
+                      dataKey="cop"
+                      stackId="s"
+                      maxBarSize={64}
+                      radius={[4, 4, 0, 0]}
+                      isAnimationActive={false}
+                      fill={COP_C}
+                    >
+                      <LabelList dataKey="lab" content={paisTop} />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
           </section>
         </div>
       </section>
@@ -634,7 +752,7 @@ function CosteoBody({
                       Acción sugerida
                       <InfoBtn k="accion" />
                     </th>
-                    {onOpenTramite && tramiteId ? (
+                    {onOpenTramite ? (
                       <th className="go">
                         <span className="sr">Ver ficha</span>
                       </th>
@@ -661,18 +779,16 @@ function CosteoBody({
                         <td>
                           <Mejora t={r.acc} />
                         </td>
-                        {onOpenTramite && tramiteId ? (
+                        {onOpenTramite ? (
                           <td className="go" aria-hidden="true">
-                            {rowLink(r.k).className ? (
-                              <Icon d={I.arrow} />
-                            ) : null}
+                            <Icon d={I.arrow} />
                           </td>
                         ) : null}
                       </tr>
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={8} className="main">
+                      <td colSpan={onOpenTramite ? 9 : 8} className="main">
                         No hay trámites costeados con los filtros seleccionados.
                       </td>
                     </tr>
@@ -683,7 +799,7 @@ function CosteoBody({
             <div style={{ display: "flex", justifyContent: "flex-end" }}>
               <button
                 className="btn primary"
-                onClick={onVerTodos}
+                onClick={() => onVerTodos?.(sel, D.costeados)}
                 disabled={!onVerTodos}
               >
                 Ver todos los trámites <Icon d={I.arrow} />
@@ -696,7 +812,6 @@ function CosteoBody({
   );
 }
 
-/* Controles del encabezado de Costeo: cuatro filtros que afectan toda la pantalla */
 function ImpCtl({
   sel,
   setSel,
@@ -769,12 +884,14 @@ export interface CosteoEditorialProps {
   getData?: (f: CosteoFiltros) => CosteoData;
   /** Muestra u oculta «¿Qué actividades explican el costo?» (pendiente de decisión del BID). */
   mostrarActividades?: boolean;
-  /** Resuelve el nombre de un trámite prioritario al id de su ficha; sin id, la fila no es clicable. */
-  tramiteId?: (nombre: string) => string | undefined;
-  /** Clic en una fila de «Trámites prioritarios» (abre la ficha del trámite). */
-  onOpenTramite?: (id: string) => void;
-  /** Botón «Ver todos los trámites». */
-  onVerTodos?: () => void;
+  /** Filtros con los que arranca la pantalla (para conservarlos al volver de una ficha o del listado). */
+  filtros?: CosteoFiltros;
+  /** Aviso cuando cambian los filtros. */
+  onFiltros?: (f: CosteoFiltros) => void;
+  /** Clic en una fila de «Trámites prioritarios»: recibe el nombre y los filtros vigentes (abre la ficha del trámite). */
+  onOpenTramite?: (nombre: string, sel: CosteoFiltros) => void;
+  /** Botón «Ver todos los trámites»: recibe los filtros vigentes y el total de trámites costeados. */
+  onVerTodos?: (sel: CosteoFiltros, total: number) => void;
 }
 
 /** Costeo de trámites: costo administrativo estimado (CET = CA + COP) y dónde se concentra. */
@@ -783,11 +900,15 @@ export function CosteoEditorial({
   ultimaActualizacion = "15 de septiembre de 2026",
   getData = impData,
   mostrarActividades = true,
-  tramiteId,
+  filtros,
+  onFiltros,
   onOpenTramite,
   onVerTodos,
 }: CosteoEditorialProps) {
-  const [sel, setSel] = useState<CosteoFiltros>(IMP_ALL);
+  const [sel, setSel] = useState<CosteoFiltros>(filtros ?? IMP_ALL);
+  useEffect(() => {
+    onFiltros?.(sel);
+  }, [sel]);
   const D = getData(sel);
   return (
     <PageShell
@@ -819,8 +940,8 @@ export function CosteoEditorial({
       <CosteoBody
         key={JSON.stringify(sel)}
         D={D}
+        sel={sel}
         showAct={mostrarActividades}
-        tramiteId={tramiteId}
         onOpenTramite={onOpenTramite}
         onVerTodos={onVerTodos}
       />

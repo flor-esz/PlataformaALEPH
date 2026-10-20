@@ -41,7 +41,12 @@ import {
 import { PageShell } from "./PageShell";
 import { PAISES_FIXTURE, barrerasFixture } from "./fixtures";
 import { COLORES_SERIE, RAMPS, T, colorPais } from "./theme";
-import type { BarrerasData, DesgloseBarrera, ScreenProps } from "./types";
+import type {
+  BarreraFila,
+  BarrerasData,
+  DesgloseBarrera,
+  ScreenProps,
+} from "./types";
 
 const SEV_CLAVE = { Alta: "alta", Media: "media", Baja: "baja" } as const;
 const totalFila = (r: DesgloseBarrera) => r.entrada + r.operacion;
@@ -56,7 +61,7 @@ function BarrerasBody({
   D: BarrerasData;
   country: string;
   onSelectPais: (n: string) => void;
-  onOpenBarrera?: (id?: string) => void;
+  onOpenBarrera?: (fila: BarreraFila) => void;
   onVerTodas?: () => void;
 }) {
   const nat = country !== "Todos";
@@ -391,31 +396,47 @@ function BarrerasBody({
   const jerTot = BB.jerarquia
     .map((x) => [x.k, totalFila(x)] as [string, number])
     .sort((a, b) => b[1] - a[1]);
+  const lc = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
+  const jerPl: Record<string, string> = {
+    Ley: "leyes",
+    Decreto: "decretos",
+    Resolución: "resoluciones",
+    Reglamento: "reglamentos",
+  };
   const finds: [string, string][] = !nat
     ? []
     : [
         [
           pE + " %",
-          "de las barreras de " +
-            country +
-            " son de entrada y acceso al mercado",
+          "de las barreras identificadas afectan la entrada y el acceso al mercado",
+        ],
+        [
+          pct(BB.sev[0][1], BB.total) + " %",
+          "de las barreras identificadas presentan severidad alta",
+        ],
+        [
+          pct(ambTot[0][1], BB.total) + " %",
+          "de las barreras identificadas afectan " +
+            lc(ambTot[0][0]) +
+            ", el principal canal de transmisión",
         ],
         [
           pct(secTot[0][1] + secTot[1][1], BB.total) + " %",
-          "se concentra en " + secTot[0][0] + " y " + secTot[1][0],
+          "de las barreras identificadas se concentran en " +
+            lc(secTot[0][0]) +
+            " y " +
+            lc(secTot[1][0]),
         ],
-        [pct(BB.sev[0][1], BB.total) + " %", "tiene severidad alta"],
         [
-          pct(ambTot[0][1], BB.total) + " %",
-          "corresponde al canal de transmisión " +
-            ambTot[0][0] +
-            ", el de mayor impacto",
+          pct((BB.mip ?? [["Alta", 0]])[0][1], BB.total) + " %",
+          "de las barreras identificadas presentan una afectación alta a las MIPYMES",
         ],
         [
           pct(jerTot[0][1], BB.total) + " %",
-          "es de tipo " + jerTot[0][0],
+          "de las barreras identificadas se encuentran en " +
+            (jerPl[jerTot[0][0]] || lc(jerTot[0][0])) +
+            ", el tipo de instrumento con mayor concentración",
         ],
-        BB.diagnostico ?? ["18 %", "Diagnóstico"], // pendiente: el BID define el hallazgo «Diagnóstico»
       ];
   return (
     <React.Fragment>
@@ -524,6 +545,14 @@ function BarrerasBody({
             aria="Barreras por nivel de severidad"
             def={DEFS.sev}
             defs={SEV_DEFS}
+            ctr="barreras identificadas"
+            note={
+              "Las " +
+              fmtInt(BB.total) +
+              " barreras identificadas están asociadas a " +
+              fmtInt(Math.round((BB.total * 940) / 1250)) +
+              " artículos. Un mismo artículo puede generar más de una barrera cuando contiene distintos mecanismos restrictivos o afecta varios canales de transmisión."
+            }
           />
         </div>
       </div>
@@ -1090,30 +1119,30 @@ function BarrerasBody({
                       {(BB.tabla ?? []).map((r: any, i: number) => (
                         <tr
                           key={r.id ?? i}
-                          className={onOpenBarrera && r.id ? "rowlink" : undefined}
-                          tabIndex={onOpenBarrera && r.id ? 0 : undefined}
+                          className={onOpenBarrera ? "rowlink" : undefined}
+                          tabIndex={onOpenBarrera ? 0 : undefined}
                           title={
-                            onOpenBarrera && r.id
+                            onOpenBarrera
                               ? "Ver la ficha de la barrera"
                               : undefined
                           }
                           onKeyDown={
-                            onOpenBarrera && r.id
+                            onOpenBarrera
                               ? (e) => {
                                   if (e.key === "Enter" || e.key === " ") {
                                     e.preventDefault();
-                                    onOpenBarrera(r.id);
+                                    onOpenBarrera(r);
                                   }
                                 }
                               : undefined
                           }
                           onClick={
-                            onOpenBarrera && r.id
-                              ? () => onOpenBarrera(r.id)
+                            onOpenBarrera
+                              ? () => onOpenBarrera(r)
                               : undefined
                           }
                           style={
-                            onOpenBarrera && r.id
+                            onOpenBarrera
                               ? { cursor: "pointer" }
                               : undefined
                           }
@@ -1152,7 +1181,7 @@ function BarrerasBody({
                             <Mejora t={r.accion} />
                           </td>
                           <td className="go" aria-hidden="true">
-                            {onOpenBarrera && r.id ? <Icon d={I.arrow} /> : null}
+                            {onOpenBarrera ? <Icon d={I.arrow} /> : null}
                           </td>
                         </tr>
                       ))}
@@ -1251,7 +1280,7 @@ function BarrerasBody({
 
 export interface BarrerasEditorialProps extends ScreenProps<BarrerasData> {
   /** Clic en una fila de la tabla (abre el detalle de la barrera). */
-  onOpenBarrera?: (id?: string) => void;
+  onOpenBarrera?: (fila: BarreraFila) => void;
   /** Botón "Ver todas las barreras". */
   onVerTodas?: () => void;
 }
