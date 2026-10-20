@@ -19,7 +19,7 @@ export interface PaisRef {
 }
 
 /** Cifras del encabezado (a la derecha del título). */
-export type HeroStat = [valor: string, etiqueta: string];
+export type HeroStat = [valor: string, etiqueta: string, infoKey?: string];
 
 /** Selector extra del encabezado (Sector, Subsector…). */
 export interface HeroFilter {
@@ -184,4 +184,122 @@ export interface TramitesData {
   /** [tipo de usuario, parte del costo (0-1)] */
   cUsu?: Par[];
   tabla?: TramiteFila[];
+}
+
+/* ───────────── Costeo (antes «Impacto económico») ───────────── */
+
+/** Filtros del encabezado; «Todos» = sin filtro. Afectan toda la pantalla. */
+export interface CosteoFiltros {
+  pais: string;
+  /** Sector administrativo. */
+  sec: string;
+  /** Entidad responsable. */
+  ent: string;
+  /** Tipo de usuario (Empresarial / Ciudadano). */
+  usu: string;
+}
+/** Costo en millones de USD, dividido en tiempo activo (CA) y espera de la administración (COP). */
+export interface CosteoFila {
+  k: string;
+  v: number;
+  ca: number;
+  cop: number;
+  /** Nº de trámites con los que se calculó (usuarios, países). */
+  n?: number;
+  /** Color fijo del país. */
+  c?: string;
+}
+export interface CosteoTramite {
+  k: string;
+  sec: string;
+  ent: string;
+  usu: string;
+  /** Costo unitario (USD). */
+  cu: number;
+  /** Volumen anual. */
+  vol: number;
+  /** Costo agregado (millones de USD) y su división CA / COP. */
+  v: number;
+  ca: number;
+  cop: number;
+  acc: string;
+  eta: string;
+  sev: Sev;
+}
+export interface CosteoData {
+  /** Costo administrativo estimado total (millones de USD): CET = CA + COP. */
+  cost: number;
+  ca: number;
+  cop: number;
+  /** Trámites costeados. */
+  costeados: number;
+  /** Costo promedio por transacción (USD). */
+  avg: number;
+  sector: CosteoFila[];
+  entidad: CosteoFila[];
+  usuarios: CosteoFila[];
+  /** Ordenados por costo agregado, de mayor a menor. */
+  tram: CosteoTramite[];
+  /** Costo activo repartido en las ocho actividades estándar. */
+  act: { k: string; v: number; p: number }[];
+  pais: CosteoFila[];
+}
+
+/* ---------- Índice de Distorsiones Regulatorias (IDR) ---------- */
+/** Puntaje 0–100 de una categoría. */
+export interface IdrPunto {
+  k: string;
+  v: number;
+}
+export interface IdrData {
+  /** Puntaje del subíndice Barreras y del subíndice Trámites (promedio de los países elegidos). */
+  b: number;
+  t: number;
+  /** Componentes del subíndice Barreras. */
+  ent: number;
+  ope: number;
+  /** Las seis cargas del subíndice Trámites. */
+  cargas: IdrPunto[];
+  tipos: IdrPunto[];
+  secs: IdrPunto[];
+  ents: IdrPunto[];
+  adms: IdrPunto[];
+  /** Evolución del subíndice Barreras: una fila por año con una clave por país y el promedio ALC. */
+  evo: Record<string, number>[];
+  paises: { k: string; b: number; t: number; idr: number; c: string; on: boolean }[];
+  /** Fuentes procesadas / previstas, % de cobertura y % de hallazgos validados (pie de página). */
+  fp: number;
+  ft: number;
+  cob: number;
+  val: number;
+}
+
+/* ---------- Reportes ---------- */
+export type ReporteTipo = "estrategico" | "operativo" | "xbar" | "xtra";
+export type ReporteFormato = "PDF" | "PPT editable" | "Excel";
+/** Filtros del alcance ("Todos"/"Todas" = sin filtrar). */
+export interface ReporteFiltros {
+  pais: string;
+  sec: string;
+  ent: string;
+  tipo: string;
+  hitl: string;
+  per: string;
+  sev: string;
+  eje: string;
+  usu: string;
+}
+/** Lo que el usuario eligió al pulsar «Generar» / «Descargar». */
+export interface ReporteSeleccion {
+  tipo: ReporteTipo;
+  formatos: ReporteFormato[];
+  filtros: ReporteFiltros;
+  /** Registros estimados con esos filtros. */
+  barreras: number;
+  tramites: number;
+}
+export interface ReporteConteo {
+  nb: number;
+  nt: number;
+  cob: number;
 }

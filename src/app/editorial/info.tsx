@@ -8,11 +8,13 @@ export function InfoBtn({
   def,
   tone,
   size,
+  label,
 }: {
   k?: string;
   def?: Def | null;
   tone?: "dark";
   size?: "lg";
+  label?: string;
 }) {
   const d = def || DEFS[k];
   const [open, setOpen] = useState(false);
@@ -154,6 +156,7 @@ export function InfoBtn({
         className={
           "ibtn" +
           (size === "lg" ? " lg" : "") +
+          (label ? " ibtn-l" : "") +
           (tone === "dark" ? " on-dark" : "")
         }
         aria-label={"Definición: " + d.t}
@@ -182,6 +185,7 @@ export function InfoBtn({
         >
           <path d={I.info} />
         </svg>
+        {label ? <span>{label}</span> : null}
       </button>
       {pop}
     </>

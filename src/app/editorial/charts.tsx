@@ -465,3 +465,67 @@ export function NowBox({
     </div>
   );
 }
+
+/* Etiqueta al final de la barra: cifra + porcentaje en un recuadro de color aparte (el % es información adicional) */
+export const endChip = ({ x, y, width, height, value }: any, st: any, stack?: boolean) => {
+  const t = String(value),
+    i = t.indexOf(" · ");
+  if (i < 0)
+    return (
+      <text
+        x={x + width + 6}
+        y={y + height / 2}
+        dominantBaseline="central"
+        style={{ ...st, whiteSpace: "pre" }}
+        fill="var(--ink)"
+      >
+        {t}
+      </text>
+    );
+  const n = t.slice(0, i),
+    pc = t.slice(i + 3),
+    nw = n.length * 7.6,
+    cw = pc.length * 6.4 + 12,
+    x0 = x + width + 6,
+    cy = y + height / 2;
+  const cx = stack ? x0 : x0 + nw + 8,
+    ty = stack ? cy + 10 : cy,
+    ny = stack ? cy - 8 : cy;
+  return (
+    <g>
+      <text
+        x={x0}
+        y={ny}
+        dominantBaseline="central"
+        style={{ ...st, whiteSpace: "pre" }}
+        fill="var(--ink)"
+      >
+        {n}
+      </text>
+      <rect
+        x={cx}
+        y={ty - 9}
+        width={cw}
+        height={18}
+        rx={9}
+        fill="var(--primary)"
+        fillOpacity={0.12}
+      />
+      <text
+        x={cx + cw / 2}
+        y={ty}
+        textAnchor="middle"
+        dominantBaseline="central"
+        style={{
+          fontSize: 11.5,
+          fontWeight: 600,
+          fontFamily: "Inter, system-ui, sans-serif",
+          whiteSpace: "pre",
+        }}
+        fill="var(--primary)"
+      >
+        {pc}
+      </text>
+    </g>
+  );
+};

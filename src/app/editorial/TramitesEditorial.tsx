@@ -13,6 +13,7 @@ import {
   AX_XH0,
   axT,
   axisProps,
+  endChip,
   otrosNote,
   star,
   valAxis,
@@ -60,12 +61,14 @@ function TramitesBody({
   onSelectPais,
   onOpenTramite,
   onVerTodos,
+  onCosteo,
 }: {
   D: TramitesData;
   country: string;
   onSelectPais: (n: string) => void;
   onOpenTramite?: (id?: string) => void;
   onVerTodos?: () => void;
+  onCosteo?: () => void;
 }) {
   const nat = country !== "Todos";
   const [fs, setFs] = useState({
@@ -285,17 +288,7 @@ function TramitesBody({
     </div>
   );
   /* valor al final de la barra en una sola línea (sin partir «660 · 36 %») */
-  const endLbl = ({ x, y, width, height, value }) => (
-    <text
-      x={x + width + 6}
-      y={y + height / 2}
-      dominantBaseline="central"
-      style={{ ...lblStyle, whiteSpace: "pre" }}
-      fill="var(--ink)"
-    >
-      {value}
-    </text>
-  );
+  const endLbl = (o: any) => endChip(o, lblStyle, false);
   const Leg = (
     <div
       className="dislegend"
@@ -498,12 +491,14 @@ function TramitesBody({
         ],
         [
           Math.round((D.mip[0][1] / mipTot) * 100) + " %",
-          "de los trámites tiene una afectación alta a la MIPYME",
+          "de los trámites tiene una afectación alta a las MIPYMEs",
         ],
-        [
-          Math.round(D.cAct[0][1] * 100) + " %",
-          "del costo administrativo estimado corresponde a la Actividad estándar 1",
-        ],
+        ((m) => [
+          Math.round(m[1] * 100) + " %",
+          "del costo administrativo estimado corresponde a la actividad «" +
+            m[0].toLowerCase() +
+            "»",
+        ])(D.cAct.reduce((a, x) => (x[1] > a[1] ? x : a))),
       ]
     : [];
 
@@ -653,14 +648,18 @@ function TramitesBody({
                 <CardHead title="Costo estimado por actividad estándar" />
                 {hbarsOne(
                   cActRows,
-                  150,
+                  190,
                   "Costo estimado",
                   TR_G,
                   110,
                   "Actividad estándar",
                   "Costo estimado (millones de USD)",
                 )}
-                {otrosNote(cActRows.map((r) => r.k))}
+                <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                  <button className="btn" onClick={onCosteo} disabled={!onCosteo}>
+                    Ver más <Icon d={I.arrow} />
+                  </button>
+                </div>
               </section>
               <section className="card">
                 <CardHead title="Costos administrativos por usuario" />
@@ -689,7 +688,7 @@ function TramitesBody({
                 </p>
               </section>
               <section className="card">
-                <CardHead title="Afectación a la MIPYME" />
+                <CardHead title="Afectación a las MIPYMEs" />
                 <div className="mip">
                   <div
                     className="split"
@@ -717,7 +716,9 @@ function TramitesBody({
                           {k}
                         </span>
                         <b>{fmtInt(v)}</b>
-                        <span className="mp">{pct(v, mipTot)} %</span>
+                        <span className="mp">
+                          <span className="pchip">{pct(v, mipTot)} %</span>
+                        </span>
                       </li>
                     ))}
                   </ul>
@@ -989,7 +990,10 @@ function TramitesBody({
                           {s}
                         </span>
                         <b>
-                          {r.sev[i]} · {pct(r.sev[i], r.tot)} %
+                          {r.sev[i]}{" "}
+                          <span className="pchip">
+                            {pct(r.sev[i], r.tot)} %
+                          </span>
                         </b>
                       </React.Fragment>
                     ))}
@@ -1016,6 +1020,8 @@ export interface TramitesEditorialProps extends ScreenProps<TramitesData> {
   onOpenTramite?: (id?: string) => void;
   /** Botón "Ver todos los trámites". */
   onVerTodos?: () => void;
+  /** Botón "Ver más" de «Costo estimado por actividad estándar»: abre Costeo. */
+  onCosteo?: () => void;
 }
 
 /** Trámites con potencial de mejora: dónde se concentran, qué cargas generan y dónde actuar. */
@@ -1030,6 +1036,7 @@ export function TramitesEditorial({
   anios,
   onOpenTramite,
   onVerTodos,
+  onCosteo,
 }: TramitesEditorialProps) {
   const D = data ?? tramitesFixture(country);
   return (
@@ -1056,6 +1063,7 @@ export function TramitesEditorial({
         onSelectPais={onCountryChange}
         onOpenTramite={onOpenTramite}
         onVerTodos={onVerTodos}
+        onCosteo={onCosteo}
       />
     </PageShell>
   );

@@ -138,7 +138,9 @@ function PanoramaBody({ D, country }: { D: PanoramaData; country: string }) {
   const [topN, setTopN] = useState(10);
   const hlS = pinS;
   const [hlT, setHlT] = useState<any>(null);
-  const [ind, setInd] = useState("count");
+  const [ind, setInd] = useState(() =>
+    "age" in D.indicadores ? "age" : Object.keys(D.indicadores)[0],
+  );
   const one = country !== "Todos";
   const ci = D.paises.findIndex((c) => c.name === country);
   const years = D.years;

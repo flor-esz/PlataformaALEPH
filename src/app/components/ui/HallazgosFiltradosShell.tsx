@@ -8,7 +8,7 @@ import { C, HDR_BTN_PRIMARY, HDR_BTN_SECONDARY } from "../../theme";
 // solo se usan dentro del cuerpo de HallazgosFiltradosShell(), nunca en el
 // top-level de este módulo, así que el import estático es seguro (ver
 // comentario en theme.ts sobre el porqué).
-import { Header, BarraFiltrosBarreras, DescargarDropdown } from "../../App";
+import { Header, BarraFiltrosBarreras, DescargarDropdown, FEATURES } from "../../App";
 import type { View, Country, HojaExcel, ReporteEstrategicoData } from "../../App";
 
 // ─── Shell compartido de "Hallazgos filtrados" ─────────────────────────────
@@ -173,9 +173,11 @@ export function HallazgosFiltradosShell<T>({
         title="Hallazgos filtrados"
         actions={
           <>
+            {FEATURES.botonesDescargaFueraDeReportes && (
             <button style={HDR_BTN_PRIMARY} onClick={() => onNavigate({ screen: "reportes" })}>
               <Download size={13} /><span className="hidden sm:inline">Generar reporte</span><span className="sm:hidden">Reporte</span>
             </button>
+            )}
             {descargar ? (
               <DescargarDropdown
                 hojas={descargar.hojas}
@@ -188,9 +190,11 @@ export function HallazgosFiltradosShell<T>({
               // pasan `descargar` (ninguna variante de HallazgosFiltrados* usa
               // ya este fallback; queda para futuras pantallas que reusen el
               // shell sin cablearlo desde el día uno).
-              <button style={HDR_BTN_SECONDARY}>
-                Descargar <ChevronDown size={13} />
-              </button>
+              FEATURES.botonesDescargaFueraDeReportes && (
+                <button style={HDR_BTN_SECONDARY}>
+                  Descargar <ChevronDown size={13} />
+                </button>
+              )
             )}
           </>
         }

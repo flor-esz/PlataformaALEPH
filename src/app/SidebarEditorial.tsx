@@ -15,11 +15,28 @@
 import { useEffect, useState } from "react";
 import type React from "react";
 import {
-  LayoutDashboard, BarChart2, AlertTriangle, FileText, Globe, ChartBar,
-  ClipboardCheck, ClipboardList, Gauge, BookOpen, Settings, Users, Layers,
-  Database, History, LogOut, ChevronDown, ChevronLeft, X,
+  FileText, ClipboardCheck, ClipboardList, Gauge, BookOpen,
+  ChevronDown, ChevronLeft, X,
 } from "lucide-react";
 import type { View } from "./App";
+import { I } from "./editorial/icons";
+
+// Íconos del diseñador (los mismos trazos del prototipo, grosor 1.8). Mismo contrato que los de lucide
+// (`size`, `strokeWidth`), así `row()`/`group()` no cambian. Lo que no está en el prototipo sigue con lucide.
+const proto = (d: string): React.ElementType =>
+  function ProtoIcon({ size = 17, strokeWidth = 1.8 }: { size?: number; strokeWidth?: number }) {
+    return (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d={d} />
+      </svg>
+    );
+  };
+const IcTableros = proto(I.panorama), IcPanorama = proto(I.bars), IcBarreras = proto(I.barreras),
+  IcTramites = proto(I.tramites), IcCosteo = proto(I.impacto), IcIdr = proto(I.idr),
+  IcReportes = proto(I.reportes), IcAdmin = proto(I.settings), IcUsuarios = proto(I.users),
+  IcCatalogos = proto(I.layers), IcFuentes = proto(I.db), IcBitacora = proto(I.history),
+  IcSalir = proto(I.logout);
 import "../styles/sidebar-editorial.css";
 
 const DASHBOARD_SECTIONS = ["dashboard", "barreras", "tramites", "impacto-economico", "indice"];
@@ -75,13 +92,13 @@ export function SidebarEditorial({
 
   const row = (
     label: string, section: string, Icon: React.ElementType,
-    onClick?: () => void, forceActive?: boolean,
+    onClick?: () => void, forceActive?: boolean, child?: boolean,
   ) => {
     const active = forceActive !== undefined ? forceActive : activeSection === section;
     return (
       <button
         key={label}
-        className="edsb-sn"
+        className={"edsb-sn" + (child ? " edsb-child" : "")}
         aria-current={active ? "page" : undefined}
         aria-label={label}
         onClick={() => { setActiveSection(section); onClick?.(); }}
@@ -89,6 +106,7 @@ export function SidebarEditorial({
       >
         <span className="edsb-ico"><Icon size={17} strokeWidth={1.8} /></span>
         <span className="edsb-txt">{label}</span>
+        {child ? <span className="edsb-elbow" aria-hidden="true" /> : null}
       </button>
     );
   };
@@ -149,15 +167,15 @@ export function SidebarEditorial({
         <div className="edsb-label">Menú</div>
 
         {group(
-          "dash", "Dashboards", LayoutDashboard, dashboardsOpen,
+          "dash", "Dashboards", IcTableros, dashboardsOpen,
           DASHBOARD_SECTIONS.includes(activeSection),
           () => { setDashboardsOpen(!dashboardsOpen); if (!dashboardsOpen) nav(() => onNavigate({ screen: "panel-regional" })); },
           <>
-            {row("Panorama Regulatorio", "dashboard", BarChart2, () => nav(() => onNavigate({ screen: "panel-regional" })))}
-            {row("Barreras Regulatorias", "barreras", AlertTriangle, () => nav(() => onNavigate({ screen: "barreras" })))}
-            {row("Trámites con potencial de mejora", "tramites", FileText, () => nav(() => onNavigate({ screen: "tramites" })))}
-            {row("Impacto económico", "impacto-economico", Globe, () => nav(() => onNavigate({ screen: "impacto-economico" })))}
-            {row("Índice / IDR", "indice", ChartBar, () => nav(() => onNavigate({ screen: "indice" })))}
+            {row("Panorama Regulatorio", "dashboard", IcPanorama, () => nav(() => onNavigate({ screen: "panel-regional" })))}
+            {row("Barreras Regulatorias", "barreras", IcBarreras, () => nav(() => onNavigate({ screen: "barreras" })))}
+            {row("Trámites con potencial de mejora", "tramites", IcTramites, () => nav(() => onNavigate({ screen: "tramites" })))}
+            {row("Costeo", "impacto-economico", IcCosteo, () => nav(() => onNavigate({ screen: "impacto-economico" })), undefined, true)}
+            {row("Índice / IDR", "indice", IcIdr, () => nav(() => onNavigate({ screen: "indice" })))}
           </>,
         )}
 
@@ -172,21 +190,21 @@ export function SidebarEditorial({
           </>,
         )}
 
-        {row("Reportes", "reportes", ClipboardList, () => nav(() => onNavigate({ screen: "reportes" })))}
+        {row("Reportes", "reportes", IcReportes, () => nav(() => onNavigate({ screen: "reportes" })))}
         {features.documentacionMetodologia && row("Metodología", "documentacion", BookOpen, () => nav(() => onNavigate({ screen: "documentacion" })))}
 
         {userRole === "administrador" && (
           <>
             <div className="edsb-label">Gestión</div>
             {group(
-              "admin", "Administración", Settings, adminOpen,
+              "admin", "Administración", IcAdmin, adminOpen,
               activeSection === "administracion",
               () => { setAdminOpen(!adminOpen); if (!adminOpen) nav(() => onNavigate({ screen: "administracion", tab: "usuarios" })); },
               <>
-                {row("Usuarios", "administracion", Users, () => nav(() => onNavigate({ screen: "administracion", tab: "usuarios" })), isAdminTab("usuarios"))}
-                {row("Catálogos", "administracion", Layers, () => nav(() => onNavigate({ screen: "administracion", tab: "catalogos" })), isAdminTab("catalogos"))}
-                {row("Fuentes", "administracion", Database, () => nav(() => onNavigate({ screen: "administracion", tab: "fuentes" })), isAdminTab("fuentes"))}
-                {row("Bitácora", "administracion", History, () => nav(() => onNavigate({ screen: "administracion", tab: "bitacora" })), isAdminTab("bitacora"))}
+                {row("Usuarios", "administracion", IcUsuarios, () => nav(() => onNavigate({ screen: "administracion", tab: "usuarios" })), isAdminTab("usuarios"))}
+                {row("Catálogos", "administracion", IcCatalogos, () => nav(() => onNavigate({ screen: "administracion", tab: "catalogos" })), isAdminTab("catalogos"))}
+                {row("Fuentes", "administracion", IcFuentes, () => nav(() => onNavigate({ screen: "administracion", tab: "fuentes" })), isAdminTab("fuentes"))}
+                {row("Bitácora", "administracion", IcBitacora, () => nav(() => onNavigate({ screen: "administracion", tab: "bitacora" })), isAdminTab("bitacora"))}
               </>,
             )}
           </>
@@ -202,7 +220,7 @@ export function SidebarEditorial({
             className="edsb-sn" aria-label="Salir" onClick={onLogout}
             onMouseEnter={show("Salir")} onMouseLeave={hide} onFocus={show("Salir")} onBlur={hide}
           >
-            <span className="edsb-ico"><LogOut size={17} strokeWidth={1.8} /></span>
+            <span className="edsb-ico"><IcSalir size={17} strokeWidth={1.8} /></span>
             <span className="edsb-txt">Salir</span>
           </button>
         </div>

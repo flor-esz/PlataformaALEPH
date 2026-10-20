@@ -15,8 +15,8 @@ import type {
 } from "./types";
 import { fmtInt } from "./format";
 
-const YEARS = [2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024];
-const PAISES_BASE = [
+export const YEARS = [2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024];
+export const PAISES_BASE = [
   { id: "AR", name: "Argentina", now: 6432 },
   { id: "BO", name: "Bolivia", now: 2981 },
   { id: "CL", name: "Chile", now: 4765 },
@@ -47,7 +47,7 @@ function growth(final: number, startRatio: number, seed: number): number[] {
 const seriePais = PAISES_BASE.map((c, i) =>
   growth(c.now, [0.58, 0.66, 0.6, 0.52, 0.55, 0.63][i], 1.3 + i * 0.7),
 );
-const SECTORES: [string, number][] = [
+export const SECTORES: [string, number][] = [
   ["Comercio", 2210],
   ["Energía", 1340],
   ["Transporte", 1280],
@@ -66,7 +66,7 @@ const sectorSeries = SECTORES.map((s, i) =>
     2 + i * 0.5,
   ),
 );
-const TIPOS: [string, number][] = [
+export const TIPOS: [string, number][] = [
   ["Ley", 2210],
   ["Decreto", 1620],
   ["Resolución", 780],
@@ -75,24 +75,23 @@ const TIPOS: [string, number][] = [
 const tipoSeries = TIPOS.map((s, i) =>
   growth(s[1], [0.5, 0.55, 0.45, 0.6, 0.65, 0.7][i], 1 + i * 0.9),
 );
+/** Las ocho actividades estándar del Costeo Estándar (sin «Otras actividades»): [nombre, peso]. */
+export const IMP_ACT: [string, number][] = [
+  ["Identificación y comprensión de requisitos", 0.18],
+  ["Generación de nueva información", 0.14],
+  ["Recolección de información preexistente", 0.12],
+  ["Reuniones con personal interno", 0.08],
+  ["Llenado de formatos y/o elaboración de solicitudes y reportes", 0.16],
+  ["Contratación y reuniones con servicios externos", 0.1],
+  ["Creación y administración de archivos de respaldo", 0.07],
+  ["Pagos, espera en oficinas públicas y traslados", 0.15],
+];
 const INDICADORES = {
-  count: {
-    label: "Cantidad de regulaciones vigentes",
-    unit: "regulaciones",
-    decimals: 0,
-    valores: PAISES_BASE.map((c) => c.now),
-  },
   age: {
     label: "Edad promedio del acervo regulatorio",
     unit: "años",
     decimals: 1,
     valores: [18.4, 14.1, 16.9, 15.2, 12.8, 13.5],
-  },
-  words: {
-    label: "Cantidad total de palabras",
-    unit: "millones de palabras",
-    decimals: 1,
-    valores: [41.2, 17.8, 29.6, 57.3, 31.9, 19.4],
   },
   length: {
     label: "Longitud promedio de las regulaciones",
@@ -423,7 +422,7 @@ export function barrerasFixture(country: string): BarrerasData {
 
 // ── Trámites ────────────────────────────────────────────────────────────────
 type S3 = [number, number, number];
-const TR_PAIS: Record<string, [number, S3, number, number]> = {
+export const TR_PAIS: Record<string, [number, S3, number, number]> = {
   Argentina: [320, [110, 150, 60], 52, 13],
   Bolivia: [280, [90, 130, 60], 46, 12],
   Chile: [310, [115, 138, 57], 51, 13],
@@ -431,7 +430,7 @@ const TR_PAIS: Record<string, [number, S3, number, number]> = {
   Perú: [350, [140, 160, 50], 57, 14],
   Panamá: [307, [125, 147, 35], 50, 13],
 };
-const TR_REG = {
+export const TR_REG = {
   tot: 1842,
   ent: 320,
   sec: 14,
@@ -659,12 +658,7 @@ export function tramitesFixture(country: string): TramitesData {
     acc: sc(TR_CO.acc),
     afe: sc(TR_CO.afe),
     mip: sc(TR_CO.mip),
-    cAct: [
-      ["Actividad estándar 1", 0.346, 0.4],
-      ["Actividad estándar 2", 0.253, 0.3],
-      ["Actividad estándar 3", 0.214, 0.18],
-      ["Otras actividades", 0.187, 0.12],
-    ],
+    cAct: IMP_ACT.map(([k, v]) => [k, v, v] as [string, number, number]),
     cUsu: [
       ["Empresarial", 0.5],
       ["Ciudadano", 0.323],

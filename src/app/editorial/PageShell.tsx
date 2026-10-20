@@ -15,10 +15,19 @@ export interface PageShellProps {
   intro: string;
   infoKey: string;
   stats: HeroStat[];
-  country: string;
-  paises: PaisRef[];
-  onCountryChange: (c: string) => void;
+  /** Pantallas con nivel regional / por país (Panorama, Barreras, Trámites). Las demás no lo pasan. */
+  country?: string;
+  paises?: PaisRef[];
+  onCountryChange?: (c: string) => void;
   filtros?: HeroFilter[];
+  /** Pantallas sin nivel regional / por país (Costeo, IDR, Reportes): sin «Vista …» ni país en la ruta. */
+  sinNivel?: boolean;
+  /** Controles propios del encabezado (reemplazan «Nivel de visualización» y país). `null` = sin controles. */
+  controls?: React.ReactNode | null;
+  /** Ruta antes del título (por defecto «Tableros»). */
+  rastro?: string[];
+  /** Contenido del pie (por defecto: última actualización y años incluidos). */
+  pie?: React.ReactNode;
   /** Filtros de sector del encabezado cuando no se pasa `filtros` (el prototipo los muestra
    *  en Barreras regional y en Barreras/Trámites por país). Sin datos todavía: solo "Todos". */
   sectorFiltro?: "sector" | "sector+subsector";
@@ -28,7 +37,13 @@ export interface PageShellProps {
   children: React.ReactNode;
 }
 
-export function PageShell(p: PageShellProps) {
+export function PageShell(props: PageShellProps) {
+  const p = {
+    ...props,
+    country: props.country ?? "Todos",
+    paises: props.paises ?? [],
+    onCountryChange: props.onCountryChange ?? (() => {}),
+  };
   const regional = p.country === "Todos";
   const [ultimoPais, setUltimoPais] = useState(
     regional ? p.paises[0]?.name : p.country,
@@ -37,6 +52,7 @@ export function PageShell(p: PageShellProps) {
     setUltimoPais(c);
     p.onCountryChange(c);
   };
+  const conNivel = !p.sinNivel;
 
   const filtrosHero: HeroFilter[] =
     p.filtros ??
@@ -57,10 +73,14 @@ export function PageShell(p: PageShellProps) {
       <div className="main">
         <header className="top">
           <nav className="crumbs" aria-label="Ruta">
-            <span>Tableros</span>
-            <span>/</span>
+            {(p.rastro ?? ["Tableros"]).map((r) => (
+              <React.Fragment key={r}>
+                <span>{r}</span>
+                <span>/</span>
+              </React.Fragment>
+            ))}
             <b>{p.eyebrow}</b>
-            {!regional && (
+            {conNivel && !regional && (
               <>
                 <span>/</span>
                 <b>{p.country}</b>
@@ -96,7 +116,9 @@ export function PageShell(p: PageShellProps) {
               >
                 <div>
                   <div className="eyebrow">
-                    {p.eyebrow} · Vista {regional ? "regional" : "por país"}
+                    {p.eyebrow}
+                    {conNivel &&
+                      ` · Vista ${regional ? "regional" : "por país"}`}
                   </div>
                   <h1>
                     <span className="lite">{p.t1} </span>
@@ -105,57 +127,64 @@ export function PageShell(p: PageShellProps) {
                   </h1>
                   <p className="intro">{p.intro}</p>
                 </div>
-                <div className="controls">
-                  <div
-                    className="ctlrow on-dark"
-                    role="group"
-                    aria-label="Filtros de la vista"
-                  >
-                    <div className="cg">
-                      <span className="clbl">Nivel de visualización</span>
-                      <Fseg
-                        tone="dark"
-                        v={regional ? "Regional" : "Por país"}
-                        items={["Regional", "Por país"]}
-                        label="Nivel de visualización"
-                        set={(k) =>
-                          k === "Regional"
-                            ? p.onCountryChange("Todos")
-                            : pickPais(ultimoPais ?? p.paises[0]?.name)
-                        }
-                      />
-                    </div>
-                    {!regional && (
+                {p.controls === null ? null : p.controls !== undefined ? (
+                  <div className="controls">{p.controls}</div>
+                ) : (
+                  <div className="controls">
+                    <div
+                      className="ctlrow on-dark"
+                      role="group"
+                      aria-label="Filtros de la vista"
+                    >
                       <div className="cg">
-                        <span className="clbl">País</span>
-                        <Dd
+                        <span className="clbl">Nivel de visualización</span>
+                        <Fseg
                           tone="dark"
-                          value={p.country}
-                          onChange={pickPais}
-                          options={p.paises.map((c) => [c.name, c.name])}
-                          label="Selecciona un país"
+                          v={regional ? "Regional" : "Por país"}
+                          items={["Regional", "Por país"]}
+                          label="Nivel de visualización"
+                          set={(k) =>
+                            k === "Regional"
+                              ? p.onCountryChange("Todos")
+                              : pickPais(ultimoPais ?? p.paises[0]?.name)
+                          }
                         />
                       </div>
-                    )}
-                    {filtrosHero.map((f) => (
-                      <div className="cg" key={f.label}>
-                        <span className="clbl">{f.label}</span>
-                        <Dd
-                          tone="dark"
-                          value={f.value}
-                          onChange={f.onChange}
-                          options={f.options}
-                          label={f.label}
-                        />
-                      </div>
-                    ))}
+                      {!regional && (
+                        <div className="cg">
+                          <span className="clbl">País</span>
+                          <Dd
+                            tone="dark"
+                            value={p.country}
+                            onChange={pickPais}
+                            options={p.paises.map((c) => [c.name, c.name])}
+                            label="Selecciona un país"
+                          />
+                        </div>
+                      )}
+                      {filtrosHero.map((f) => (
+                        <div className="cg" key={f.label}>
+                          <span className="clbl">{f.label}</span>
+                          <Dd
+                            tone="dark"
+                            value={f.value}
+                            onChange={f.onChange}
+                            options={f.options}
+                            label={f.label}
+                          />
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
               <dl className="klist">
                 {p.stats.map((s) => (
                   <div key={s[1]}>
-                    <dt>{s[1]}</dt>
+                    <dt>
+                      {s[1]}
+                      {s[2] ? <InfoBtn k={s[2]} tone="dark" /> : null}
+                    </dt>
                     <dd>{s[0]}</dd>
                   </div>
                 ))}
@@ -169,12 +198,20 @@ export function PageShell(p: PageShellProps) {
             <div className="zi">
               <div className="foot-note">
                 <Icon d={I.cal} />
-                {p.ultimaActualizacion && (
-                  <span>Última actualización: {p.ultimaActualizacion}</span>
-                )}
-                {p.ultimaActualizacion && p.anios && <span className="sep" />}
-                {p.anios && (
-                  <span>Años incluidos en el análisis: {p.anios}</span>
+                {p.pie !== undefined ? (
+                  p.pie
+                ) : (
+                  <>
+                    {p.ultimaActualizacion && (
+                      <span>Última actualización: {p.ultimaActualizacion}</span>
+                    )}
+                    {p.ultimaActualizacion && p.anios && (
+                      <span className="sep" />
+                    )}
+                    {p.anios && (
+                      <span>Años incluidos en el análisis: {p.anios}</span>
+                    )}
+                  </>
                 )}
                 <a href="#notas">Notas metodológicas →</a>
               </div>

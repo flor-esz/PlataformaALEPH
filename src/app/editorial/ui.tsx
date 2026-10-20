@@ -166,12 +166,14 @@ export function Fseg({
   items,
   label,
   tone,
+  soon,
 }: {
   v: string;
   set: (v: string) => void;
   items: string[];
   label: string;
   tone?: "dark";
+  soon?: string[];
 }) {
   return (
     <div
@@ -179,16 +181,31 @@ export function Fseg({
       role="group"
       aria-label={label}
     >
-      {items.map((k) => (
-        <button
-          type="button"
-          key={k}
-          aria-pressed={v === k}
-          onClick={() => set(k)}
-        >
-          {k}
-        </button>
-      ))}
+      {items.map((k) =>
+        soon && soon.includes(k) ? (
+          <button
+            type="button"
+            key={k}
+            className="is-soon"
+            aria-pressed="false"
+            aria-disabled="true"
+            title="Próximamente"
+            onClick={(e) => e.preventDefault()}
+          >
+            {k}
+            <small>próximamente</small>
+          </button>
+        ) : (
+          <button
+            type="button"
+            key={k}
+            aria-pressed={v === k}
+            onClick={() => set(k)}
+          >
+            {k}
+          </button>
+        ),
+      )}
     </div>
   );
 }

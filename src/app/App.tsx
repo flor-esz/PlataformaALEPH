@@ -48,9 +48,9 @@ import {
 // que theme.ts evita de raíz).
 import { C, HDR_BTN_PRIMARY, HDR_BTN_SECONDARY, HDR_BTN_PILL } from "./theme";
 import { SidebarEditorial } from "./SidebarEditorial";
-import { PanoramaEditorial, BarrerasEditorial, TramitesEditorial } from "./editorial";
+import { PanoramaEditorial, BarrerasEditorial, TramitesEditorial, CosteoEditorial, IdrEditorial, ReportesEditorial } from "./editorial";
 import { barrerasFixture, tramitesFixture } from "./editorial/fixtures";
-import type { BarrerasData, TramitesData } from "./editorial";
+import type { BarrerasData, TramitesData, ReporteSeleccion, ReportesInicial } from "./editorial";
 // PanelRegional importa { Header, KpiCard, ... } de vuelta desde este archivo
 // (mismo ciclo App.tsx <-> otros módulos documentado arriba), pero nunca los
 // usa en el top-level de su módulo -- solo dentro del cuerpo de la función
@@ -61,11 +61,6 @@ import PanelRegional from "./PanelRegional";
 // Mismo criterio que PanelRegional para { Header, KpiCard, COUNTRY_TRAMITES_
 // DATA, ... } -- ImpactoEconomico.tsx solo los usa dentro del cuerpo de su
 // componente, nunca en el top-level de su módulo. Import estático seguro.
-import ImpactoEconomico from "./ImpactoEconomico";
-// Mismo criterio que PanelRegional / ImpactoEconomico -- IndiceIDR.tsx solo
-// usa lo que importa de vuelta desde este archivo dentro del cuerpo de
-// IndiceIDR(), nunca en el top-level de su módulo. Import estático seguro.
-import IndiceIDR from "./IndiceIDR";
 // Mismo criterio -- HallazgosFiltrados.tsx solo usa Header dentro del cuerpo
 // de HallazgosFiltrados(), nunca en el top-level de su módulo. Import
 // estático seguro. instrumentosMuestra.ts no importa nada de este archivo
@@ -139,6 +134,9 @@ export function useIsMobile() {
 // nuevo acá -- nunca borrar ni comentar el código.
 export const ENTREGA_ACTUAL: 1 | 2 | 3 = 1;
 export const FEATURES = {
+  // Decisión del BID (entrega 3): «Generar reporte» y «Descargar» existen solo en Reportes. En false se ocultan en el
+  // resto de las pantallas (fichas de detalle, Hallazgos filtrados…); en true vuelven como antes.
+  botonesDescargaFueraDeReportes: false,
   // Entrega 2
   tablaExploratoriaInstrumentos: ENTREGA_ACTUAL >= 2, // Req-28
   descargaExcelPanelPais: ENTREGA_ACTUAL >= 2, // Req-29
@@ -2193,6 +2191,63 @@ function barrerasEditorialData(country: string): BarrerasData {
   return filas.length ? { ...base, tabla: filas } : base;
 }
 
+// ── Reportes (pantalla editorial) ─────────────────────────────────────────────
+// Puente entre la pantalla presentacional ReportesEditorial y las funciones reales de este archivo:
+// el Excel sale de exportarHallazgosExcel() y el PDF de ReportePDFScreen / ReporteEstrategicoScreen
+// (view "reporte-pdf"). Los filtros del prototipo se traducen a FiltrosHallazgos; los que dev aún
+// no tiene (entidad, periodo, estado HITL, eje, usuario) se muestran pero no filtran todavía.
+const SEV_REPORTE: Record<string, string[]> = { Alta: ["Crítico", "Alto"], Media: ["Mediano"], Baja: ["Bajo"] };
+
+function reporteInicial(prefill?: ReportesPrefill): ReportesInicial | undefined {
+  if (!prefill) return undefined;
+  const sev = prefill.severidades?.[0];
+  return {
+    tipo: "operativo",
+    filtros: {
+      ...(prefill.pais && prefill.pais !== "Todos" ? { pais: prefill.pais } : {}),
+      ...(prefill.sectores?.[0] ? { sec: prefill.sectores[0] } : {}),
+      ...(prefill.tipoHallazgo ? { tipo: prefill.tipoHallazgo === "carga" ? "Carga" : "Distorsión" } : {}),
+      ...(sev ? { sev: sev === "Crítico" || sev === "Alto" ? "Alta" : sev === "Mediano" ? "Media" : "Baja" } : {}),
+    },
+  };
+}
+
+function generarReporte(sel: ReporteSeleccion, navigate: (v: View) => void): string {
+  const f = sel.filtros;
+  const filtros: FiltrosHallazgos = {
+    ...FILTROS_HALLAZGOS_DEFAULT,
+    pais: f.pais as Country,
+    sectores: f.sec === "Todos" ? [] : [f.sec],
+    severidades: f.sev === "Todas" ? [] : (SEV_REPORTE[f.sev] ?? []),
+  };
+  const paisLabel = f.pais === "Todos" ? "Todos los países" : f.pais;
+  const hechos: string[] = [];
+  const pendientes: string[] = [];
+  const tipoHallazgo: "distorsion" | "carga" = sel.tipo === "xtra" || (sel.tipo === "operativo" && f.tipo === "Carga") ? "carga" : "distorsion";
+  for (const fm of sel.formatos) {
+    if (fm === "Excel") {
+      const items = tipoHallazgo === "distorsion" ? filtrarBarreras(filtros) : filtrarTramites(filtros);
+      if (items.length === 0) pendientes.push("Excel (ningún registro con esos filtros)");
+      else { void exportarHallazgosExcel(tipoHallazgo, items, paisLabel); hechos.push("Excel"); }
+    } else if (fm === "PDF") {
+      hechos.push("PDF");
+    } else {
+      pendientes.push(fm + " (aún no disponible)");
+    }
+  }
+  if (sel.formatos.includes("PDF")) {
+    const ctx = sel.tipo === "estrategico"
+      ? { tipo: "estrategico", pais: f.pais }
+      : {
+          tipo: tipoHallazgo, filtrosActivos: filtros, paisLabel,
+          sectoresLabel: f.sec === "Todos" ? "Todos los sectores" : f.sec,
+          periodo: f.per, fecha: new Date().toLocaleString("es-BO"),
+        };
+    navigate({ screen: "reporte-pdf", context: JSON.stringify(ctx) });
+  }
+  return (hechos.length ? "Listo: " + hechos.join(" + ") + "." : "") + (pendientes.length ? " Pendiente: " + pendientes.join("; ") + "." : "");
+}
+
 function tramitesEditorialData(country: string): TramitesData {
   const base = tramitesFixture(country);
   if (country === "Todos") return base;
@@ -4000,7 +4055,11 @@ export function KpiCard({ label, value, valueSuffix, sub, valueColor, tooltip, o
 // pantalla completa cortada por página (exportarVistaPdf, descartada);
 // ahora renderiza ReporteEstrategicoPaper fuera de pantalla y lo pagina por
 // bloques con exportarReporteEstrategicoPdf (ver esa función, más arriba).
-export function DescargarDropdown({
+// Oculto fuera de Reportes (ver FEATURES.botonesDescargaFueraDeReportes).
+export function DescargarDropdown(props: React.ComponentProps<typeof DescargarDropdownImpl>) {
+  return FEATURES.botonesDescargaFueraDeReportes ? <DescargarDropdownImpl {...props} /> : null;
+}
+function DescargarDropdownImpl({
   hojas,
   filtrosActivos,
   nombreArchivoBase,
@@ -4638,9 +4697,11 @@ function CountryDashboard({ country, onCountryChange, onNavigate }: { country: s
           como las otras pantallas. CountryDashboard no declara ningún
           useState de filtro propio (sector/entidad/etc.), así que el único
           dato real que hay para precargar es el país actual. */}
+      {FEATURES.botonesDescargaFueraDeReportes && (
       <button style={HDR_BTN_PRIMARY} onClick={() => onNavigate({ screen: "reportes", prefill: { pais: country as Country } })}>
         <Download size={13} /><span className="hidden sm:inline">Generar reporte</span><span className="sm:hidden">Reporte</span>
       </button>
+      )}
       {/* "Tabla activa" de esta pantalla = fuentesTrazabilidad (la única con
           <table> real, ver FuentesTrazabilidadTable más abajo). Único filtro
           real de esta pantalla es el país (sin useState de filtro propio,
@@ -5388,9 +5449,11 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
               {FEATURES.documentacionMetodologia && (
                 <button style={HDR_BTN_PILL} onClick={() => onNavigate({ screen: "documentacion" })}>Ver metodología</button>
               )}
+              {FEATURES.botonesDescargaFueraDeReportes && (
               <button style={HDR_BTN_PRIMARY} onClick={() => onNavigate({ screen: "reportes", prefill: reportesPrefill })}>
                 <ExternalLink size={13} /><span className="hidden sm:inline">Generar reporte</span><span className="sm:hidden">Reporte</span>
               </button>
+              )}
               <DescargarDropdown
                 hojas={[hojaResumenBar, hojaClasificacionBar, hojaJerarquiaBar, hojaTopBarrerasReg]}
                 filtrosActivos={filtrosActivosBarreras}
@@ -5722,9 +5785,11 @@ function BarrerasScreen({ initialSector, country = "Bolivia", onCountryChange, o
                   {FEATURES.documentacionMetodologia && (
                     <button style={HDR_BTN_PILL} onClick={() => onNavigate({ screen: "documentacion" })}>Ver metodología</button>
                   )}
+                  {FEATURES.botonesDescargaFueraDeReportes && (
                   <button style={HDR_BTN_PRIMARY} onClick={() => onNavigate({ screen: "reportes", prefill: reportesPrefill })}>
                     <ExternalLink size={13} /><span className="hidden sm:inline">Generar reporte</span><span className="sm:hidden">Reporte</span>
                   </button>
+                  )}
                   <DescargarDropdown
                     hojas={[hojaResumenBarPais, hojaClasificacionBarPais, hojaJerarquiaBarPais, FEATURES.impactoEconomicoBarrerasPais && hojaCanalesBarPais, FEATURES.accionMejoraSugeridaBarrerasPais && hojaAccionMejoraBarPais, hojaTopBarrerasPais].filter(Boolean)}
                     filtrosActivos={filtrosActivosBarPais}
@@ -6137,9 +6202,11 @@ function BarreraDetail({ id, onNavigate, userRole, retroGobiernoOverrides, onGua
         title={barrera.titulo}
         actions={
           <>
+            {FEATURES.botonesDescargaFueraDeReportes && (
             <button style={HDR_BTN_PRIMARY} onClick={() => onNavigate({ screen: "reportes", prefill: { tipoHallazgo: "distorsion", pais: barrera.pais, sectores: [barrera.sector] } })}>
               <Download size={13} /><span className="hidden sm:inline">Generar reporte</span><span className="sm:hidden">Reporte</span>
             </button>
+            )}
             {FEATURES.descargaFichaBarrera && (
             <DescargarDropdown
               hojas={[{
@@ -6679,9 +6746,11 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
               {FEATURES.documentacionMetodologia && (
                 <button style={HDR_BTN_PILL} onClick={() => onNavigate({ screen: "documentacion" })}>Ver metodología</button>
               )}
+              {FEATURES.botonesDescargaFueraDeReportes && (
               <button style={HDR_BTN_PRIMARY} onClick={() => onNavigate({ screen: "reportes", prefill: reportesPrefill })}>
                 <ExternalLink size={13} /><span className="hidden sm:inline">Generar reporte</span><span className="sm:hidden">Reporte</span>
               </button>
+              )}
               <DescargarDropdown
                 hojas={[hojaResumen, hojaTramitesPorPais, hojaEntradaPorPais, hojaTipoUsuario, hojaPorEntidad, FEATURES.tablaPrioritariaTramites && hojaTramitesPrioritarios].filter(Boolean)}
                 filtrosActivos={[]}
@@ -7089,9 +7158,11 @@ function TramitesScreen({ country = "Bolivia", onCountryChange, onNavigate }: { 
                 {FEATURES.documentacionMetodologia && (
                   <button style={HDR_BTN_PILL} onClick={() => onNavigate({ screen: "documentacion" })}>Ver metodología</button>
                 )}
+                {FEATURES.botonesDescargaFueraDeReportes && (
                 <button style={HDR_BTN_PRIMARY} onClick={() => onNavigate({ screen: "reportes", prefill: reportesPrefill })}>
                   <ExternalLink size={13} /><span className="hidden sm:inline">Generar reporte</span><span className="sm:hidden">Reporte</span>
                 </button>
+                )}
                 <DescargarDropdown
                   hojas={[hojaResumen, hojaCargaPorEje, hojaTopEntidades, hojaEtapaCiclo, FEATURES.impactoAccionTramitesPais && hojaMipyme, hojaTipoUsuario, FEATURES.impactoAccionTramitesPais && hojaAccionMejora, FEATURES.impactoAccionTramitesPais && hojaAfectaciones, FEATURES.tablaPrioritariaTramites && hojaTramitesPrioritarios].filter(Boolean)}
                   filtrosActivos={filtrosActivosExcel}
@@ -7418,12 +7489,16 @@ function TramiteDetail({ id, onNavigate, userRole, retroGobiernoOverrides, onGua
         title={tramite.nombre}
         actions={
           <>
+            {FEATURES.botonesDescargaFueraDeReportes && (
             <button style={HDR_BTN_PRIMARY} onClick={() => onNavigate({ screen: "reportes", prefill: { tipoHallazgo: "carga", pais: tramite.pais, sectores: [tramite.sector] } })}>
               <Download size={13} /><span className="hidden sm:inline">Generar reporte</span><span className="sm:hidden">Reporte</span>
             </button>
+            )}
+            {FEATURES.botonesDescargaFueraDeReportes && (
             <button style={HDR_BTN_SECONDARY}>
               Descargar <ChevronDown size={13} />
             </button>
+            )}
           </>
         }
       />
@@ -7620,12 +7695,16 @@ function DistorsionDetail({ id, onNavigate }: { id: string; onNavigate: (v: View
         title={d.nombre}
         actions={
           <>
+            {FEATURES.botonesDescargaFueraDeReportes && (
             <button style={HDR_BTN_PRIMARY} onClick={() => onNavigate({ screen: "reportes", prefill: { tipoHallazgo: "distorsion", pais: tramite?.pais, sectores: tramite?.sector ? [tramite.sector] : [] } })}>
               <Download size={13} /><span className="hidden sm:inline">Generar reporte</span><span className="sm:hidden">Reporte</span>
             </button>
+            )}
+            {FEATURES.botonesDescargaFueraDeReportes && (
             <button style={HDR_BTN_SECONDARY}>
               Descargar <ChevronDown size={13} />
             </button>
+            )}
           </>
         }
       />
@@ -9467,6 +9546,8 @@ const ANEXO_METODOLOGICO_DATA: ReporteEstrategicoData = {
 };
 
 // ─── Reportes ─────────────────────────────────────────────────────────────────
+// Pantalla anterior de configuración: ya no se muestra (la reemplaza ReportesEditorial, ver renderView).
+// Se conserva mientras el BID cierra la revisión de Reportes; se puede borrar sin más cambios.
 function ReportesScreen({ prefill, onNavigate }: { prefill?: ReportesPrefill; onNavigate: (v: View) => void }) {
   const COUNTRIES: Country[] = ["Todos", "Argentina", "Bolivia", "Chile", "Ecuador", "Perú"];
   const CORPUS_MIN = "2015-01";
@@ -11344,6 +11425,7 @@ function AppInner() {
   const applyViewSideEffects = (v: View) => {
     if (v.screen === "panel-regional") setActiveSection("dashboard");
     if (v.screen === "impacto-economico") setActiveSection("impacto-economico");
+    if (v.screen === "indice") setActiveSection("indice");
     if (v.screen === "country-dashboard") { setActiveSection("dashboard"); setActiveCountry(v.country as Country); }
     if (v.screen === "barreras" || v.screen === "barrera-detail") setActiveSection("barreras");
     if (v.screen === "tramites" || v.screen === "tramite-detail") setActiveSection("tramites");
@@ -11480,14 +11562,18 @@ function AppInner() {
   const renderView = () => {
     switch (view.screen) {
       case "panel-regional": return <PanoramaEditorial country="Todos" onCountryChange={cambiarPaisPanorama} />;
-      case "impacto-economico": return <ImpactoEconomico country={activeCountry} onCountryChange={c => setActiveCountry(c)} onNavigate={navigate} />;
+      case "impacto-economico": return <CosteoEditorial
+        tramiteId={nombre => ALL_TRAMITES.find(t => t.nombre === nombre)?.id}
+        onOpenTramite={id => navigate({ screen: "tramite-detail", id })}
+        onVerTodos={() => navigate({ screen: "tramites" })}
+      />;
       case "country-dashboard": return <PanoramaEditorial country={view.country} onCountryChange={cambiarPaisPanorama} />;
       case "barreras": return <BarrerasEditorial country={activeCountry} data={barrerasEditorialData(activeCountry)} onCountryChange={c => { setActiveCountry(c as Country); window.history.replaceState(null, "", BASE + viewToUrl(view, c as Country)); }} onOpenBarrera={id => id && navigate({ screen: "barrera-detail", id })} />;
       case "barrera-detail": return <BarreraDetail id={view.id} onNavigate={navigate} userRole={userRole} retroGobiernoOverrides={retroGobiernoOverrides} onGuardarRetroGobierno={guardarRetroGobierno} />;
-      case "tramites": return <TramitesEditorial country={activeCountry} data={tramitesEditorialData(activeCountry)} onCountryChange={c => { setActiveCountry(c as Country); window.history.replaceState(null, "", BASE + viewToUrl(view, c as Country)); }} onOpenTramite={id => id && navigate({ screen: "tramite-detail", id })} />;
+      case "tramites": return <TramitesEditorial country={activeCountry} data={tramitesEditorialData(activeCountry)} onCountryChange={c => { setActiveCountry(c as Country); window.history.replaceState(null, "", BASE + viewToUrl(view, c as Country)); }} onOpenTramite={id => id && navigate({ screen: "tramite-detail", id })} onCosteo={() => navigate({ screen: "impacto-economico" })} />;
       case "tramite-detail": return <TramiteDetail id={view.id} onNavigate={navigate} userRole={userRole} retroGobiernoOverrides={retroGobiernoOverrides} onGuardarRetroGobierno={guardarRetroGobierno} />;
       case "distorsion-detail": return <DistorsionDetail id={view.id} onNavigate={navigate} />;
-      case "indice": return <IndiceIDR country={activeCountry} onCountryChange={c => setActiveCountry(c)} onNavigate={navigate} />;
+      case "indice": return <IdrEditorial />;
       case "hallazgos-filtrados": {
         // Label legible por cada key de filtro soportada -- "jerarquia" y
         // "estadoProcesamiento" llegan de un clic en gráfica de PanelRegional.tsx;
@@ -11659,7 +11745,11 @@ function AppInner() {
         if (adminTab === "bitacora") return <AdminBitacoraScreen />;
         return <AdminUsuariosScreen />;
       }
-      case "reportes": return <ReportesScreen prefill={(view as { screen: "reportes"; prefill?: ReportesPrefill }).prefill} onNavigate={navigate} />;
+      case "reportes": return <ReportesEditorial
+        key={JSON.stringify((view as { screen: "reportes"; prefill?: ReportesPrefill }).prefill ?? null)}
+        inicial={reporteInicial((view as { screen: "reportes"; prefill?: ReportesPrefill }).prefill)}
+        onGenerar={sel => generarReporte(sel, navigate)}
+      />;
       case "reporte-pdf": return <ReportePDFScreen context={(view as { screen: "reporte-pdf"; context?: string }).context} onNavigate={navigate} />;
       case "documentacion": return <DocumentacionScreen />;
       case "revision-repositorio":

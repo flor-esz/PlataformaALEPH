@@ -80,7 +80,7 @@ export const DEFS: Record<string, Def> = {
     how: "Cada porción es un canal; el centro muestra el total. Se ordenan de mayor a menor.",
   },
   jer: {
-    t: "Jerarquía normativa",
+    t: "Tipo de regulación",
     d: "Tipo de regulación donde se identifica la barrera.",
     items: TIPO_ITEMS,
     how: "Se ordenan de mayor a menor número de barreras; cada tipo conserva su color en toda la plataforma.",
@@ -97,7 +97,7 @@ export const DEFS: Record<string, Def> = {
   },
   sec1: {
     t: "Dónde se concentran las barreras",
-    d: "Compara cómo se reparten las barreras según canal de transmisión, jerarquía normativa, sector económico y entidad emisora.",
+    d: "Compara cómo se reparten las barreras según canal de transmisión, tipo de regulación, sector económico y entidad emisora.",
     how: "Cada gráfica tiene sus propios filtros.",
   },
   sec2: {
@@ -208,12 +208,12 @@ export const DEFS: Record<string, Def> = {
     how: "Un trámite puede generar más de un tipo de carga.",
   },
   bmip: {
-    t: "Afectación a la MIPYME",
+    t: "Afectación a las MIPYMEs",
     d: "Mide la proporción de barreras que tienen una afectación desproporcionada sobre las Mipymes.",
     how: "Más barras llenas en el marcador, mayor afectación.",
   },
   tmip: {
-    t: "Afectación a la MIPYME",
+    t: "Afectación a las MIPYMEs",
     d: "Mide la proporción de trámites que tienen una afectación desproporcionada sobre las Mipymes.",
     how: "Más barras llenas en el marcador, mayor afectación.",
   },
@@ -260,6 +260,7 @@ export const DEFS: Record<string, Def> = {
 };
 
 export const DEF_RULES: [RegExp, string][] = [
+  [/^Barreras por tipo de regulación/i, "jer"],
   [/^Barreras por acción sugerida/i, "bacc"],
   [/^Desagregación de la acción/i, "dacc"],
   [/^Trámites por nivel de severidad/i, "tsev"],
@@ -271,10 +272,9 @@ export const DEF_RULES: [RegExp, string][] = [
   [/^Costo estimado por actividad/i, "tcact"],
   [/^Costos administrativos por usuario/i, "tcusu"],
   [/^Tipo de carga que genera/i, "tafe"],
-  [/^Afectación a la MIPYME/i, "tmip"],
+  [/^Afectación a las MIPYMEs/i, "tmip"],
   [/^Hallazgos/i, "thall"],
   [/canal de transmisión|ámbito de impacto/i, "amb"],
-  [/jerarquía normativa/i, "jer"],
   [/sector económico/i, "sec"],
   [/entidad emisora/i, "eni"],
   [/nivel de severidad/i, "sev"],
@@ -287,4 +287,150 @@ export const DEF_RULES: [RegExp, string][] = [
 export const defFor = (title?: string) => {
   const r = DEF_RULES.find((x) => x[0].test(title || ""));
   return r ? DEFS[r[1]] : null;
+};
+
+/* Entrega 3: Costeo, Índice / IDR y Reportes */
+export const IDR_INTRO =
+  "El IDR mide las distorsiones generadas por regulaciones y trámites a empresas y ciudadanos.";
+export const IDR_DEF_B =
+  "Mide las distorsiones generadas por el contenido de las regulaciones que pueden dificultar la entrada al mercado o limitar cómo operan las empresas.";
+export const IDR_DEF_T =
+  "Mide las cargas administrativas que aumentan el tiempo, costo, esfuerzo o incertidumbre para completar un trámite.";
+DEFS.idr = {
+  t: "Índice de Distorsiones Regulatorias (IDR)",
+  d:
+    IDR_INTRO +
+    " Se compone de dos subíndices: Barreras y Trámites. A mayor puntaje, mayores distorsiones.",
+};
+DEFS.sidb = { t: "Subíndice Barreras", d: IDR_DEF_B };
+DEFS.sidt = { t: "Subíndice Trámites", d: IDR_DEF_T };
+DEFS.iporpais = {
+  t: "IDR por país",
+  d: "Puntaje del IDR del último año disponible en cada país, ordenado de mayor a menor.",
+};
+DEFS.itipo = {
+  t: "Tipo de regulación",
+  d: "Puntaje por tipo de regulación donde se identifican las distorsiones.",
+  items: TIPO_ITEMS,
+};
+DEFS.idesag = {
+  t: "Desagregación del IDR",
+  d: "Muestra los dos subíndices y sus componentes: en Barreras, la entrada y la operación; en Trámites, las seis cargas (documental, procedimental, temporal, monetaria, de acceso e incertidumbre).",
+};
+DEFS.ievo = {
+  t: "Evolución del subíndice",
+  d: "Puntaje del subíndice de Barreras de cada país a lo largo de los años.",
+};
+DEFS.isec = {
+  t: "Sector económico",
+  d: "Puntaje del subíndice de Barreras según el sector económico afectado.",
+};
+DEFS.ient = {
+  t: "Sector administrativo y entidad emisora",
+  d: "Puntaje del subíndice de Trámites según el sector administrativo (no económico) o la entidad que emite o administra el trámite. El sector administrativo agrupa las entidades.",
+};
+DEFS.icar = {
+  t: "Cargas de los trámites",
+  d: "Desagregación del subíndice de Trámites en seis cargas: documental, procedimental, temporal, monetaria, de acceso e incertidumbre.",
+};
+DEFS.ieo = {
+  t: "Subíndice por componente",
+  d: "Desagregación del subíndice de Barreras entre las que afectan la entrada y el acceso al mercado y las que afectan la operación y los modelos de negocio.",
+};
+
+DEFS.imp = {
+  t: "Costeo de trámites",
+  d: "Costo que los trámites generan a quienes deben cumplirlos. Se estima con el Costeo Estándar y se expresa como el Costo Económico Total (CET) del trámite. Incluye todos los trámites costeados, con o sin potencial de mejora.",
+};
+DEFS.imest = {
+  t: "Estimación del costo del trámite",
+  d: "La metodología del Costo Económico Total (CET) se fundamenta en el Modelo de Costeo Estándar y se compone de: CET = CA + COP.",
+  items: [
+    [
+      "CET",
+      "Costo unitario estimado que enfrenta el usuario al completar un trámite, considerando tanto el esfuerzo activo requerido como el costo asociado al tiempo de espera de la administración.",
+    ],
+    [
+      "CA",
+      "Valor del tiempo activo que ciudadanos o empresas destinan a cumplir el trámite: comprender requisitos, preparar y reunir información, diligenciar formularios, realizar gestiones, contratar servicios externos, archivar documentos y efectuar traslados o esperas.",
+    ],
+    [
+      "COP",
+      "Valor económico asociado al tiempo pasivo de espera mientras la autoridad procesa y resuelve el trámite, cuando ese plazo posterga una actividad económica o el acceso a un beneficio.",
+    ],
+  ],
+};
+DEFS.itram = {
+  t: "Trámites costeados",
+  d: "Corresponde al total de trámites incluidos en el portal o catálogo oficial de trámites que se incorporaron al ejercicio de costeo, independientemente de si presentan o no potencial de mejora según la rúbrica del IDR.",
+};
+DEFS.iavg = {
+  t: "Costo promedio por trámite",
+  d: "Costo estimado de realizar un trámite una vez, en promedio, con los filtros seleccionados.",
+};
+DEFS.iconc = {
+  t: "¿Dónde se concentra el costo?",
+  d: "Muestra dónde se concentra el costo administrativo estimado, dividido entre tiempo activo (CA) y espera de la administración (COP), y ayuda a priorizar.",
+};
+DEFS.iusu = {
+  t: "Costos administrativos por usuario",
+  d: "Costo estimado según el tipo de usuario, dividido entre CA y COP. Puede verse como costo total o como promedio por trámite.",
+};
+DEFS.iact = {
+  t: "¿Qué actividades explican el costo?",
+  d: "Descompone el costo activo (CA) según las ocho actividades estándar del Costeo Estándar y explica por qué cuesta.",
+};
+DEFS.ipais = {
+  t: "¿Cómo se compara el costeo entre países?",
+  d: "Costo administrativo estimado de cada país, dividido entre CA y COP, y número de trámites con los que se calculó el dato.",
+};
+DEFS.itab = {
+  t: "Trámites prioritarios",
+  d: "Trámites con mayor costo estimado, con su sector, entidad, etapa, tipo de usuario, severidad y acción sugerida.",
+};
+DEFS.idr = {
+  t: "Índice de Distorsiones Regulatorias (IDR)",
+  d:
+    IDR_INTRO +
+    " Se compone de dos subíndices: Barreras y Trámites. A mayor puntaje, mayores distorsiones.",
+};
+DEFS.sidb = { t: "Subíndice Barreras", d: IDR_DEF_B };
+DEFS.sidt = { t: "Subíndice Trámites", d: IDR_DEF_T };
+DEFS.iporpais = {
+  t: "IDR por país",
+  d: "Puntaje del IDR del último año disponible en cada país, ordenado de mayor a menor.",
+};
+DEFS.itipo = {
+  t: "Tipo de regulación",
+  d: "Puntaje por tipo de regulación donde se identifican las distorsiones.",
+  items: TIPO_ITEMS,
+};
+DEFS.idesag = {
+  t: "Desagregación del IDR",
+  d: "Muestra los dos subíndices y sus componentes: en Barreras, la entrada y la operación; en Trámites, las seis cargas (documental, procedimental, temporal, monetaria, de acceso e incertidumbre).",
+};
+DEFS.ievo = {
+  t: "Evolución del subíndice",
+  d: "Puntaje del subíndice de Barreras de cada país a lo largo de los años.",
+};
+DEFS.isec = {
+  t: "Sector económico",
+  d: "Puntaje del subíndice de Barreras según el sector económico afectado.",
+};
+DEFS.ient = {
+  t: "Sector administrativo y entidad emisora",
+  d: "Puntaje del subíndice de Trámites según el sector administrativo (no económico) o la entidad que emite o administra el trámite. El sector administrativo agrupa las entidades.",
+};
+DEFS.icar = {
+  t: "Cargas de los trámites",
+  d: "Desagregación del subíndice de Trámites en seis cargas: documental, procedimental, temporal, monetaria, de acceso e incertidumbre.",
+};
+DEFS.ieo = {
+  t: "Subíndice por componente",
+  d: "Desagregación del subíndice de Barreras entre las que afectan la entrada y el acceso al mercado y las que afectan la operación y los modelos de negocio.",
+};
+DEFS.rep = {
+  t: "Reportes",
+  d: "Genera reportes estratégicos y operativos y bases en Excel con los filtros que elijas.",
+  how: "Elige el tipo de salida, define el alcance y el formato, revisa el resumen y genera el archivo.",
 };

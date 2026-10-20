@@ -34,6 +34,7 @@ import {
   Flag,
   Mejora,
   Pips,
+  SEV_DEFS,
   SevPanel,
   SevPill,
 } from "./ui";
@@ -412,7 +413,7 @@ function BarrerasBody({
         ],
         [
           pct(jerTot[0][1], BB.total) + " %",
-          "está en la jerarquía normativa " + jerTot[0][0],
+          "es de tipo " + jerTot[0][0],
         ],
         BB.diagnostico ?? ["18 %", "Diagnóstico"], // pendiente: el BID define el hallazgo «Diagnóstico»
       ];
@@ -522,6 +523,7 @@ function BarrerasBody({
             totalLabel="Total de barreras"
             aria="Barreras por nivel de severidad"
             def={DEFS.sev}
+            defs={SEV_DEFS}
           />
         </div>
       </div>
@@ -535,7 +537,7 @@ function BarrerasBody({
                 <InfoBtn k="sec1" />
               </h2>
               <p>
-                Distribución según canal de transmisión, jerarquía normativa,
+                Distribución según canal de transmisión, tipo de regulación,
                 sector económico y entidad emisora
               </p>
             </div>
@@ -556,7 +558,7 @@ function BarrerasBody({
             </section>
 
             <section className="card">
-              <CardHead title="Barreras por jerarquía normativa" />
+              <CardHead title="Barreras por tipo de regulación" />
               <Ctl f={f2} setF={setF2} d={d2} setD={setD2} />
               <div
                 className="chart"
@@ -752,7 +754,7 @@ function BarrerasBody({
             </section>
 
             <section className="card g-wide">
-              <CardHead title="Afectación a la MIPYME" def={DEFS.bmip} />
+              <CardHead title="Afectación a las MIPYMEs" def={DEFS.bmip} />
               <div className="mip">
                 <div
                   className="split"
@@ -780,7 +782,9 @@ function BarrerasBody({
                         {k}
                       </span>
                       <b>{fmtInt(v)}</b>
-                      <span className="mp">{pct(v, BB.total)} %</span>
+                      <span className="mp">
+                        <span className="pchip">{pct(v, BB.total)} %</span>
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -1077,12 +1081,32 @@ function BarrerasBody({
                           Acción sugerida
                           <InfoBtn k="accion" />
                         </th>
+                        <th className="go">
+                          <span className="sr">Ver ficha</span>
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
                       {(BB.tabla ?? []).map((r: any, i: number) => (
                         <tr
                           key={r.id ?? i}
+                          className={onOpenBarrera && r.id ? "rowlink" : undefined}
+                          tabIndex={onOpenBarrera && r.id ? 0 : undefined}
+                          title={
+                            onOpenBarrera && r.id
+                              ? "Ver la ficha de la barrera"
+                              : undefined
+                          }
+                          onKeyDown={
+                            onOpenBarrera && r.id
+                              ? (e) => {
+                                  if (e.key === "Enter" || e.key === " ") {
+                                    e.preventDefault();
+                                    onOpenBarrera(r.id);
+                                  }
+                                }
+                              : undefined
+                          }
                           onClick={
                             onOpenBarrera && r.id
                               ? () => onOpenBarrera(r.id)
@@ -1126,6 +1150,9 @@ function BarrerasBody({
                           </td>
                           <td>
                             <Mejora t={r.accion} />
+                          </td>
+                          <td className="go" aria-hidden="true">
+                            {onOpenBarrera && r.id ? <Icon d={I.arrow} /> : null}
                           </td>
                         </tr>
                       ))}
@@ -1196,13 +1223,13 @@ function BarrerasBody({
                         <i style={{ background: T.entrada }}></i>Entrada
                       </span>
                       <b>
-                        {e} · {pct(e, e + o)} %
+                        {e} <span className="pchip">{pct(e, e + o)} %</span>
                       </b>
                       <span>
                         <i style={{ background: T.operacion }}></i>Operación
                       </span>
                       <b>
-                        {o} · {pct(o, e + o)} %
+                        {o} <span className="pchip">{pct(o, e + o)} %</span>
                       </b>
                     </div>
                     <button
