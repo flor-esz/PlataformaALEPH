@@ -167,7 +167,7 @@ export function SidebarEditorial({
         <div className="edsb-label">Menú</div>
 
         {group(
-          "dash", "Dashboards", IcTableros, dashboardsOpen,
+          "dash", "Tableros", IcTableros, dashboardsOpen,
           DASHBOARD_SECTIONS.includes(activeSection),
           () => { setDashboardsOpen(!dashboardsOpen); if (!dashboardsOpen) nav(() => onNavigate({ screen: "panel-regional" })); },
           <>

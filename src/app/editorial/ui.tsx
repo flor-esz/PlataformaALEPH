@@ -62,6 +62,9 @@ export function Dd({
   label,
   pre,
   tone,
+  disabled,
+  hint,
+  placeholder,
 }: {
   value: string;
   options: any[][];
@@ -69,6 +72,11 @@ export function Dd({
   label: string;
   pre?: string;
   tone?: "dark";
+  /** Desplegable inactivo (atenuado). `hint` explica qué falta elegir. */
+  disabled?: boolean;
+  hint?: string;
+  /** Texto guía cuando `value` no está entre las opciones (p. ej. «Selecciona un país»). */
+  placeholder?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [hi, setHi] = useState(0);
@@ -82,11 +90,12 @@ export function Dd({
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
   }, [open]);
-  const idx = Math.max(
-    0,
-    options.findIndex((o) => o[0] === value),
-  );
-  const cur = options.find((o) => o[0] === value) ?? [value, value];
+  const found = options.findIndex((o) => o[0] === value);
+  const idx = Math.max(0, found);
+  const ph = found < 0 && !!placeholder;
+  const cur = ph
+    ? ["", placeholder]
+    : (options.find((o) => o[0] === value) ?? [value, value]);
   const pick = (v) => {
     onChange(v);
     setOpen(false);
@@ -121,6 +130,8 @@ export function Dd({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label={label}
+        disabled={!!disabled}
+        title={disabled ? hint : undefined}
         onClick={() => {
           setHi(idx);
           setOpen(!open);
@@ -128,7 +139,7 @@ export function Dd({
         onKeyDown={onKey}
       >
         {pre ? <span className="dd-pre">{pre}</span> : null}
-        <span>{cur[1]}</span>
+        <span className={ph ? "dd-ph" : undefined}>{cur[1]}</span>
         <Icon d={I.chev} cls="dd-chev" />
       </button>
       {open ? (
@@ -206,6 +217,113 @@ export function Fseg({
           </button>
         ),
       )}
+    </div>
+  );
+}
+/** Desplegable de selección múltiple: se queda abierto al marcar y siempre deja al menos una opción activa. */
+export function DdMulti({
+  values,
+  options,
+  onChange,
+  label,
+}: {
+  values: string[];
+  options: string[];
+  onChange: (v: string[]) => void;
+  label: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [hi, setHi] = useState(0);
+  const ref = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    if (!open) return;
+    const h = (e) => {
+      if (ref.current && !ref.current.contains(e.target as Node))
+        setOpen(false);
+    };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [open]);
+  const toggle = (v: string) => {
+    const on = values.includes(v);
+    if (on && values.length === 1) return;
+    onChange(on ? values.filter((x) => x !== v) : [...values, v]);
+  };
+  const txt =
+    values.length === options.length
+      ? "Las " + options.length + " secciones"
+      : options.filter((o) => values.includes(o)).join(" + ");
+  const onKey = (e) => {
+    if (e.key === "Escape") {
+      setOpen(false);
+      return;
+    }
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      if (!open) {
+        setHi(0);
+        setOpen(true);
+        return;
+      }
+      setHi(
+        (h) =>
+          (h + (e.key === "ArrowDown" ? 1 : -1) + options.length) %
+          options.length,
+      );
+    } else if ((e.key === "Enter" || e.key === " ") && open) {
+      e.preventDefault();
+      toggle(options[hi]);
+    }
+  };
+  return (
+    <div className="dd" ref={ref}>
+      <button
+        type="button"
+        className={"dd-btn" + (open ? " is-open" : "")}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={label}
+        onClick={() => {
+          setHi(0);
+          setOpen(!open);
+        }}
+        onKeyDown={onKey}
+      >
+        <span>{txt}</span>
+        <Icon d={I.chev} cls="dd-chev" />
+      </button>
+      {open ? (
+        <ul
+          className="dd-menu"
+          role="listbox"
+          aria-multiselectable="true"
+          aria-label={label}
+        >
+          {options.map((o, i) => (
+            <li
+              key={o}
+              role="option"
+              aria-selected={values.includes(o)}
+              className={
+                "dd-opt" +
+                (i === hi ? " hi" : "") +
+                (values.includes(o) ? " on" : "")
+              }
+              onMouseEnter={() => setHi(i)}
+              onClick={() => toggle(o)}
+            >
+              <span className="dd-chk" aria-hidden="true">
+                {values.includes(o) ? (
+                  <Icon d="M5 12.5l4.5 4.5L19 7.5" />
+                ) : null}
+              </span>
+              <span className="dd-txt">
+                <b>{o}</b>
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </div>
   );
 }

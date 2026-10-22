@@ -5,7 +5,6 @@
 // si devuelve un texto, se muestra como confirmación.
 import React, { useState } from "react";
 import { CardHead } from "./cardhead";
-import { IMP_SECS } from "./costeo-data";
 import { DEFS } from "./defs";
 import { PAISES_BASE, YEARS } from "./fixtures";
 import { fmtInt } from "./format";
@@ -13,13 +12,14 @@ import { Icon } from "./icons";
 import { PageShell } from "./PageShell";
 import {
   RP_ALL,
-  RP_ENTS,
   RP_FMT,
   RP_TIPOS,
   RP_TYPES,
   RP_YEARS,
+  rpAdms,
   rpData,
   rpPer,
+  rpSecs,
 } from "./reportes-data";
 import { Dd, Fseg } from "./ui";
 import type {
@@ -53,7 +53,10 @@ function ReportesBody({
   const set = (k: keyof ReporteFiltros) => (v: string) => {
     setF((s) => {
       const n = { ...s, [k]: v };
-      if (k === "pais") n.ent = "Todos";
+      if (k === "pais" || k === "tipo") {
+        n.sec = "Todos";
+        n.adm = "Todos";
+      }
       if (n.desde > n.hasta) {
         if (k === "desde") n.hasta = n.desde;
         else n.desde = n.hasta;
@@ -84,12 +87,20 @@ function ReportesBody({
   };
   const isX = R.g === "Bases en Excel";
   const alc = [
-    f.pais === "Todos" ? "6 países" : f.pais,
-    f.sec === "Todos" ? "todos los sectores" : f.sec,
-    f.ent === "Todos" ? "todas las entidades" : f.ent,
+    f.pais || "Elige un país",
+    f.tipo === "Barreras"
+      ? f.sec === "Todos"
+        ? "todos los sectores económicos"
+        : f.sec
+      : f.tipo === "Trámites"
+        ? f.adm === "Todos"
+          ? "todos los sectores administrativos"
+          : f.adm
+        : "todos los sectores",
   ].join(" · ");
-  const records =
-    type === "xbar"
+  const records = !f.pais
+    ? "Elige un país"
+    : type === "xbar"
       ? fmtInt(D.nb) + " barreras"
       : type === "xtra"
         ? fmtInt(D.nt) + " trámites"
@@ -158,12 +169,31 @@ function ReportesBody({
     k: keyof ReporteFiltros,
     label: string,
     options: [string, string][],
+    off?: boolean,
+    hint?: string,
+    ph?: string,
   ) => (
-    <div className="cg">
+    <div className={"cg" + (off ? " is-off" : "")}>
       <span className="clbl clbl-t">{label}</span>
-      <Dd value={f[k]} onChange={set(k)} options={options} label={label} />
+      <Dd
+        value={f[k]}
+        onChange={set(k)}
+        options={options}
+        label={label}
+        disabled={off}
+        hint={hint}
+        placeholder={ph}
+      />
     </div>
   );
+  /* un solo filtro de sector: cambia de nombre y de lista según el tipo de hallazgo */
+  const slot: { k: keyof ReporteFiltros; label: string; opts: string[] } =
+    f.tipo === "Trámites"
+      ? { k: "adm", label: "Sector administrativo", opts: rpAdms(f.pais) }
+      : f.tipo === "Barreras"
+        ? { k: "sec", label: "Sector económico", opts: rpSecs(f.pais) }
+        : { k: "sec", label: "Sector", opts: [] };
+  const slotOff = !f.pais || f.tipo === "Todos";
   const todos = (arr: string[], t?: string): [string, string][] => [
     ["Todos", t || "Todos"],
     ...arr.map((x): [string, string] => [x, x]),
@@ -228,8 +258,8 @@ function ReportesBody({
             <div>
               <h2 id="r2">Alcance</h2>
               <p>
-                País, sector económico, entidad, tipo de hallazgo, periodo,
-                severidad
+                País, tipo de hallazgo, severidad, sector económico, sector
+                administrativo, periodo
               </p>
             </div>
           </div>
@@ -239,31 +269,53 @@ function ReportesBody({
               role="group"
               aria-label="Filtros del alcance"
             >
-              {dd("pais", "País", todos(PAISES_BASE.map((c) => c.name)))}
-              {dd("sec", "Sector económico", todos(IMP_SECS))}
               {dd(
-                "ent",
-                "Entidad",
-                todos(
-                  f.pais === "Todos" ? [] : (RP_ENTS[f.pais] ?? []),
-                  "Todas",
-                ),
-              )}
-              {dd("tipo", "Tipo de hallazgo", todos(RP_TIPOS))}
-              {dd(
-                "desde",
-                "Desde",
-                RP_YEARS.map((y) => [y, y]),
+                "pais",
+                "País",
+                PAISES_BASE.map((c): [string, string] => [c.name, c.name]),
+                false,
+                undefined,
+                "Selecciona un país",
               )}
               {dd(
-                "hasta",
-                "Hasta",
-                RP_YEARS.map((y) => [y, y]),
+                "tipo",
+                "Tipo de hallazgo",
+                todos(RP_TIPOS),
+                !f.pais,
+                "Elige un país para activarlo",
               )}
               {dd(
                 "sev",
                 "Severidad",
                 todos(["Alta", "Media", "Baja"], "Todas"),
+              )}
+              <div className="cg" role="group" aria-label="Fecha de registro">
+                <span className="clbl clbl-t">Desde</span>
+                <Dd
+                  value={f.desde}
+                  onChange={set("desde")}
+                  options={RP_YEARS.map((y) => [y, y])}
+                  label="Desde"
+                />
+                <span className="clbl clbl-t" style={{ marginLeft: 8 }}>
+                  Hasta
+                </span>
+                <Dd
+                  value={f.hasta}
+                  onChange={set("hasta")}
+                  options={RP_YEARS.map((y) => [y, y])}
+                  label="Hasta"
+                />
+              </div>
+              <span className="rp-br" aria-hidden="true"></span>
+              {dd(
+                slot.k,
+                slot.label,
+                todos(slot.opts),
+                slotOff,
+                !f.pais
+                  ? "Elige un país para activarlo"
+                  : "Elige «Barreras» o «Trámites» en Tipo de hallazgo para activarlo",
               )}
             </div>
           </section>
@@ -347,7 +399,7 @@ function ReportesBody({
                 )}
                 {row("Registros incluidos", <b>{records}</b>)}
                 {row("Fecha de corte", "15 sep 2026")}
-                {row("Cobertura de fuentes", D.cob + " %")}
+                {row("Cobertura de fuentes", f.pais ? D.cob + " %" : "—")}
               </dl>
             </section>
             <section className="card">
@@ -369,7 +421,16 @@ function ReportesBody({
             </section>
           </div>
           <div className="rp-act">
-            <button className="btn primary" onClick={gen}>
+            <button
+              className="btn primary"
+              onClick={gen}
+              disabled={!f.pais}
+              title={
+                f.pais
+                  ? undefined
+                  : "Elige un país en Alcance para generar el archivo"
+              }
+            >
               {genLbl}
             </button>
             <button className="btn" onClick={clear}>

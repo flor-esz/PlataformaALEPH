@@ -264,7 +264,14 @@ export interface IdrData {
   adms: IdrPunto[];
   /** Evolución del subíndice Barreras: una fila por año con una clave por país y el promedio ALC. */
   evo: Record<string, number>[];
-  paises: { k: string; b: number; t: number; idr: number; c: string; on: boolean }[];
+  paises: {
+    k: string;
+    b: number;
+    t: number;
+    idr: number;
+    c: string;
+    on: boolean;
+  }[];
   /** Fuentes procesadas / previstas, % de cobertura y % de hallazgos validados (pie de página). */
   fp: number;
   ft: number;
@@ -275,11 +282,13 @@ export interface IdrData {
 /* ---------- Reportes ---------- */
 export type ReporteTipo = "estrategico" | "operativo" | "xbar" | "xtra";
 export type ReporteFormato = "PDF" | "PPT editable" | "Excel";
-/** Filtros del alcance ("Todos"/"Todas" = sin filtrar). */
+/** Filtros del alcance ("Todos"/"Todas" = sin filtrar). `pais` es obligatorio: "" = sin elegir. */
 export interface ReporteFiltros {
   pais: string;
+  /** Sector económico (con tipo «Barreras»). */
   sec: string;
-  ent: string;
+  /** Sector administrativo (con tipo «Trámites»). */
+  adm: string;
   tipo: string;
   hitl: string;
   /** Año inicial y final del periodo (desde ≤ hasta). */

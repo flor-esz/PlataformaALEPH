@@ -97,7 +97,7 @@ export const DEFS: Record<string, Def> = {
   },
   sec1: {
     t: "Dónde se concentran las barreras",
-    d: "Compara cómo se reparten las barreras según canal de transmisión, tipo de regulación, sector económico y entidad emisora.",
+    d: "Compara cómo se reparten las barreras según canal de transmisión, tipo de regulación y sector económico.",
     how: "Cada gráfica tiene sus propios filtros.",
   },
   sec2: {

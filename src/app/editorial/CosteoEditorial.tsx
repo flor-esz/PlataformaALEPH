@@ -341,12 +341,14 @@ function CosteoBody({
       );
     })
     .sort((a, b) => b.v - a.v);
-  const actRows = D.act.map((r) => ({
-    k: r.k,
-    v: r.v,
-    lab: usd(r.v) + " · " + Math.round(r.p * 100) + " %",
-    c: TR_G,
-  }));
+  const actRows = D.act
+    .map((r) => ({
+      k: r.k,
+      v: r.v,
+      lab: usd(r.v) + " · " + Math.round(r.p * 100) + " %",
+      c: TR_G,
+    }))
+    .sort((a, b) => b.v - a.v);
   const paisRows = D.pais
     .slice()
     .sort((a, b) => b.v - a.v)

@@ -67,15 +67,12 @@ function BarrerasBody({
   const nat = country !== "Todos";
   const BB = D;
   const [n3, setN3] = useState("10"),
-    [n4, setN4] = useState("10"),
     [ind3, setInd3] = useState("n");
   const [f1, setF1] = useState("Todos"),
     [f2, setF2] = useState("Todos"),
-    [f3, setF3] = useState("Todos"),
-    [f4, setF4] = useState("Todos");
+    [f3, setF3] = useState("Todos");
   const [d2, setD2] = useState("total"),
-    [d3, setD3] = useState("total"),
-    [d4, setD4] = useState("total"); // B5: por defecto sin desagregación
+    [d3, setD3] = useState("total"); // B5: por defecto sin desagregación
   const [xAcc, setXAcc] = useState<string | null>(null),
     [xTipo, setXTipo] = useState("Todas"),
     [xSec, setXSec] = useState("Todos"); // X1: acción elegida y filtros del panel
@@ -150,8 +147,6 @@ function BarrerasBody({
     .sort(byTot);
   const sec = n3 === "all" ? secAll : secAll.slice(0, +n3);
   const fv = inst ? fmt1 : fmtInt;
-  const entAll = BB.entidad.map((e) => mk(d4, e.k, e, f4)).sort(byTot);
-  const ent = n4 === "all" ? entAll : entAll.slice(0, +n4);
   const pd = (n) =>
     (Math.round((n / BB.total) * 1000) / 10).toFixed(1).replace(".", ",");
   const sevData = BB.sev.map(([name, value], i) => ({
@@ -566,8 +561,8 @@ function BarrerasBody({
                 <InfoBtn k="sec1" />
               </h2>
               <p>
-                Distribución según canal de transmisión, tipo de regulación,
-                sector económico y entidad emisora
+                Distribución según canal de transmisión, tipo de regulación y
+                sector económico
               </p>
             </div>
           </div>
@@ -642,7 +637,7 @@ function BarrerasBody({
               {otrosNote(jer.map((r) => r.k))}
             </section>
 
-            <section className="card">
+            <section className="card g-wide">
               <CardHead title="Barreras por sector económico" />
               <Ctl f={f3} setF={setF3} d={d3} setD={setD3} />
               <div
@@ -718,68 +713,6 @@ function BarrerasBody({
                 </ResponsiveContainer>
               </div>
               {Leg(d3)}
-            </section>
-
-            <section className="card">
-              <CardHead title="Barreras por entidad emisora" />
-              <Ctl f={f4} setF={setF4} d={d4} setD={setD4} />
-              <div
-                className="ctlrow"
-                role="group"
-                aria-label="Opciones de la gráfica"
-              >
-                <div className="cg">
-                  <span className="clbl clbl-t">Mostrar</span>
-                  <Dd
-                    value={n4}
-                    onChange={setN4}
-                    options={[
-                      ["5", "Top 5"],
-                      ["10", "Top 10"],
-                      ["all", "Todas"],
-                    ]}
-                    label="Cantidad de entidades a mostrar"
-                  />
-                </div>
-              </div>
-              <div
-                className="chart"
-                style={{ height: ent.length * 30 + 12 + AX_TOP + AX_XH0 }}
-              >
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={ent}
-                    layout="vertical"
-                    margin={{ top: AX_TOP, right: 44, left: 0, bottom: 0 }}
-                    barCategoryGap="30%"
-                  >
-                    {valAxis("Número de barreras")}
-                    <YAxis
-                      type="category"
-                      dataKey="k"
-                      {...axisProps(T)}
-                      width={yW(190, "Entidad emisora")}
-                      tick={{
-                        fill: T.axis,
-                        fontSize: 12,
-                        fontFamily: "Inter, system-ui, sans-serif",
-                      }}
-                      tickFormatter={star}
-                      label={axT("Entidad emisora", "yr")}
-                    />
-                    <Tooltip
-                      cursor={{ fill: T.grid, opacity: 0.5 }}
-                      content={stackTip}
-                    />
-                    {bars(d4, "e", 16, true, false)}
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-              {Leg(d4)}
-              {otrosNote(
-                ent.map((r) => r.k),
-                "barreras",
-              )}
             </section>
 
             <section className="card g-wide">
@@ -1137,14 +1070,10 @@ function BarrerasBody({
                               : undefined
                           }
                           onClick={
-                            onOpenBarrera
-                              ? () => onOpenBarrera(r)
-                              : undefined
+                            onOpenBarrera ? () => onOpenBarrera(r) : undefined
                           }
                           style={
-                            onOpenBarrera
-                              ? { cursor: "pointer" }
-                              : undefined
+                            onOpenBarrera ? { cursor: "pointer" } : undefined
                           }
                         >
                           <td className="main">{r.barrera}</td>

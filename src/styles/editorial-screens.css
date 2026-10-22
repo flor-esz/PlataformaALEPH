@@ -802,3 +802,10 @@
 
 /* Los elementos .sr (solo lector de pantalla) dentro de una tabla con scroll no deben ensanchar la página. */
 .ed .tablewrap{position:relative}
+
+/* ── Ronda 21 oct (builds 78-79): filtros inactivos, texto guía y salto de renglón en Reportes ── */
+.ed .rp-br{flex:0 0 100%;height:0}
+.ed .dd-btn:disabled{opacity:.45;cursor:not-allowed;box-shadow:none}
+.ed .dd-btn .dd-ph{font-weight:500;opacity:.75}
+.ed .btn:disabled{opacity:.5;cursor:not-allowed}
+.ed .cg.is-off .clbl{opacity:.5}

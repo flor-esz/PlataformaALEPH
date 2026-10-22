@@ -495,7 +495,9 @@ function TramitesBody({
 
   /* Vista por país: cargas */
   const cAct = nat ? D.cAct.map(([k, s, c]) => ({ k, v: D.cost * s })) : [];
-  const cActRows = cAct.map((r) => ({ ...r, lab: "USD " + fmt1(r.v) + " M" }));
+  const cActRows = cAct
+    .map((r) => ({ ...r, lab: "USD " + fmt1(r.v) + " M" }))
+    .sort((a, b) => b.v - a.v);
   const cUsu = nat
     ? D.cUsu.map(([k, s]) => ({
         k,

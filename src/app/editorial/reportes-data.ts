@@ -1,6 +1,6 @@
 // Datos de ejemplo de Reportes: catálogo de salidas, filtros por defecto y conteo estimado de registros.
 // Con datos reales, desarrollo sustituye `rpData` (misma forma de salida: `ReporteConteo`).
-import { impH, impShare } from "./costeo-data";
+import { IMP_ADMS, IMP_SECS, impH, impSecShare, impShare } from "./costeo-data";
 import { TR_PAIS, TR_REG } from "./fixtures";
 import { I } from "./icons";
 import { idrData } from "./idr-data";
@@ -88,9 +88,9 @@ export const RP_TYPES: Record<ReporteTipo, RpTipo> = {
   },
 };
 export const RP_ALL: ReporteFiltros = {
-  pais: "Todos",
+  pais: "",
   sec: "Todos",
-  ent: "Todos",
+  adm: "Todos",
   tipo: "Todos",
   hitl: "Todos",
   desde: "2015",
@@ -175,19 +175,28 @@ export const RP_ENTS: Record<string, string[]> = {
     "AMPYME",
   ],
 };
+/** Sectores económicos de un país: los primeros N de la lista (N = sectores del país, dato de ejemplo). */
+export const rpSecs = (pais: string): string[] =>
+  pais ? IMP_SECS.slice(0, (TR_PAIS as any)[pais][3]) : [];
+export const RP_ADMS = IMP_ADMS.filter(
+  (a) => a !== "Otros sectores administrativos",
+);
+/** Sectores administrativos de un país (de ejemplo: cada país tiene casi todos, no todos). */
+export const rpAdms = (pais: string): string[] =>
+  pais ? RP_ADMS.filter((a) => impH(pais + a) > 0.2) : [];
 export const rpYears = (f: { desde: string; hasta: string }) =>
   RP_YEARS.filter((y) => y >= f.desde && y <= f.hasta);
 export const rpPer = (f: { desde: string; hasta: string }) =>
   f.desde === f.hasta ? f.desde : f.desde + "–" + f.hasta;
 export const RP_FMT: ReporteFormato[] = ["PDF", "PPT editable", "Excel"];
 export function rpData(f: ReporteFiltros): ReporteConteo {
-  const sc = f.pais === "Todos" ? 1 : (TR_PAIS as any)[f.pais][0] / TR_REG.tot;
+  const P = f.pais || "Todos"; // sin país elegido solo se calcula una vista previa regional
+  const sc = P === "Todos" ? 1 : (TR_PAIS as any)[P][0] / TR_REG.tot;
   const sh = (rows: [string, number][], k: string) =>
     k === "Todos" ? 1 : impShare(rows, k);
   const base =
     sc *
     sh(TR_REG.sector, f.sec) *
-    (f.ent === "Todos" ? 1 : 0.08 + 0.14 * impH(f.pais + f.ent)) *
     (
       { Todos: 1, Validado: 0.74, Preliminar: 0.18, Simulado: 0.08 } as Record<
         string,
@@ -202,9 +211,10 @@ export function rpData(f: ReporteFiltros): ReporteConteo {
       ? 1
       : TR_REG.sev[["Alta", "Media", "Baja"].indexOf(f.sev)] / TR_REG.tot;
   if (f.usu !== "Todos") ((bf = 0), (tf *= sh(TR_REG.usuario, f.usu)));
+  if (f.adm !== "Todos") tf *= impSecShare(f.adm);
   return {
     nb: Math.round(1250 * base * bf * sv),
     nt: Math.round(1842 * base * tf * sv),
-    cob: idrData(f.pais).cob,
+    cob: idrData(P).cob,
   };
 }

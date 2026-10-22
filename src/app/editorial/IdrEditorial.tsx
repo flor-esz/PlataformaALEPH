@@ -31,7 +31,7 @@ import { InfoBtn } from "./info";
 import { idrData } from "./idr-data";
 import { PageShell } from "./PageShell";
 import { ALC, ALC_COLOR, COLORES_SERIE, T, TR_G, colorPais } from "./theme";
-import { Dd, Fseg } from "./ui";
+import { Dd, DdMulti, Fseg } from "./ui";
 import type { IdrData } from "./types";
 
 const Y_LAST = YEARS[YEARS.length - 1];
@@ -59,7 +59,16 @@ function IdrScale({ v }: { v: number }) {
 const IDR_SECCIONES = ["IDR", "Subíndice Barreras", "Subíndice Trámites"];
 
 function IdrBody({ D }: { D: IdrData }) {
-  const [sec, setSec] = useState("IDR");
+  /* secciones visibles; siempre en el orden de IDR_SECCIONES */
+  const [secs, setSecs] = useState<string[]>(["IDR"]);
+  const has = (k: string) => secs.includes(k);
+  const setSecsOrd = (v: string[]) =>
+    setSecs(IDR_SECCIONES.filter((x) => v.includes(x)));
+  const addSec = (k: string) =>
+    setSecs((a) => IDR_SECCIONES.filter((x) => a.includes(x) || x === k));
+  /** Número de la sección entre las visibles. */
+  const pos = (k: string) => IDR_SECCIONES.filter(has).indexOf(k) + 1;
+  const zcls = (k: string) => (pos(k) % 2 ? "z-alt" : "z-base");
   const [entV, setEntV] = useState("Sector administrativo");
   const [hlE, setHlE] = useState<any>(null),
     [yE, setYE] = useState<any>(null);
@@ -154,7 +163,9 @@ function IdrBody({ D }: { D: IdrData }) {
     .sort((a, b) => b.v - a.v)
     .map((r) => ({
       ...r,
-      c: COLORES_SERIE[TIPOS.findIndex((q) => q[0] === r.k) % COLORES_SERIE.length],
+      c: COLORES_SERIE[
+        TIPOS.findIndex((q) => q[0] === r.k) % COLORES_SERIE.length
+      ],
     }));
   const desag = [
     { k: "Subíndice Barreras", v: D.b, c: "var(--primary)" },
@@ -164,13 +175,7 @@ function IdrBody({ D }: { D: IdrData }) {
     ...D.cargas.map((x) => ({ ...x, c: TR_G })),
   ];
   const tile = (title, v, def, txt, k) => (
-    <div
-      className={
-        "idr-tile" +
-        (sec === k ? " on" : "") +
-        (sec !== "IDR" && sec !== k ? " dim" : "")
-      }
-    >
+    <div className={"idr-tile" + (has(k) ? " on" : "")}>
       <div className="idr-tt">
         <h4>
           {title}
@@ -185,9 +190,9 @@ function IdrBody({ D }: { D: IdrData }) {
         <IdrScale v={v} T={T} />
       </div>
       <p className="idr-def">{txt}</p>
-      {sec !== k ? (
+      {!has(k) ? (
         <div>
-          <button className="btn" onClick={() => setSec(k)}>
+          <button className="btn" onClick={() => addSec(k)}>
             Ver {title.toLowerCase()} <Icon d={I.arrow} />
           </button>
         </div>
@@ -234,15 +239,15 @@ function IdrBody({ D }: { D: IdrData }) {
             <div
               className="ctlrow"
               role="group"
-              aria-label="Sección del índice"
+              aria-label="Secciones del índice"
             >
               <div className="cg">
-                <span className="clbl clbl-t">Sección</span>
-                <Fseg
-                  v={sec}
-                  set={setSec}
-                  items={IDR_SECCIONES}
-                  label="Sección del índice"
+                <span className="clbl clbl-t">Secciones</span>
+                <DdMulti
+                  values={secs}
+                  onChange={setSecsOrd}
+                  options={IDR_SECCIONES}
+                  label="Secciones del índice que se muestran"
                 />
               </div>
             </div>
@@ -275,13 +280,13 @@ function IdrBody({ D }: { D: IdrData }) {
         </div>
       </div>
 
-      {sec === "IDR"
+      {has("IDR")
         ? zone(
-            "z-alt",
+            zcls("IDR"),
             "d1",
             <>
               {head(
-                1,
+                pos("IDR"),
                 "d1",
                 "IDR",
                 "Puntaje de los países y desagregación de los dos subíndices",
@@ -320,13 +325,13 @@ function IdrBody({ D }: { D: IdrData }) {
           )
         : null}
 
-      {sec === "Subíndice Barreras"
+      {has("Subíndice Barreras")
         ? zone(
-            "z-alt",
+            zcls("Subíndice Barreras"),
             "d2",
             <>
               {head(
-                1,
+                pos("Subíndice Barreras"),
                 "d2",
                 "Subíndice Barreras",
                 "Evolución y dónde se concentran las distorsiones de las regulaciones",
@@ -375,7 +380,10 @@ function IdrBody({ D }: { D: IdrData }) {
                   DEFS.itipo,
                   sorted(D.tipos, "var(--primary)").map((r) => ({
                     ...r,
-                    c: COLORES_SERIE[TIPOS.findIndex((q) => q[0] === r.k) % COLORES_SERIE.length],
+                    c: COLORES_SERIE[
+                      TIPOS.findIndex((q) => q[0] === r.k) %
+                        COLORES_SERIE.length
+                    ],
                   })),
                   130,
                   "Tipo de regulación",
@@ -405,13 +413,13 @@ function IdrBody({ D }: { D: IdrData }) {
           )
         : null}
 
-      {sec === "Subíndice Trámites"
+      {has("Subíndice Trámites")
         ? zone(
-            "z-alt",
+            zcls("Subíndice Trámites"),
             "d3",
             <>
               {head(
-                1,
+                pos("Subíndice Trámites"),
                 "d3",
                 "Subíndice Trámites",
                 "Dónde se concentran las cargas que los trámites generan",
@@ -472,7 +480,13 @@ function IdrBody({ D }: { D: IdrData }) {
     </React.Fragment>
   );
 }
-function IdrCtl({ pais, setPais }: { pais: string; setPais: (p: string) => void }) {
+function IdrCtl({
+  pais,
+  setPais,
+}: {
+  pais: string;
+  setPais: (p: string) => void;
+}) {
   return (
     <div
       className="ctlrow on-dark"
